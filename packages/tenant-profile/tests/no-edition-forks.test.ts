@@ -30,9 +30,7 @@ export const FORK_RE = new RegExp(
  * NOT the tenant profile/edition (a different concept sharing the name) and the entry is never removed.
  */
 export const ALLOWED: Record<string, { slice: string; why: string }> = {
-  "services/hrms-service/src/modules/recruitment/edition-policy.ts": { slice: "B6", why: "policy.edition === 'govt' -> catalogue recruitmentPolicy" },
-  "services/gateway-service/src/screen-manifest.ts": { slice: "B6", why: "edition === 'small_office' -> catalogue manifestKey (also the small_office=MSME naming trap)" },
-  "services/payroll-service/src/modules/pay-profiles/plan.ts": { slice: "B6", why: "pay-profile plan; confirm/rename in B6 (payroll plan.ts)" },
+  "services/payroll-service/src/modules/pay-profiles/plan.ts": { slice: "permanent", why: "pay profile (govt_scale / ctc_contract ...), not a tenant profile" },
   "services/hrms-service/src/modules/pay-profile/domain.ts": { slice: "permanent", why: "pay profile (govt_scale / ctc_contract ...), not a tenant profile" },
   "services/payroll-service/src/modules/ctc/runtime.ts": { slice: "permanent", why: "pay profile, not a tenant profile" },
   "services/payroll-service/src/modules/integration/consumer.ts": { slice: "permanent", why: "pay profile, not a tenant profile" },

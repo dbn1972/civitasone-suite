@@ -2623,6 +2623,9 @@ importers:
       '@civitasone/search':
         specifier: workspace:*
         version: link:../../packages/search
+      '@civitasone/tenant-profile':
+        specifier: workspace:*
+        version: link:../../packages/tenant-profile
       '@civitasone/types':
         specifier: workspace:*
         version: link:../../packages/types
@@ -2884,6 +2887,9 @@ importers:
       '@civitasone/storage':
         specifier: workspace:*
         version: link:../../packages/storage
+      '@civitasone/tenant-profile':
+        specifier: workspace:*
+        version: link:../../packages/tenant-profile
       '@civitasone/types':
         specifier: workspace:*
         version: link:../../packages/types
@@ -4155,6 +4161,9 @@ importers:
       '@civitasone/storage':
         specifier: workspace:*
         version: link:../../packages/storage
+      '@civitasone/tenant-profile':
+        specifier: workspace:*
+        version: link:../../packages/tenant-profile
       '@civitasone/types':
         specifier: workspace:*
         version: link:../../packages/types

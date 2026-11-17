@@ -184,3 +184,44 @@ export function describeProfile(profileCode: string | null | undefined, flagOn: 
     settings: effectiveSettings(profileCode, flagOn),
   };
 }
+
+// ── B6: data-keyed readers (replace edition-string forks in hrms / gateway / payroll) ──
+
+/**
+ * The recruitment default for a raw tenant-service edition (`tenant.tenants.edition`, incl. the admin word `govt_dept`).
+ * `requisition_first` for the government profiles, `direct` for every other known edition; an unknown or empty value
+ * returns null so the caller can fail closed to today's behaviour. The per-tenant `requireRequisition` override stays
+ * the authority in hrms: this only supplies the DEFAULT.
+ */
+export function recruitmentPolicyForEdition(raw: string | null | undefined): RecruitmentPolicy | null {
+  const v = (raw ?? "").trim().toLowerCase();
+  if (!v) return null;
+  const p = getProfile(defaultProfileCode(v));
+  if (!p || !((p.editions as readonly string[]).includes(v) || p.adminEdition === v)) return null;
+  return p.recruitmentPolicy;
+}
+
+/**
+ * The gateway screen-manifest key for a tenant: the stored profile's `manifestKey`, else the edition's default profile,
+ * else "default" (the generic manifest). Never forks on the edition string (`small_office` is the MSME edition).
+ */
+export function manifestKeyFor(profileCode: string | null | undefined, edition: string | null | undefined): ManifestKey {
+  return getProfile(profileCode)?.manifestKey
+    ?? getProfile(edition ? defaultProfileCode(edition) : undefined)?.manifestKey
+    ?? "default";
+}
+
+export type PensionDefault = "NPS" | "EPF";
+
+/** The pension scheme an employee with none recorded defaults to, by statutory pack. Government stays NPS. */
+export function defaultPensionSchemeFor(pack: StatutoryPack): PensionDefault {
+  return pack === "govt_in" ? "NPS" : "EPF";
+}
+
+/**
+ * A SUGGESTION for the TDS deductor category (never an override of a configured `documentIdentity.deductorCategory`):
+ * "government" for a government-family profile, null (no suggestion) otherwise.
+ */
+export function suggestedDeductorCategory(profileCode: string | null | undefined): "government" | null {
+  return getProfile(profileCode)?.family === "govt" ? "government" : null;
+}

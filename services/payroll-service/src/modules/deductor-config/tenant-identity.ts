@@ -28,6 +28,8 @@
  * its DocIdentity if it is not there yet).
  */
 
+import { suggestedDeductorCategory } from "@civitasone/tenant-profile";
+
 export interface TenantDocIdentity {
   /** documentIdentity.orgName only (NOT the tenant name; see tenantName). */
   orgName: string | null;
@@ -38,6 +40,10 @@ export interface TenantDocIdentity {
   pan: string | null;
   /** documentIdentity.deductorCategory, lower-cased ("government" for a Central / State Government deductor). */
   deductorCategory: string | null;
+  /** B6: the tenant's catalogue profile code (absent on a tenant-service that predates profiles). */
+  profileCode?: string | null;
+  /** B6: catalogue SUGGESTION for deductorCategory ("government" for a govt profile); never overrides a configured value. */
+  suggestedDeductorCategory?: string | null;
   /** false only when tenant-service answered 404 NOT_FOUND for this tenant (absent = registered). */
   registered?: boolean;
 }
@@ -63,11 +69,14 @@ const str = (v: unknown, max = 400): string | null => {
 };
 
 /** Parse a tenant record ({ name, settings }) the way #2463 docIdentityFromTenant does. */
-export function tenantDocIdentityFrom(tenant: { name?: unknown; settings?: unknown } | null | undefined): TenantDocIdentity {
+export function tenantDocIdentityFrom(tenant: { name?: unknown; settings?: unknown; profileCode?: unknown } | null | undefined): TenantDocIdentity {
   const settings = tenant && typeof tenant.settings === "object" && tenant.settings !== null ? (tenant.settings as Record<string, unknown>) : {};
   const raw = settings[DOC_IDENTITY_SETTING];
   const d = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+  const profileCode = str(tenant?.profileCode, 60);
   return {
+    profileCode,
+    suggestedDeductorCategory: suggestedDeductorCategory(profileCode),
     orgName: str(d.orgName, 200),
     tenantName: str(tenant?.name, 200),
     address: str(d.address, 400),
@@ -114,7 +123,7 @@ export async function readTenantDocIdentity(tenantId: string, fetchImpl: FetchLi
     }
     throw new TenantIdentityUnavailableError(`tenant-service returned HTTP ${res.status ?? "non-2xx"}`);
   }
-  let body: { name?: unknown; settings?: unknown; data?: { name?: unknown; settings?: unknown } } | null;
+  let body: { name?: unknown; settings?: unknown; profileCode?: unknown; data?: { name?: unknown; settings?: unknown; profileCode?: unknown } } | null;
   try { body = (await res.json()) as typeof body; } catch { throw new TenantIdentityUnavailableError("unreadable response body"); }
   const tenant = body?.data ?? body;
   if (!tenant || typeof tenant !== "object") throw new TenantIdentityUnavailableError("response body is not a tenant record");

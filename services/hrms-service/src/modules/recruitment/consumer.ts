@@ -9,6 +9,7 @@ import { enqueue, markProcessed, SYSTEM_ACTOR_ID } from "../../shared/outbox.js"
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import * as editionPolicyRepo from "./edition-policy-repo.js";
+import type { Edition } from "./edition-policy.js";
 import * as offerRepo from "./offer-repo.js";
 import { DEFAULT_OFFER_CHAIN } from "./offer-domain.js";
 import * as templateRepo from "./jd-template-repo.js";
@@ -77,7 +78,7 @@ export function registerRecruitmentConsumers(queue: Queue): void {
   // GAP-RECRUITMENT-NEW-06: set the tenant's edition policy. Idempotent via markProcessed; the audit event
   // records the before/after so a switch of "requisition required" is always attributable.
   queue.subscribe(COMMANDS.recruitmentPolicySet, async (msg) => {
-    const p = msg.payload as { tenantId: string; edition: "govt" | "psu" | "small_office"; requireRequisition: boolean | null };
+    const p = msg.payload as { tenantId: string; edition: Edition; requireRequisition: boolean | null };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const { before, after } = await editionPolicyRepo.upsertPolicyTx(
