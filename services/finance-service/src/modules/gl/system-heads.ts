@@ -93,6 +93,16 @@ export function FUND_HEAD_CODES(): Record<"dueTo" | "dueFrom" | "transferOut" | 
 }
 
 /**
+ * Section 8 NF-7: the four equity-class inter-fund MOVEMENT heads (transfer out/in, release out/in). They record a fund-to-fund
+ * movement for the year in which it happens; at year end the per-fund close folds them into that fund's accumulated-fund head
+ * (year-end/domain.ts rollInterFundHeads) so they never accumulate across years. Read at call time (env-overridable).
+ */
+export function INTER_FUND_MOVEMENT_CODES(): string[] {
+  const f = FUND_HEAD_CODES();
+  return [f.transferOut, f.transferIn, f.releaseOut, f.releaseIn];
+}
+
+/**
  * Section 8 NF-3: chart codes of the grants-in-aid heads. ONE definition shared by the nonprofit chart (standard-heads.ts) and
  * the grants posting module (modules/grants), so the seeded heads are exactly the heads NF-3 posts to and the two cannot drift.
  * Env-configurable like every system head (FINANCE_GRANT_*_CODE), read at call time. FAIL-SAFE: an override that is malformed,

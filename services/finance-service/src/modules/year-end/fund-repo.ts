@@ -9,24 +9,27 @@
  * SAME pure `rollForward` the govt close uses (carry-forward heads keep their balance, income and expenditure net into
  * the fund's own accumulated-fund line), and each fund's carry-forward must sum to zero on its own (a fund that does not
  * balance stops the close, naming the fund).
+ *
+ * NF-7: the inter-fund movement heads (transfer / release, in and out) are then folded into each fund's accumulated-fund line
+ * (rollFund), so they open every new year at zero instead of accumulating; see year-end/domain.ts rollInterFundHeads.
  */
 import { sql } from "drizzle-orm";
 import { fyBounds } from "../../shared/ist-date.js";
-import { ACCUMULATED_FUND } from "../gl/system-heads.js";
+import { ACCUMULATED_FUND, INTER_FUND_MOVEMENT_CODES } from "../gl/system-heads.js";
 import { coalesceFundSql } from "../gl/funds.js";
 import { fundContext } from "../gl/fund-context.js";
 import { DomainError } from "../masters/domain.js";
-import { rollForward, toDrCr, type HeadMovement } from "./domain.js";
+import { rollForward, rollInterFundHeads, toDrCr, type HeadMovement } from "./domain.js";
 import { headDirectory, type Tx } from "./repo.js";
 
 type Row = Record<string, unknown>;
 const rowsOf = (r: unknown): Row[] => (Array.isArray(r) ? r : ((r as { rows?: Row[] })?.rows ?? [])) as Row[];
 const big = (v: unknown): bigint => (v === null || v === undefined ? 0n : BigInt(String(v)));
 
-type FundMovement = HeadMovement & { fundId: string };
+export type FundMovement = HeadMovement & { fundId: string };
 type FundOpeningRow = { fundId: string; accountCode: string; signed: bigint; source: string };
 
-async function fundLedgerMovements(tx: Tx, tenantId: string, general: string, from: string | null, to: string | null): Promise<FundMovement[]> {
+export async function fundLedgerMovements(tx: Tx, tenantId: string, general: string, from: string | null, to: string | null): Promise<FundMovement[]> {
   const lower = from ? sql`AND fl.posting_date >= ${from}::date` : sql``;
   const upper = to ? sql`AND fl.posting_date <= ${to}::date` : sql``;
   // The fund expression binds the GENERAL uuid as a parameter; repeating it in GROUP BY would be a different expression
@@ -55,6 +58,14 @@ async function fundStoredOpening(tx: Tx, tenantId: string, general: string, fy: 
   return rows.map((r) => ({ fundId: String(r.fund_id), accountCode: String(r.account_code), signed: big(r.dr) - big(r.cr), source: String(r.source ?? "manual") }));
 }
 
+/**
+ * NF-7: ONE fund's year roll = the shared govt `rollForward` (income / expenditure into the accumulated fund) followed by the
+ * inter-fund movement roll (3910/3911/3920/3921 into the same accumulated fund). Only the per-fund (fund_accounting ON) path
+ * calls this; the govt close never does.
+ */
+const rollFund = (base: ReadonlyMap<string, bigint>, moves: ReadonlyArray<HeadMovement>, classify: (code: string) => { classification: string | null }): Map<string, bigint> =>
+  rollInterFundHeads(rollForward(base, moves, classify, ACCUMULATED_FUND), INTER_FUND_MOVEMENT_CODES(), ACCUMULATED_FUND);
+
 const perFund = <T extends { fundId: string }>(items: readonly T[]): Map<string, T[]> => {
   const m = new Map<string, T[]>();
   for (const i of items) { const l = m.get(i.fundId); if (l) l.push(i); else m.set(i.fundId, [i]); }
@@ -74,7 +85,7 @@ export async function fundOpeningForFy(tx: Tx, tenantId: string, general: string
   const out = new Map<string, Map<string, bigint>>();
   const stored = await fundStoredOpening(tx, tenantId, general, fy);
   if (stored.length > 0) {
-    for (const [fundId, rows] of perFund(stored)) out.set(fundId, rollForward(signedByCode(rows), [], classify, ACCUMULATED_FUND));
+    for (const [fundId, rows] of perFund(stored)) out.set(fundId, rollFund(signedByCode(rows), [], classify));
     return out;
   }
   const [anchorRow] = rowsOf(await tx.execute(sql`
@@ -85,7 +96,7 @@ export async function fundOpeningForFy(tx: Tx, tenantId: string, general: string
   const dayBefore = `${Number(fy.slice(0, 4))}-03-31`;
   const moves = perFund(await fundLedgerMovements(tx, tenantId, general, anchor ? fyBounds(anchor).start : null, dayBefore));
   for (const fundId of new Set([...base.keys(), ...moves.keys()])) {
-    out.set(fundId, rollForward(signedByCode(base.get(fundId) ?? []), moves.get(fundId) ?? [], classify, ACCUMULATED_FUND));
+    out.set(fundId, rollFund(signedByCode(base.get(fundId) ?? []), moves.get(fundId) ?? [], classify));
   }
   return out;
 }
@@ -99,7 +110,7 @@ export async function fundCarriedForFy(tx: Tx, tenantId: string, general: string
   const moves = perFund(await fundLedgerMovements(tx, tenantId, general, start, end));
   const carried = new Map<string, Map<string, bigint>>();
   for (const fundId of new Set([...opening.keys(), ...moves.keys()])) {
-    carried.set(fundId, rollForward(opening.get(fundId) ?? new Map(), moves.get(fundId) ?? [], classify, ACCUMULATED_FUND));
+    carried.set(fundId, rollFund(opening.get(fundId) ?? new Map(), moves.get(fundId) ?? [], classify));
   }
   return carried;
 }
