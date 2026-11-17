@@ -13,18 +13,23 @@ describe("B1 catalogue fields (data-keyed)", () => {
     }
   });
 
-  it("govt profiles map to admin edition govt_dept, are requisition-first and never compose on onboard", () => {
+  it("govt profiles map to admin edition govt_dept and are requisition-first", () => {
     for (const code of ["govt_dept", "govt_small_office"]) {
       const p = getProfile(code)!;
       expect(p.adminEdition).toBe("govt_dept");
       expect(p.recruitmentPolicy).toBe("requisition_first");
-      expect(p.composeOnOnboard).toBe(false);
-      expect(composesOnOnboard(code)).toBe(false);
     }
   });
 
-  it("compose allow-list is exactly the former NON_GOVT_PROFILES (section8, small_office, psu)", () => {
-    expect(PROFILES.filter((p) => p.composeOnOnboard).map((p) => p.code).sort()).toEqual(["psu", "section8", "small_office"]);
+  it("govt_dept never composes on onboard; govt_small_office does (B2, migration 0064 bundle)", () => {
+    expect(getProfile("govt_dept")!.composeOnOnboard).toBe(false);
+    expect(composesOnOnboard("govt_dept")).toBe(false);
+    expect(getProfile("govt_small_office")!.composeOnOnboard).toBe(true);
+    expect(composesOnOnboard("govt_small_office")).toBe(true);
+  });
+
+  it("compose allow-list is the former NON_GOVT_PROFILES (section8, small_office, psu) plus govt_small_office", () => {
+    expect(PROFILES.filter((p) => p.composeOnOnboard).map((p) => p.code).sort()).toEqual(["govt_small_office", "psu", "section8", "small_office"]);
     expect(composesOnOnboard("private")).toBe(false);
     expect(composesOnOnboard("nope")).toBe(false);
     expect(composesOnOnboard(null)).toBe(false);

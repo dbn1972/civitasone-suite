@@ -1,5 +1,5 @@
 /**
- * Tenant-profile S5 — composition applied on tenant.tenant.onboarded for non-govt profiles.
+ * Tenant-profile S5 (+B2 govt_small_office) — composition applied on tenant.tenant.onboarded for catalogue composeOnOnboard profiles.
  * AUTHORED, NOT YET RUN (real DB; run in a quiet window). Govt golden: flag off AND on => no composition rows.
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from "vitest";
@@ -90,7 +90,7 @@ describe("migration 0062", () => {
 });
 
 describe("bundle / profile drift guard", () => {
-  it.each(["section8", "small_office", "psu"])("module_bundle.%s equals org_profile.default_modules", async (code) => {
+  it.each(["section8", "small_office", "psu", "govt_small_office"])("module_bundle.%s equals org_profile.default_modules", async (code) => {
     const [b] = await sqlClient`SELECT module_ids FROM composition.module_bundle WHERE code = ${code}`;
     const [p] = await sqlClient`SELECT default_modules FROM composition.org_profile WHERE code = ${code}`;
     expect([...b!.module_ids].sort()).toEqual([...p!.default_modules].sort());
@@ -103,18 +103,31 @@ describe("onboarded consumer — govt golden (byte-identical)", () => {
     const s = await state(T.govtOff);
     expect(s.profile).toHaveLength(0); expect(s.ents).toHaveLength(0); expect(s.mode).toHaveLength(0);
   });
-  it("govt_dept and govt_small_office, flag ON => nothing written", async () => {
+  it("govt_dept, flag ON => nothing written", async () => {
     process.env.TENANT_PROFILES_ENABLED = "true";
     await onboarded(T.govtOn, "govt_dept", "govt");
-    await onboarded(T.smallOfficeGovt, "govt_small_office", "govt");
-    for (const t of [T.govtOn, T.smallOfficeGovt]) {
-      const s = await state(t);
-      expect(s.profile).toHaveLength(0); expect(s.ents).toHaveLength(0); expect(s.mode).toHaveLength(0);
-    }
+    const s = await state(T.govtOn);
+    expect(s.profile).toHaveLength(0); expect(s.ents).toHaveLength(0); expect(s.mode).toHaveLength(0);
   });
-  it("govt profiles are never in the allow-list", () => {
+  it("govt_small_office, flag OFF => nothing written", async () => {
+    await onboarded(T.smallOfficeGovt, "govt_small_office", "govt");
+    const s = await state(T.smallOfficeGovt);
+    expect(s.profile).toHaveLength(0); expect(s.ents).toHaveLength(0); expect(s.mode).toHaveLength(0);
+  });
+  it("govt_small_office, flag ON => composes its 17-module bundle in shadow mode (B2, migration 0064)", async () => {
+    process.env.TENANT_PROFILES_ENABLED = "true";
+    await onboarded(T.smallOfficeGovt, "govt_small_office", "govt");
+    const s = await state(T.smallOfficeGovt);
+    expect(s.profile.map((r) => r.profile_code)).toEqual(["govt_small_office"]);
+    expect(s.mode.map((r) => r.mode)).toEqual(["shadow"]);
+    const [b] = await sqlClient`SELECT module_ids FROM composition.module_bundle WHERE code = 'govt_small_office'`;
+    const ents = s.ents.map((r) => r.module_id as string);
+    for (const m of b!.module_ids as string[]) expect(ents).toContain(m);
+    expect(ents).not.toContain("recruitment");
+  });
+  it("govt_dept is never in the allow-list; govt_small_office is (catalogue data)", () => {
     expect(composesOnOnboard("govt_dept")).toBe(false);
-    expect(composesOnOnboard("govt_small_office")).toBe(false);
+    expect(composesOnOnboard("govt_small_office")).toBe(true);
   });
 });
 

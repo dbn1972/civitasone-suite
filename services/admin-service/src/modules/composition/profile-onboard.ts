@@ -1,10 +1,10 @@
 /**
- * Tenant-profile slice S5 — apply a NON-GOVT segment's module bundle at onboard.
+ * Tenant-profile slice S5 (+B2) — apply a profile's module bundle at onboard (non-govt segments and govt_small_office; never govt_dept).
  *
  * Listens for tenant.tenant.onboarded and, ONLY when TENANT_PROFILES_ENABLED === "true" AND the tenant's profile has
  * `composeOnOnboard: true` in the @civitasone/tenant-profile catalogue, materialises the profile (applyProfileTx) and sets the gateway module-guard mode to
  * `shadow` (would-deny logged, nothing blocked). Anything else is a complete no-op, so the govt pilot is
- * byte-identical: flag off, govt_dept, govt_small_office, unknown / placeholder profiles -> return before ANY read or write
+ * byte-identical: flag off, govt_dept, unknown / placeholder profiles -> return before ANY read or write
  * (not even markProcessed). The allow-list (catalogue `composeOnOnboard`, not a govt deny-list) is deliberate: a new profile code can never
  * accidentally start composing tenants.
  *
@@ -53,7 +53,7 @@ export function registerProfileOnboardConsumer(queue: Queue): void {
       const profiles = await repo.loadProfiles(tenantId);
       const chosen = profiles.find((x) => x.code === profileCode);
       if (!chosen) {
-        log.warn({ tenantId, profileCode }, "org_profile row missing (migration 0062 not applied?); composition skipped");
+        log.warn({ tenantId, profileCode }, "org_profile row missing (migration 0062/0064 not applied?); composition skipped");
         return;
       }
       // Validate the bundle against the registry BEFORE writing (fail loud, like the apply-plan consumer).
