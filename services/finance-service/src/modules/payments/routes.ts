@@ -5,7 +5,7 @@ import { paymentsListSchema, BillSummaryListSchema, BillDetailSchema, AdvanceSum
 import { sendValidated, sendAccepted } from "@civitasone/schemas/validate";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { resolveContext, requireRole, HttpError, financeErrorHandler } from "../../shared/context.js";
-import { createBillBody, approveBillBody, rejectBillBody, initiateEftBody, gemInvoiceMatchBody, createAdvanceBody, createUCBody, adjustAdvanceBody, idParam } from "./validators.js";
+import { createBillBody, createBillBodyNoDdo, initiateEftBodyNoDdo, approveBillBody, rejectBillBody, initiateEftBody, gemInvoiceMatchBody, createAdvanceBody, createUCBody, adjustAdvanceBody, idParam } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 import * as repo from "./repo.js";
@@ -25,6 +25,12 @@ import { idempotentCreate } from "../../shared/idempotency.js";
 import { findHeadByIdAndTenant } from "../budget/repo.js";
 import { assertValidHoAWithMaster } from "../hoa/domain.js";
 import { HoaError } from "../../shared/hoa.js";
+import { resolveCoaTemplateTx } from "../gl/coa-template.js";
+
+/** B3: true when the tenant COA template is govt (also when the profile flag is off / no settings row). Data-keyed on coa_template. */
+async function tenantIsGovt(tenantId: string): Promise<boolean> {
+  return (await scopedRead((tx) => resolveCoaTemplateTx(tx, tenantId))).template === "govt";
+}
 
 /**
  * UAT T-EDGE TE-11 / TE-04: every vendor bill on a head with no head-of-account code (HOA_EMPTY) or
@@ -217,14 +223,16 @@ export async function paymentsRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/finance/bills", { config: { rateLimit: { max: 10, timeWindow: "1 minute" } } }, async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, FINANCE_ROLES);
-    const body = createBillBody.parse(req.body);
+    // B3: the DDO is mandatory only for a govt-template tenant (strict body, as before); other templates may omit it.
+    const billGovt = await tenantIsGovt(ctx.tenantId);
+    const body = billGovt ? createBillBody.parse(req.body) : createBillBodyNoDdo.parse(req.body);
     // A deactivated vendor must not receive new bills. A vendor row that cannot be
     // found is tolerated (bills.vendor_id has no FK yet; see migration 0065).
     const vendor = await mastersRepo.getVendorById(ctx.tenantId, body.vendorId);
     if (vendor && !vendor.isActive) throw new HttpError(409, "VENDOR_INACTIVE", "vendor is deactivated; reactivate it before lodging bills");
     await assertBillHeadUsable(ctx.tenantId, body.headId);
     // UAT b24: an unconfigured DDO used to be a 202 that dead-lettered UNKNOWN_DDO in the worker.
-    await assertBillDdoConfigured(ctx.tenantId, body.ddoCode);
+    if (billGovt) await assertBillDdoConfigured(ctx.tenantId, body.ddoCode);
     // UAT T-EDGE TE-09: one bill per X-Idempotency-Key (same body replays, other body 422).
     return sendAccepted(reply, acceptedResponseSchema, await idempotentCreate(ctx, "finance.bill.create", body, async () => {
       // The vendor's invoice number (body.billNo): with FINANCE_VENDOR_BILL_NO_UNIQUE on, the same vendor cannot lodge it
@@ -301,7 +309,7 @@ export async function paymentsRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/finance/payments/eft", { config: { rateLimit: { max: 10, timeWindow: "1 minute" } } }, async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, FINANCE_ROLES);
-    const body = initiateEftBody.parse(req.body);
+    const body = (await tenantIsGovt(ctx.tenantId)) ? initiateEftBody.parse(req.body) : initiateEftBodyNoDdo.parse(req.body);
     // The optional disbursing account must be an active bank account of THIS tenant (the consumer re-checks and
     // dead-letters nothing: it throws NonRetryable). Same 422 whether it never existed or belongs to another tenant.
     if (body.bankAccountId && !(await repo.isActiveBankAccount(ctx.tenantId, body.bankAccountId))) {

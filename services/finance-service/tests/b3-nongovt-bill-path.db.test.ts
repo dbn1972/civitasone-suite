@@ -9,7 +9,7 @@ import { sql, eq } from "drizzle-orm";
 import { MemoryQueue } from "@civitasone/queue";
 import { db } from "../src/shared/db.js";
 import { scoped } from "./_tenant.js";
-import { financeBills } from "../src/modules/payments/schema.js";
+import { financeBills, financePayments } from "../src/modules/payments/schema.js";
 import { financeHeads } from "../src/modules/budget/schema.js";
 import { financeDdo, financeVendors } from "../src/modules/masters/schema.js";
 import { financeBudgetAllocation } from "../src/modules/budget/allocation-schema.js";
@@ -18,6 +18,8 @@ import { fyFromDate } from "../src/modules/hoa/voucher.js";
 import { COMMANDS } from "../src/topics.js";
 
 const ACTOR = randomUUID();
+const PASSER = randomUUID();
+const PAYER = randomUUID();
 const FY = fyFromDate(new Date().toISOString().slice(0, 10));
 type Tpl = "govt" | "commercial" | "nonprofit";
 interface Fx { tenantId: string; headId: string; vendorId: string; template: Tpl; code: string }
@@ -71,6 +73,7 @@ beforeAll(async () => {
 afterAll(async () => {
   if (prevFlag === undefined) delete process.env.TENANT_PROFILES_ENABLED; else process.env.TENANT_PROFILES_ENABLED = prevFlag;
   for (const t of all) {
+    await scoped(t.tenantId, (tx) => tx.delete(financePayments).where(eq(financePayments.tenantId, t.tenantId)));
     await scoped(t.tenantId, (tx) => tx.delete(financeBills).where(eq(financeBills.tenantId, t.tenantId)));
     await scoped(t.tenantId, (tx) => tx.delete(financeBudgetAllocation).where(eq(financeBudgetAllocation.tenantId, t.tenantId)));
     await scoped(t.tenantId, (tx) => tx.delete(financeVendors).where(eq(financeVendors.id, t.vendorId)));
@@ -115,5 +118,49 @@ describe("B3 (c): a works-style bill (workId, no headCode) takes the template de
     const { billId, dlq } = await post(t, { workId: randomUUID(), worksBillId: randomUUID(), poRef: `works_award:${randomUUID()}`, grnRef: `works_bill:${randomUUID()}`, ...(t === GOV ? { ddoCode: "DDO123456" } : {}) });
     expect(dlq).toEqual([]);
     expect((await rowOf(t, billId))?.headId).toBe(t.headId);
+  });
+});
+
+/** Mark a posted bill passed by a second officer, then run finance.payment.initiate as a third (maker != passer != payer). */
+async function pay(t: Fx, billId: string, over: Record<string, unknown>): Promise<{ paymentId: string; dlq: string[] }> {
+  await scoped(t.tenantId, (tx) => tx.update(financeBills).set({ status: "passed", updatedBy: PASSER }).where(eq(financeBills.id, billId)));
+  const q = new MemoryQueue({ maxAttempts: 1 });
+  registerPaymentsConsumers(q);
+  await q.start();
+  const paymentId = randomUUID();
+  await q.publish(COMMANDS.paymentInitiate, {
+    messageId: randomUUID(), type: COMMANDS.paymentInitiate, tenantId: t.tenantId, actorId: PAYER, correlationId: randomUUID(), schemaVersion: "1.0",
+    payload: { id: paymentId, tenantId: t.tenantId, billId, mode: "NEFT", amountMinor: "30000", currency: "INR", reason: "B3 test", ...over },
+  });
+  await q.drain();
+  await q.stop();
+  return { paymentId, dlq: q.dlq.map((d) => String(d.error)) };
+}
+const payOf = (t: Fx, id: string) => scoped(t.tenantId, (tx) => tx.select().from(financePayments).where(eq(financePayments.id, id))).then((r) => r[0]);
+
+describe("B3 payment path: DDO only for govt", () => {
+  it.each([COM, NPO])("$template bill is PAID with no DDO row and no ddoCode (stored null)", async (t) => {
+    const bill = await post(t, { headCode: "5400" });
+    expect(bill.dlq).toEqual([]);
+    const r = await pay(t, bill.billId, {});
+    expect(r.dlq).toEqual([]);
+    const row = await payOf(t, r.paymentId);
+    expect(row?.status).toBe("initiated");
+    expect(row?.ddoCode ?? null).toBeNull();
+    expect((await rowOf(t, bill.billId))?.status).toBe("paid");
+  });
+  it("govt payment is still refused without a ddoCode, and with a malformed one, and pays with a valid DDO", async () => {
+    // GOV has its DDO row from the (b) tests above.
+    const bill = await post(GOV, { headCode: "2202", ddoCode: "DDO123456" });
+    expect(bill.dlq).toEqual([]);
+    const noDdo = await pay(GOV, bill.billId, {});
+    expect(noDdo.dlq.join(" ")).toMatch(/SCHEMA_VIOLATION/);
+    expect(await payOf(GOV, noDdo.paymentId)).toBeUndefined();
+    const bad = await pay(GOV, bill.billId, { ddoCode: "!!" });
+    expect(bad.dlq.length).toBe(1);
+    expect(await payOf(GOV, bad.paymentId)).toBeUndefined();
+    const ok = await pay(GOV, bill.billId, { ddoCode: "DDO123456" });
+    expect(ok.dlq).toEqual([]);
+    expect((await payOf(GOV, ok.paymentId))?.ddoCode).toBe("DDO123456");
   });
 });

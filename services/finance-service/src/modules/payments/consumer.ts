@@ -489,12 +489,16 @@ export function registerPaymentsConsumers(queue: Queue): void {
   });
 
   sub(COMMANDS.paymentInitiate, async (msg) => {
+    // B3: DDO is a govt-template concept. govt (or flag off / no settings row) keeps the DDO mandatory and validated exactly as
+    // before; commercial / nonprofit may omit it (stored null). Keyed on coa_template only.
+    const { template: payTemplate } = await db.transaction((tx) => resolveCoaTemplateTx(tx, msg.tenantId));
+    const payIsGovt = payTemplate === "govt";
     {
       const schema = z.object({
         id: z.string().uuid(),
         tenantId: z.string().uuid(),
         billId: z.string().uuid(),
-        ddoCode: z.string().min(1),
+        ddoCode: payIsGovt ? z.string().min(1) : z.string().min(1).nullish(),
         mode: z.string().min(1),
         // BUG FIX: initiateEftBody now validates amountMinor via the file's
         // bigint-safe moneyMinorField (see validators.ts) instead of a raw
@@ -506,13 +510,14 @@ export function registerPaymentsConsumers(queue: Queue): void {
       if (!_v.success) throw new NonRetryableError(`[finance/payments] paymentInitiate SCHEMA_VIOLATION: ${_v.error.message}`);
     }
     const p = msg.payload as {
-      id: string; tenantId: string; billId: string; ddoCode: string; mode: string;
+      id: string; tenantId: string; billId: string; ddoCode?: string | null; mode: string;
       amountMinor: number | string | bigint; currency?: string; eftRef?: string; bankAccountId?: string;
       // Optional here (a command queued before `reason` became mandatory at the
       // route must still process); the route enforces it for every new request.
       reason?: string;
     };
-    assertValidDdoCode(p.ddoCode);
+    const payDdo: string | null = payIsGovt ? p.ddoCode as string : (p.ddoCode ?? null);
+    if (payIsGovt) assertValidDdoCode(p.ddoCode as string);
     const paymentAmount = BigInt(p.amountMinor);
     // BUG FIX (cache poisoning): captured from inside the tx and used to prime
     // the cache with the FULL row after commit — see cache.put below.
@@ -526,8 +531,8 @@ export function registerPaymentsConsumers(queue: Queue): void {
       }
       const bill = await repo.findBillByIdTx(tx, p.billId);
       if (!bill) throw new Error(`bill ${p.billId} not found`);
-      if (bill.ddoCode && bill.ddoCode !== p.ddoCode.toUpperCase()) {
-        throw new Error(`DDO code mismatch: bill has ${bill.ddoCode}, payment has ${p.ddoCode}`);
+      if (payDdo && bill.ddoCode && bill.ddoCode !== payDdo.toUpperCase()) {
+        throw new Error(`DDO code mismatch: bill has ${bill.ddoCode}, payment has ${payDdo}`);
       }
       assertBillPassed(bill.status ?? "pending");
       assertValidPaymentMode(p.mode);
@@ -558,7 +563,7 @@ export function registerPaymentsConsumers(queue: Queue): void {
       assertPeriodOpenForApPosting(await getPeriodStatusTx(tx, p.tenantId, payPeriod), payPeriod, "post payment");
       insertedPayment = await repo.insertPayment(tx, {
         id: p.id, tenantId: p.tenantId, billId: p.billId,
-        ddoCode: p.ddoCode.toUpperCase(),
+        ddoCode: payDdo ? payDdo.toUpperCase() : null,
         eftRef: p.eftRef ?? null, mode: p.mode,
         amountMinor: BigInt(p.amountMinor), currency: p.currency ?? "INR",
         ...(p.bankAccountId ? { bankAccountId: p.bankAccountId } : {}),
@@ -605,7 +610,7 @@ export function registerPaymentsConsumers(queue: Queue): void {
       // paise amount, mode, bill, DDO) and why (the officer's reason); the actor is on
       // the envelope. Paise are a decimal string (bigint-safe, no JSON number).
       await audit(tx, msg, "initiate", "payment", p.id, "success", {
-        billId: p.billId, ddoCode: p.ddoCode.toUpperCase(), mode: p.mode,
+        billId: p.billId, ddoCode: payDdo ? payDdo.toUpperCase() : null, mode: p.mode,
         amountMinor: paymentAmount.toString(), currency: p.currency ?? "INR",
         ...(p.reason ? { reason: p.reason } : {}),
       });
