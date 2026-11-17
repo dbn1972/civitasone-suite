@@ -15,8 +15,8 @@ import { fyOfDate } from "../../shared/ist-date.js";
 import { DomainError } from "./domain.js";
 import { HttpError } from "../../shared/context.js";
 import { financeBudgets, financeHeads } from "./schema.js";
-import { financeSettings } from "../approvals/schema.js";
-import { toBudgetControl, type BudgetControl } from "../approvals/domain.js";
+import { type BudgetControl } from "../approvals/domain.js";
+import { loadPostingSettingsTx, type PostingSettings } from "../approvals/posting-settings.js";
 
 export const NO_BUDGET_PROVISION = "NO_BUDGET_PROVISION";
 
@@ -37,14 +37,16 @@ export function provisionAction(mode: BudgetControl, needs: boolean): ProvisionA
 /** A budget problem that did not stop the posting because the tenant's budget control is advisory. */
 export type ProvisionWarning = { code: "NO_BUDGET_PROVISION" | "BUDGET_EXCEEDED"; headCode: string; fy: string };
 
-/** The tenant's budget control. No settings row, or an unknown value, reads as mandatory. */
+/**
+ * The tenant's budget control. No settings row, or an unknown value, reads as mandatory.
+ * Section 8 NF-1 (S4): the settings row is read ONCE per posting by loadPostingSettingsTx (budget control + fund
+ * accounting together). A caller that already holds it passes it as `ps` and no second select runs.
+ */
 export async function loadBudgetControlTx(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  tx: any, tenantId: string,
+  tx: any, tenantId: string, ps?: PostingSettings,
 ): Promise<BudgetControl> {
-  const rows: Array<{ m: string }> = await tx.select({ m: financeSettings.budgetControl }).from(financeSettings)
-    .where(eq(financeSettings.tenantId, tenantId)).limit(1);
-  return toBudgetControl(rows[0]?.m);
+  return (ps ?? await loadPostingSettingsTx(tx, tenantId)).budgetControl;
 }
 
 /**

@@ -29,9 +29,11 @@ const log = pino({ name: "works-billing-consumer" });
  * chart of accounts (never a literal head id, which exists for one tenant only). Default 2202 is the head the old
  * literal id pointed at.
  */
-export function worksBillHeadCode(): string {
+export function worksBillHeadCode(): string | undefined {
+  // B3: with no configured code, send none: finance (which owns the chart) resolves the tenant template default bill head
+  // (govt 2202, commercial / nonprofit 5400), so works holds no chart logic.
   const configured = process.env.WORKS_FINANCE_BILL_HEAD_CODE?.trim();
-  return configured ? configured : "2202";
+  return configured ? configured : undefined;
 }
 
 export function registerBillingConsumers(q: Queue): void {
@@ -438,7 +440,7 @@ export function registerBillingConsumers(q: Queue): void {
             tenantId: msg.tenantId,
             billNo: bill.billNumber,
             vendorId: award.contractorId,
-            headCode: worksBillHeadCode(),
+            ...(worksBillHeadCode() ? { headCode: worksBillHeadCode() as string } : {}),
             grossMinor: bill.grossAmountMinor.toString(),
             netMinor: bill.netPayableMinor.toString(),
             currency: "INR",

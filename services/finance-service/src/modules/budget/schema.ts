@@ -22,6 +22,9 @@ export const financeHeads = budgetSchema.table("finance_heads", {
   // GAP-FINANCE-JOURNAL-ENTRY-04: a control account is maintained by a
   // sub-ledger; manual journals may not post to it directly (migration 0087).
   isControl:      boolean("is_control").notNull().default(false),
+  // Tenant-profile S4 (migration 0169): stored financial-statement class (asset | current_liability | equity | reserve |
+  // income | expense | ...). NULL for every govt head and every pre-existing head; set only by non-govt COA templates.
+  statementClass: varchar("statement_class", { length: 32 }),
   createdAt:      timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:      timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy:      uuid("created_by").notNull(),

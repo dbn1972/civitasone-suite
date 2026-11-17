@@ -1,4 +1,6 @@
-export type Edition = "govt_dept" | "psu" | "small_office";
+import type { AdminEdition } from "@civitasone/tenant-profile";
+
+export type Edition = AdminEdition;
 export type TenantStatus = "draft" | "active" | "suspended" | "archived";
 
 export type TenantView = {

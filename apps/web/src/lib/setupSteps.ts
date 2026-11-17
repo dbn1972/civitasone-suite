@@ -8,6 +8,8 @@
  * Requirements 7 and 13.3.
  */
 
+import type { OnboardingStepId } from "@civitasone/tenant-profile";
+
 export type WizardStepKey =
   | "org-profile"
   | "branches"
@@ -16,7 +18,8 @@ export type WizardStepKey =
   | "modules"
   | "finance-year-coa"
   | "leave-policies"
-  | "pay-structure";
+  | "pay-structure"
+  | "ddo-allotment";
 
 /** Honest tri-state plus an explicit per-tenant deferral. (R8.4, R10.3)
  *
@@ -52,6 +55,11 @@ export type WizardStep = {
   entryHref: string;
   /** Module key when the step only applies to an enabled module. (R13.3) */
   moduleKey?: string;
+  /**
+   * B8: when set, the step only shows for a tenant whose profile lists this id in its catalogue `onboardingSteps`
+   * (@civitasone/tenant-profile). Steps without it always show.
+   */
+  onboardingStepId?: OnboardingStepId;
 };
 
 /** The eight ordered setup areas required by Requirement 7.4. */
@@ -162,6 +170,35 @@ export const WIZARD_STEPS: WizardStep[] = [
     moduleKey: "payroll",
   },
 ];
+
+/**
+ * B8: profile-only steps, kept OUT of WIZARD_STEPS so the base eight areas (and everything derived from them) are
+ * untouched. They show only when the tenant's catalogue profile lists the matching `onboardingStepId`.
+ */
+export const PROFILE_WIZARD_STEPS: WizardStep[] = [
+  {
+    key: "ddo-allotment",
+    num: 9,
+    icon: "🏛️",
+    title: "Set up your DDO and budget allotment",
+    explanation: "Register your Drawing and Disbursing Officer (DDO) and record the budget allotted to your office, so bills and payments can be raised.",
+    example: "e.g. DDO code and name, then this year's allotment for each head",
+    cta: "Set up DDO",
+    required: false,
+    entryHref: "/finance/budget/allocation",
+    moduleKey: "finance",
+    onboardingStepId: "ddo-allotment",
+  },
+];
+
+/**
+ * B8: the steps visible for a profile. `onboardingIds` is the catalogue set (onboardingStepsFor). A step with no
+ * `onboardingStepId` is profile-independent and always shown; a tagged step shows only when the profile lists it.
+ * Data-keyed: nothing here compares a profile or edition string.
+ */
+export function stepsForProfile(steps: WizardStep[], onboardingIds: readonly OnboardingStepId[]): WizardStep[] {
+  return steps.filter((s) => !s.onboardingStepId || onboardingIds.includes(s.onboardingStepId));
+}
 
 /** The finishing/readiness step is reached when all required steps are complete. (R7.7) */
 export const REQUIRED_STEP_KEYS = WIZARD_STEPS.filter((s) => s.required).map((s) => s.key);

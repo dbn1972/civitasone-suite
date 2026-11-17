@@ -1,10 +1,10 @@
 {
   "$comment": "TRACKED DEBT, not an approved state. Each entry is a test that is hard-skipped (.skip/.todo/xdescribe/xit/xtest), env-gated (.skipIf on an unset var/unreachable dependency), or a Playwright runtime-conditional test.skip(condition, message). REL-014: this file is the inventory scripts/ci/flaky-skip-guard.mjs ratchets against — it fails on a NEW skip not listed here, and on a STALE entry (no longer a skip in source). Every hard/env-gated entry must ALSO carry its own inline // FLAKY-SKIP: <reason> (expires: YYYY-MM-DD) comment at the call site — this file tracks identity and count so the total cannot silently grow, it does not replace the inline requirement. Regenerate with --write-baseline after adding/removing/un-skipping a test. See docs/ENTERPRISE-GAP-REPORT-2026-09-07.md REL-014.",
-  "generatedAt": "2026-11-12",
+  "generatedAt": "2026-11-17",
   "hardSkipCount": 12,
-  "envGatedCount": 57,
+  "envGatedCount": 58,
   "runtimeConditionalCount": 5,
-  "count": 74,
+  "count": 75,
   "entries": [
     {
       "key": "apps/web/e2e-uat-live/hr-payroll-uat.spec.ts::Pay structure creation is processed asynchronously and had not landed yet — rerun to pick it up.",
@@ -149,6 +149,11 @@
     {
       "key": "services/document-service/tests/bulk-scan-ocr-e2e.test.ts::real OCR end-to-end via ocr-adapter ${missing ? ",
       "file": "services/document-service/tests/bulk-scan-ocr-e2e.test.ts",
+      "kind": "env-gated"
+    },
+    {
+      "key": "services/finance-service/tests/nf0-govt-golden.test.ts::matches the stored govt golden fixture (tests/fixtures/nf0-govt-golden.json)",
+      "file": "services/finance-service/tests/nf0-govt-golden.test.ts",
       "kind": "env-gated"
     },
     {

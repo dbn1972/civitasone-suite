@@ -31,7 +31,7 @@ describe("tenant-profile catalogue", () => {
     expect(getProfile("govt_dept")!.defaultBillHead).toBe("fixed");
   });
   it("owner decision 2: psu, private, ngo, cooperative behave as today, with the flag on too", () => {
-    for (const c of ["psu", "private", "ngo", "cooperative", "small_office", "section8"]) {
+    for (const c of ["psu", "private", "ngo", "cooperative", "small_office"]) {
       expect(getProfile(c)!.active, c).toBe(false);
       expect(effectiveSettings(c, true), c).toEqual(LEGACY_SETTINGS);
     }
@@ -55,5 +55,30 @@ describe("tenant-profile catalogue", () => {
   });
   it("the legacy settings object is frozen", () => {
     expect(Object.isFrozen(LEGACY_SETTINGS)).toBe(true);
+  });
+  it("B4: section8 is the ONLY nonprofit profile that is active, with its nonprofit settings (small_office stays inactive until Phase C)", () => {
+    const s8 = getProfile("section8")!;
+    expect(s8.active).toBe(true);
+    expect(s8.settings).toEqual({ accountingBasis: "accrual", budgetControl: "advisory", coaTemplate: "nonprofit", coaPacks: [], statutoryPack: "nonprofit_in", fundAccounting: true });
+    // B1 catalogue fields are intact.
+    expect(s8).toMatchObject({ composeOnOnboard: true, adminEdition: "section8", recruitmentPolicy: "direct", manifestKey: "default" });
+    expect(effectiveSettings("section8", true)).toEqual(s8.settings);
+    expect(getProfile("small_office")!.active).toBe(false);
+    expect(PROFILES.filter((p) => p.active).map((p) => p.code).sort()).toEqual(["govt_dept", "govt_small_office", "section8"]);
+  });
+  it("B4: with the flag OFF section8 still resolves to LEGACY_SETTINGS (no production change)", () => {
+    expect(effectiveSettings("section8", false)).toBe(LEGACY_SETTINGS);
+    expect(describeProfile("section8", false).active).toBe(false);
+  });
+  it("NF-0/B4: fundAccounting is false for every profile except an active section8 with the flag on (govt byte-identical)", () => {
+    expect(LEGACY_SETTINGS.fundAccounting).toBe(false);
+    for (const p of PROFILES) {
+      const on = p.code === "section8";
+      expect(p.settings.fundAccounting, p.code).toBe(on);
+      expect(effectiveSettings(p.code, true).fundAccounting, p.code).toBe(on);
+      expect(effectiveSettings(p.code, false).fundAccounting, p.code).toBe(false);
+    }
+    expect(effectiveSettings("nope", true).fundAccounting).toBe(false);
+    expect(effectiveSettings(null, true).fundAccounting).toBe(false);
   });
 });

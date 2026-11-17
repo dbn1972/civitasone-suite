@@ -3,6 +3,7 @@ import { db, scopedRead } from "../../shared/db.js";
 import { HttpError } from "../../shared/context.js";
 import { financeJournals, financeLedger, financeJournalLines, type JournalRow, type JournalInsert, type LedgerInsert, type JournalLineInsert } from "./schema.js";
 import { financeHeads } from "../budget/schema.js";
+import { omitNullFundId } from "./fund-columns.js";
 import { syncVoucher } from "../../shared/global-search.js";
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
@@ -146,7 +147,9 @@ export async function getLedgerLines(tenantId: string, headId: string | undefine
   if (headId) conditions.push(eq(financeLedger.headId, headId));
   if (from) conditions.push(gte(financeLedger.postingDate, from));
   if (to)   conditions.push(lte(financeLedger.postingDate, to));
-  return scopedRead((tx) => tx.select().from(financeLedger).where(and(...conditions)).orderBy(asc(financeLedger.postingDate)).limit(limit));
+  const rows = await scopedRead((tx) => tx.select().from(financeLedger).where(and(...conditions)).orderBy(asc(financeLedger.postingDate)).limit(limit));
+  // Section 8 NF-1: a NULL fund_id adds no `fundId` key to the response (govt byte-identity).
+  return rows.map(omitNullFundId);
 }
 
 export async function getTrialBalance(tenantId: string) {

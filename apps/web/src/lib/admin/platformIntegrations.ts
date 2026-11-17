@@ -8,11 +8,13 @@
  * emptiness checks out of page files.
  */
 
+import { ADMIN_EDITIONS } from "@civitasone/tenant-profile";
+
 export const CATEGORIES = ["esign", "dsc", "bank_api", "pfms", "ocr"] as const;
 export type IntegrationCategory = (typeof CATEGORIES)[number];
 export type IntegrationEnv = "sandbox" | "production";
 export type ProviderStatus = "available" | "beta" | "disabled";
-export const EDITIONS = ["govt_dept", "psu", "small_office"] as const;
+export const EDITIONS = ADMIN_EDITIONS;
 export type Edition = (typeof EDITIONS)[number];
 
 export const PLATFORM_API = "/api/proxy/v1/admin/platform-integrations";

@@ -5,6 +5,7 @@
  * tenant" lives in this file so the route (fast, synchronous 4xx) and the
  * consumer (authoritative, inside the transaction) apply exactly the same rule.
  */
+import { ADMIN_EDITIONS } from "@civitasone/tenant-profile";
 import { z } from "zod";
 import type { TenantStatus } from "./domain.js";
 
@@ -153,7 +154,7 @@ export function assertCanDecide(args: {
 export const editPayloadSchema = z.object({
   name: z.string().trim().min(2).max(200).optional(),
   domain: z.string().trim().min(3).max(253).regex(/^[a-z0-9.-]+$/i).optional(),
-  edition: z.enum(["govt_dept", "psu", "small_office"]).optional(),
+  edition: z.enum(ADMIN_EDITIONS).optional(),
 }).refine((v) => v.name !== undefined || v.domain !== undefined || v.edition !== undefined, { message: "no field to change" });
 export type EditPayload = z.infer<typeof editPayloadSchema>;
 

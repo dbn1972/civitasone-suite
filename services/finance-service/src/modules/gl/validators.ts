@@ -39,6 +39,9 @@ const journalLine = z.object({
   debitMinor:  zMoneyMinor,
   creditMinor: zMoneyMinor,
   narration:   narrationField,
+  // Section 8 NF-1: the fund this line belongs to. Optional; absent keeps the parsed line byte-identical to before. Refused at
+  // posting when fund accounting is off for the tenant (FUND_ACCOUNTING_DISABLED); defaults to GENERAL when it is on.
+  fundId:      z.string().uuid().optional(),
 }).refine(
   (l) => !(l.debitMinor > 0n && l.creditMinor > 0n),
   // LOWER-PRIORITY FIX (accounting-critical, related): a single line with

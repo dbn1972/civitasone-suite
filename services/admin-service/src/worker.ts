@@ -8,6 +8,7 @@ import { registerTenantConsumers } from "./modules/tenants/consumer.js";
 import { registerTenantLifecycleConsumers, startLifecycleSweeper } from "./modules/tenants/lifecycle-consumer.js";
 import { registerConfigConsumers } from "./modules/config/consumer.js";
 import { registerCompositionConsumers } from "./modules/composition/consumer.js";
+import { registerProfileOnboardConsumer } from "./modules/composition/profile-onboard.js";
 import { registerBackupConsumers } from "./modules/backup/consumer.js";
 import { registerSupportConsumers, startBreakGlassSweeper, sweepExpiredBreakGlass } from "./modules/support/consumer.js";
 import { registerScheduledJobConsumers } from "./modules/scheduled-jobs/consumer.js";
@@ -38,6 +39,8 @@ registerConfigConsumers(queue);
 // runWithTenant() (composition tenant tables are FORCE-RLS), so it is
 // registered on the plain queue, like registerSandboxConsumers below.
 registerCompositionConsumers(queue);
+// Tenant-profile S5: non-govt bundle on tenant.tenant.onboarded; no-op unless TENANT_PROFILES_ENABLED=true.
+registerProfileOnboardConsumer(queue);
 registerBackupConsumers(queue);
 registerSupportConsumers(queue);
 registerScheduledJobConsumers(tenantScoped(queue));

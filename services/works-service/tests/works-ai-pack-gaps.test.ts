@@ -155,9 +155,31 @@ describe("Gap 1 — Finance hand-off on bill DO-finalization", () => {
     const payload = mockEnqueued.find((e) => e.topic === FINANCE_HANDOFF.billCreate)!.payload!;
     expect(financeBillCreate.validate(payload)).toEqual({ ok: true });
     expect(payload.vendorId).toBe(CONTRACTOR_ID);
-    expect(payload.headCode).toBe("2202");
+    // B3: works holds no chart logic. With WORKS_FINANCE_BILL_HEAD_CODE unset it sends NO head; finance
+    // (payments/consumer.ts headCodeToUse -> templateDefaultBillHead) resolves the tenant template default: govt -> 2202,
+    // commercial / nonprofit -> 5400 (asserted in finance-service tests/s4-coa-templates.test.ts). Govt still posts to 2202.
+    expect(payload).not.toHaveProperty("headCode");
     expect(payload).not.toHaveProperty("headId");
     expect(payload.worksBillId).toBe(BILL_ID);
+  });
+
+  it("an explicit WORKS_FINANCE_BILL_HEAD_CODE (e.g. the govt bill head 2202) is still sent by code and satisfies the contract", async () => {
+    const prev = process.env.WORKS_FINANCE_BILL_HEAD_CODE;
+    process.env.WORKS_FINANCE_BILL_HEAD_CODE = "2202";
+    try {
+      mockSelectMap.set(bills, [{
+        id: BILL_ID, billNumber: "BILL/2026/003", awardId: AWARD_ID, workId: WORK_ID,
+        grossAmountMinor: 30000n, netPayableMinor: 30000n, status: "dao_finalized",
+      }]);
+      mockSelectMap.set(awards, [{ id: AWARD_ID, contractorId: CONTRACTOR_ID, contractorName: "ACME Works Ltd", acceptedAmountMinor: 1000000n }]);
+      const h = await billingHandlers();
+      await h[COMMANDS.billFinalize]({ ...queueMessage(TENANT_A, ACTOR_A, "msg-fin-contract-env"), payload: { id: BILL_ID, nextStatus: "do_finalized" } });
+      const payload = mockEnqueued.find((e) => e.topic === FINANCE_HANDOFF.billCreate)!.payload!;
+      expect(financeBillCreate.validate(payload)).toEqual({ ok: true });
+      expect(payload.headCode).toBe("2202");
+    } finally {
+      if (prev === undefined) delete process.env.WORKS_FINANCE_BILL_HEAD_CODE; else process.env.WORKS_FINANCE_BILL_HEAD_CODE = prev;
+    }
   });
 
   it("refuses the DO-finalization (NonRetryable, no hand-off) when the award has no contractor to pay", async () => {

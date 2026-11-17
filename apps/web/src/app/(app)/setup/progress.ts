@@ -17,6 +17,7 @@ import {
   getTenantUsers,
   getChartOfAccounts,
   getPayrollStructures,
+  getFinanceDdos,
 } from "@/app/_data/loaders";
 import type { WizardStepKey, StepStatus } from "@/lib/setupSteps";
 
@@ -125,6 +126,12 @@ async function evalPayStructure(): Promise<StepStatus> {
   return listStatus(r.source === "error" ? "error" : "api", r.data.length);
 }
 
+async function evalDdoAllotment(): Promise<StepStatus> {
+  // B8: complete once at least one DDO exists (the same pick-list the bill/payment forms read).
+  const r = await getFinanceDdos();
+  return listStatus(r.source === "error" ? "error" : "api", r.data.length);
+}
+
 const EVALUATORS: Record<WizardStepKey, () => Promise<StepStatus>> = {
   "org-profile": evalOrgProfile,
   branches: evalBranches,
@@ -134,6 +141,7 @@ const EVALUATORS: Record<WizardStepKey, () => Promise<StepStatus>> = {
   "finance-year-coa": evalFinanceYearCoa,
   "leave-policies": evalLeavePolicies,
   "pay-structure": evalPayStructure,
+  "ddo-allotment": evalDdoAllotment,
 };
 
 /** Evaluate one step's completion from real data. Never throws. */

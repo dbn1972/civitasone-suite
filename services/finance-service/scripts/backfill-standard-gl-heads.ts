@@ -23,7 +23,8 @@
 import { randomUUID } from "node:crypto";
 import { pathToFileURL } from "node:url";
 import postgres from "postgres";
-import { missingStandardHeads, missingAccrualStoresHeads, standardGlHeads, SEED_ACTOR, type StandardGlHead } from "../src/modules/gl/standard-heads.js";
+import { tenantProfilesEnabled } from "@civitasone/tenant-profile";
+import { missingStandardHeads, missingAccrualStoresHeads, standardGlHeads, assertNoTemplateCollision, SEED_ACTOR, type StandardGlHead } from "../src/modules/gl/standard-heads.js";
 
 type Sql = ReturnType<typeof postgres>;
 export type TenantPlan = {
@@ -48,20 +49,27 @@ export async function backfillStandardGlHeads(
     const plan = await sql.begin(async (tx) => {
       // Transaction-scoped tenant GUC (RLS), never a session SET (pgbouncer transaction pooling).
       await tx`SELECT set_config('app.tenant_id', ${tenantId}, true)`;
-      const existing = await tx<{ code: string; hoa_code: string | null }[]>`SELECT code, hoa_code FROM budget.finance_heads WHERE tenant_id = ${tenantId}::uuid`;
+      const existing = await tx<{ code: string; hoa_code: string | null; classification: string | null }[]>`SELECT code, hoa_code, classification FROM budget.finance_heads WHERE tenant_id = ${tenantId}::uuid`;
       // UAT L2-N6 review: the stores heads (1400 / GRNI / suspense / 5300) are for ACCRUAL tenants only; a cash-basis
       // tenant (the default) posts no stock journal and gets none of them.
-      const basisRow = await tx<{ accounting_basis: string }[]>`SELECT accounting_basis FROM gl.finance_settings WHERE tenant_id = ${tenantId}::uuid`;
+      const basisRow = await tx<{ accounting_basis: string; coa_template: string }[]>`SELECT accounting_basis, coa_template FROM gl.finance_settings WHERE tenant_id = ${tenantId}::uuid`;
       const basis: "cash" | "accrual" = basisRow[0]?.accounting_basis === "accrual" ? "accrual" : "cash";
       const codes = existing.map((r) => r.code);
-      const missing = [...missingStandardHeads(codes), ...(basis === "accrual" ? missingAccrualStoresHeads(codes) : [])];
+      // Tenant-profile S4: a non-govt tenant is backfilled from ITS template (only while the profile flag is on); govt / flag
+      // off / no settings row => the govt list, exactly as before.
+      const stored = basisRow[0]?.coa_template;
+      const template: "govt" | "commercial" | "nonprofit" = tenantProfilesEnabled() && (stored === "commercial" || stored === "nonprofit") ? stored : "govt";
+      // Fail loudly (CoaTemplateCollisionError, nothing written for this tenant) if the tenant already uses a template-only
+      // code for another purpose; core codes are never checked. Govt: no check, as before.
+      if (template !== "govt") assertNoTemplateCollision(existing.map((r) => ({ code: r.code, classification: r.classification })), template);
+      const missing = [...missingStandardHeads(codes, template), ...(basis === "accrual" ? missingAccrualStoresHeads(codes, template) : [])];
       const inserted: string[] = [];
       if (!opts.dryRun) {
         for (const h of missing) {
           const rows = await tx<{ code: string }[]>`
-            INSERT INTO budget.finance_heads (id, tenant_id, code, name, level, classification, hoa_code, is_control, created_by, updated_by)
+            INSERT INTO budget.finance_heads (id, tenant_id, code, name, level, classification, hoa_code, is_control, statement_class, created_by, updated_by)
             VALUES (${randomUUID()}::uuid, ${tenantId}::uuid, ${h.code}, ${h.name}, 0, ${h.classification}, ${h.hoaCode ?? null},
-                    ${h.isControl ?? false}, ${SEED_ACTOR}::uuid, ${SEED_ACTOR}::uuid)
+                    ${h.isControl ?? false}, ${h.statementClass ?? null}, ${SEED_ACTOR}::uuid, ${SEED_ACTOR}::uuid)
             ON CONFLICT (tenant_id, code) DO NOTHING
             RETURNING code`;
           if (rows[0]) inserted.push(rows[0].code);
@@ -71,7 +79,7 @@ export async function backfillStandardGlHeads(
       // UAT tenant B's 2202, so every bill raised against it fails the HoA check) gets the standard HoA. Only a NULL is
       // filled; a head that has any HoA keeps it.
       const hoaFill: string[] = [];
-      if (opts.fillMissingHoa) {
+      if (opts.fillMissingHoa && template === "govt") {
         const have = new Map(existing.map((r) => [r.code, r.hoa_code]));
         for (const h of standardGlHeads()) {
           if (!h.hoaCode || !have.has(h.code) || have.get(h.code) !== null) continue;

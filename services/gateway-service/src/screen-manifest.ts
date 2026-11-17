@@ -5,6 +5,7 @@
  * Endpoint: GET /api/v1/config/screens (called once at app load, cached by frontend)
  */
 import type { FastifyInstance } from "fastify";
+import { manifestKeyFor, type ManifestKey } from "@civitasone/tenant-profile";
 import { MSME_SECTOR_MODULES, resolveMsmeModules, type MsmeSector } from "./msme-modules.js";
 
 export type SidebarItem = {
@@ -137,11 +138,12 @@ const SERVICES_TERMS: Record<string, string> = {
 
 // ── Resolver ─────────────────────────────────────────────────────────────────
 
-function resolveManifest(edition: string, settings: Record<string, unknown> | null): ScreenManifest {
+/** Exported for tests. Keyed on the catalogue `manifestKey`, never on the edition string. */
+export function resolveManifest(edition: string, settings: Record<string, unknown> | null, manifestKey: ManifestKey = manifestKeyFor(null, edition)): ScreenManifest {
   const msme = (settings?.msme ?? null) as { sector?: string; category?: string } | null;
   const sector = (msme?.sector ?? null) as MsmeSector | null;
 
-  if (edition === "small_office" && sector) {
+  if (manifestKey === "msme" && sector) {
     switch (sector) {
       case "manufacturing":
         return {
@@ -206,6 +208,7 @@ export function registerScreenManifestRoute(app: FastifyInstance): void {
     // Fetch tenant info (edition + settings) from admin/tenant service
     const tenantUrl = process.env.GATEWAY_TENANT_URL ?? "http://127.0.0.1:3002";
     let edition = "small_office";
+    let profileCode: string | null = null;
     let settings: Record<string, unknown> | null = null;
 
     try {
@@ -218,15 +221,16 @@ export function registerScreenManifestRoute(app: FastifyInstance): void {
         signal: AbortSignal.timeout(3000),
       });
       if (res.ok) {
-        const data = await res.json() as { edition?: string; settings?: Record<string, unknown> };
+        const data = await res.json() as { edition?: string; profileCode?: string | null; settings?: Record<string, unknown> };
         edition = data.edition ?? "small_office";
+        profileCode = data.profileCode ?? null;
         settings = data.settings ?? null;
       }
     } catch {
       // On failure, use defaults (don't block the app from loading)
     }
 
-    const manifest = resolveManifest(edition, settings);
+    const manifest = resolveManifest(edition, settings, manifestKeyFor(profileCode, edition));
     return reply.send(manifest);
   });
 }

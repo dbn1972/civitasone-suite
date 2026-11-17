@@ -28,6 +28,7 @@ import { storeJournalTx } from "../ledger-export/repo.js";
 import { tenantHasModule } from "../../shared/tenant-modules.js";
 import { loadAllowanceRuleRows, resolveAllowanceRules, type AllowanceRuleRow } from "../pay-profiles/allowance-rules.js";
 import { planEmployeePay } from "../pay-profiles/plan.js";
+import { resolveTenantPensionDefault } from "../pay-profiles/tenant-pension-default.js";
 import { ctcProfileEnabled, prorateExpansion } from "../ctc/model.js";
 import { buildCtcPlanContext, ctcEarningsOverride, ctcPaidSnapshot } from "../ctc/runtime.js";
 import { annualTaxFromTaxableMinor, stdDeduction, type Regime } from "../tax/engine.js";
@@ -2396,6 +2397,8 @@ async function processPayrollRun(
   // period: the run month here, historical months for retro arrears.
   const allowanceRuleRows: AllowanceRuleRow[] = await scopedRead((tx) => loadAllowanceRuleRows(tx, p.tenantId));
   const allowanceRules = resolveAllowanceRules(allowanceRuleRows, p.tenantId, p.month);
+  // B6: pension default from the tenant profile's statutory pack (NPS when profiles are off); fails closed.
+  const defaultPension = await resolveTenantPensionDefault(p.tenantId);
   const hraFloorConfigured = Object.values(allowanceRules.hraFloorMinor).some((f) => f > 0n);
   // Days in the run month (LOP divisor) — 7th CPC uses actual days, not flat 30.
   const daysInMonth = BigInt(new Date(Number(p.month.slice(0, 4)), Number(p.month.slice(5, 7)), 0).getDate());
@@ -2612,7 +2615,7 @@ async function processPayrollRun(
         }
         continue;
       }
-      const planned = planEmployeePay(emp, p.month, daRateBps, allowanceRules, s8CtcContext);
+      const planned = planEmployeePay(emp, p.month, daRateBps, allowanceRules, s8CtcContext, defaultPension);
       if (!planned.ok) throw new DomainError(planned.code, planned.message);
       const plan = planned.plan;
       const empDaRateBps = plan.daRateBps;
