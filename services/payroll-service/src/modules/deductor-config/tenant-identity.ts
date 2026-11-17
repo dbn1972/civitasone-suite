@@ -51,6 +51,7 @@ export interface TenantDocIdentity {
 /** A tenant that was read successfully but has no documentIdentity. */
 export const EMPTY_TENANT_DOC_IDENTITY: TenantDocIdentity = {
   orgName: null, tenantName: null, address: null, tan: null, pan: null, deductorCategory: null,
+  profileCode: null, suggestedDeductorCategory: null,
 };
 /** tenant-service has no record of this tenant: nothing can be configured for it. */
 export const UNREGISTERED_TENANT_DOC_IDENTITY: TenantDocIdentity = { ...EMPTY_TENANT_DOC_IDENTITY, registered: false };
