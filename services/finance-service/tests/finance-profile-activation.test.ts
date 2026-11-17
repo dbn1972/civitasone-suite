@@ -91,7 +91,9 @@ describe("finance activation real Postgres: onboard sequence (activate -> resolv
       return;
     }
     expect(rows).toHaveLength(1);
-    expect(rows[0]).toMatchObject({ coaTemplate: eff.coaTemplate, accountingBasis: eff.accountingBasis, budgetControl: eff.budgetControl, profileCode: code, version: 1 });
+    // Created at v1; a profile that turns fund accounting on is bumped to v2 by the guarded setFundAccountingTx flip.
+    const expectedVersion = eff.fundAccounting ? 2 : 1;
+    expect(rows[0]).toMatchObject({ coaTemplate: eff.coaTemplate, accountingBasis: eff.accountingBasis, budgetControl: eff.budgetControl, profileCode: code, version: expectedVersion });
     expect(codes(await heads(t))).toEqual(codes(glHeadsForTemplate(eff.coaTemplate)));
   });
 
