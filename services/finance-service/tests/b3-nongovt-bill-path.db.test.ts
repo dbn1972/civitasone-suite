@@ -37,6 +37,12 @@ async function seed(t: Fx, withGovtMasters: boolean): Promise<void> {
     classification: t.template === "govt" ? "expenditure" : "expense",
     ...(t.template === "govt" ? { hoaCode: "220201101010101010" } : {}), createdBy: ACTOR, updatedBy: ACTOR,
   }));
+  // The payment-initiate consumer posts Dr Accounts-Payable / Cr Bank, resolved per tenant by code (defaults 2050 / 1100); same
+  // seed as tests/payments-initiate-audit.test.ts seedHeads().
+  await scoped(t.tenantId, (tx) => tx.insert(financeHeads).values([
+    { id: randomUUID(), tenantId: t.tenantId, code: "2050", name: "Accounts Payable control", level: 1, createdBy: ACTOR, updatedBy: ACTOR },
+    { id: randomUUID(), tenantId: t.tenantId, code: "1100", name: "Bank", level: 1, createdBy: ACTOR, updatedBy: ACTOR },
+  ]).onConflictDoNothing());
   if (withGovtMasters) {
     await scoped(t.tenantId, (tx) => tx.insert(financeDdo).values({ tenantId: t.tenantId, ddoCode: "DDO123456", name: "DDO", createdBy: ACTOR, updatedBy: ACTOR }).onConflictDoNothing());
   }
@@ -78,7 +84,7 @@ afterAll(async () => {
     await scoped(t.tenantId, (tx) => tx.delete(financeBudgetAllocation).where(eq(financeBudgetAllocation.tenantId, t.tenantId)));
     await scoped(t.tenantId, (tx) => tx.delete(financeVendors).where(eq(financeVendors.id, t.vendorId)));
     await scoped(t.tenantId, (tx) => tx.delete(financeDdo).where(eq(financeDdo.tenantId, t.tenantId)));
-    await scoped(t.tenantId, (tx) => tx.delete(financeHeads).where(eq(financeHeads.id, t.headId)));
+    await scoped(t.tenantId, (tx) => tx.delete(financeHeads).where(eq(financeHeads.tenantId, t.tenantId)));
     await scoped(t.tenantId, (tx) => tx.execute(sql`DELETE FROM gl.finance_settings WHERE tenant_id = ${t.tenantId}::uuid`));
   }
   void db;
