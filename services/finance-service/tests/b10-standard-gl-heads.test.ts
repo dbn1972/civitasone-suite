@@ -12,7 +12,7 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { standardGlHeads, missingStandardHeads, BILL_HEAD_HOA, accrualStoresHeads } from "../src/modules/gl/standard-heads.js";
+import { standardGlHeads, missingStandardHeads, BILL_HEAD_HOA, accrualStoresHeads, glHeadsForTemplate } from "../src/modules/gl/standard-heads.js";
 import { natureOf } from "../src/modules/financial-statements/routes.js";
 import { parseHoA } from "../src/shared/hoa.js";
 
@@ -102,14 +102,14 @@ describe("standard GL heads", () => {
   it("cover every default account code a posting path resolves by code", () => {
     // UAT L2-N6 review: the stores heads are seeded for ACCRUAL tenants only (accrualStoresHeads, added by the
     // backfill per accounting basis) -- they still have to be declared there.
-    const codes = new Set([...standardGlHeads(), ...accrualStoresHeads()].map((h) => h.code));
+    const codes = new Set([...standardGlHeads(), ...accrualStoresHeads(), ...glHeadsForTemplate("nonprofit")].map((h) => h.code));
     const uses = defaultUses();
     expect(uses.length).toBeGreaterThan(25); // the scan really saw the posting modules
     expect(uses.filter((u) => !codes.has(u.code)).map((u) => u.source)).toEqual([]);
   });
 
   it("every scanned code has a declared use, and the seeded head has that nature (classification AND statements)", () => {
-    const byCode = new Map([...standardGlHeads(), ...accrualStoresHeads()].map((h) => [h.code, h]));
+    const byCode = new Map([...standardGlHeads(), ...accrualStoresHeads(), ...glHeadsForTemplate("nonprofit")].map((h) => [h.code, h]));
     const problems: string[] = [];
     for (const u of defaultUses()) {
       if (!u.use) { problems.push(`${u.source}: use not declared in ENV_USE / LITERAL_USE`); continue; }
