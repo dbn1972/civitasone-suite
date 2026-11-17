@@ -52,7 +52,7 @@ export function registerTenantOnboardConsumers(queue: Queue): void {
       const tenantId = p.tenantId ?? msg.tenantId;
       // Tenant-profile finance activation: materialise the profile's initial gl.finance_settings FIRST, in this same
       // transaction, so the resolve below sees it. No-op (no query, no write) with the flag off or for govt_dept.
-      await activateFinanceProfileTx(tx, tenantId, p.profileCode, msg.actorId);
+      await activateFinanceProfileTx(tx, tenantId, p.profileCode, msg.actorId, msg.correlationId);
       const { template, packs } = await resolveCoaTemplateTx(tx, tenantId);
       return seedGlHeadsTx(tx, tenantId, template, packs, msg.actorId);
     });

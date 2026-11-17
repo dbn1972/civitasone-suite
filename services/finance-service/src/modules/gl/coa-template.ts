@@ -1,6 +1,8 @@
 import { and, eq, sql } from "drizzle-orm";
 import { tenantProfilesEnabled, getProfile, effectiveSettings, LEGACY_SETTINGS, COA_TEMPLATES, type CoaTemplate, type ProfileSettings } from "@civitasone/tenant-profile";
+import { randomUUID } from "node:crypto";
 import { financeSettings } from "../approvals/schema.js";
+import { setFundAccountingTx } from "./fund-activation.js";
 
 type SettingsReader = {
   select: (cols: { coaTemplate: typeof financeSettings.coaTemplate; profileCode: typeof financeSettings.profileCode }) => {
@@ -46,7 +48,7 @@ export function profileFinanceSettings(profileCode: string | null | undefined, f
 
 /**
  * Tenant-profile finance activation: at tenant.onboarded, write the tenant's INITIAL gl.finance_settings (coa_template,
- * accounting_basis, budget_control, profile_code) from its profile, in the SAME transaction that then resolves the template
+ * accounting_basis, budget_control, profile_code; fund_accounting via setFundAccountingTx when the profile sets it) from its profile, in the SAME transaction that then resolves the template
  * and seeds the heads -- so the seed sees the row (no ordering race) and a non-govt tenant gets its own chart.
  *
  *  - Flag off, or a profile that resolves to LEGACY (govt_dept): returns false and touches nothing (no query, no write).
@@ -54,14 +56,14 @@ export function profileFinanceSettings(profileCode: string | null | undefined, f
  *    profile column at its default), so a redelivery or a row that maker-checker already changed is left alone.
  *  - coa_template stays non-API-settable; later changes still go through the approvals maker-checker path.
  */
-export async function activateFinanceProfileTx(tx: unknown, tenantId: string, profileCode: string | null | undefined, actorId: string): Promise<boolean> {
+export async function activateFinanceProfileTx(tx: unknown, tenantId: string, profileCode: string | null | undefined, actorId: string, correlationId: string = randomUUID()): Promise<boolean> {
   const want = profileFinanceSettings(profileCode);
   if (!want) return false;
   const { settings: s } = want;
   const values = { accountingBasis: s.accountingBasis, budgetControl: s.budgetControl, coaTemplate: s.coaTemplate, profileCode: want.profileCode };
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const t = tx as any;
-  await t.insert(financeSettings).values({ tenantId, ...values, updatedBy: actorId })
+  const applied = await t.insert(financeSettings).values({ tenantId, ...values, updatedBy: actorId })
     .onConflictDoUpdate({
       target: financeSettings.tenantId,
       set: { ...values, updatedBy: actorId, updatedAt: new Date(), version: sql`${financeSettings.version} + 1` },
@@ -69,6 +71,12 @@ export async function activateFinanceProfileTx(tx: unknown, tenantId: string, pr
         eq(financeSettings.version, 1), eq(financeSettings.coaTemplate, "govt"), eq(financeSettings.accountingBasis, "cash"),
         eq(financeSettings.budgetControl, "mandatory"), eq(financeSettings.profileCode, "govt_dept"),
       ),
-    });
+    }).returning({ tenantId: financeSettings.tenantId });
+  // Fund accounting (Section 8): never a raw column write (DB trigger gl.guard_fund_accounting_flip). Only when THIS call
+  // applied the pristine row (a redelivery, or a row maker-checker already changed, returns no row and is left alone), and
+  // through the one guarded path, which also creates the GENERAL fund in this same transaction.
+  if (s.fundAccounting && applied.length > 0) {
+    await setFundAccountingTx(t, { tenantId, actorId, correlationId }, true, `tenant profile ${want.profileCode} onboard`);
+  }
   return true;
 }

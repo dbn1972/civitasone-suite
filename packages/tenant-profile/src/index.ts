@@ -49,10 +49,10 @@ export type ProfileSettings = {
   coaPacks: readonly string[];
   statutoryPack: StatutoryPack;
   /**
-   * Section 8: fund accounting (docs/design/SECTION8-NONPROFIT-FINANCE.md). This is the profile's DEFAULT only. Nothing
-   * copies it into gl.finance_settings.fund_accounting yet: that column is changed solely by finance-service's
-   * setFundAccountingTx (gl/fund-activation.ts), which the NF-8 activation wizard will call, per tenant. false for govt and
-   * every profile that does not set it; no profile turns it on until NF-8 (strictly last).
+   * Section 8: fund accounting (docs/design/SECTION8-NONPROFIT-FINANCE.md). This is the profile's DEFAULT. It is never
+   * copied by a raw UPDATE: finance-service's activateFinanceProfileTx (gl/coa-template.ts) turns it on at onboard through
+   * setFundAccountingTx (gl/fund-activation.ts), the one guarded path (DB trigger gl.guard_fund_accounting_flip). false for
+   * govt and every profile that does not set it; only the active section8 profile sets it true.
    */
   fundAccounting: boolean;
 };
@@ -122,10 +122,10 @@ export const PROFILES: readonly ProfileDef[] = Object.freeze([
     settings: { accountingBasis: "accrual", budgetControl: "advisory", coaTemplate: "commercial", coaPacks: [], statutoryPack: "commercial_in", fundAccounting: false },
   },
   {
-    code: "section8", label: "Section 8 company", family: "nonprofit", editions: ["section8"], active: false,
+    code: "section8", label: "Section 8 company", family: "nonprofit", editions: ["section8"], active: true,
     defaultBillHead: "fixed", bundleCode: "section8",
     composeOnOnboard: true, adminEdition: "section8", recruitmentPolicy: "direct", manifestKey: "default",
-    settings: { accountingBasis: "accrual", budgetControl: "advisory", coaTemplate: "nonprofit", coaPacks: [], statutoryPack: "nonprofit_in", fundAccounting: false },
+    settings: { accountingBasis: "accrual", budgetControl: "advisory", coaTemplate: "nonprofit", coaPacks: [], statutoryPack: "nonprofit_in", fundAccounting: true },
   },
 ] satisfies ProfileDef[]);
 

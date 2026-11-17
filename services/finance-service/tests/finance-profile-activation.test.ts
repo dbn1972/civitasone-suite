@@ -15,6 +15,7 @@ import { sqlClient } from "../src/shared/db.js";
 import { scoped } from "./_tenant.js";
 import { financeHeads } from "../src/modules/budget/schema.js";
 import { financeSettings } from "../src/modules/approvals/schema.js";
+import { funds } from "../src/modules/gl/schema.js";
 import { glHeadsForTemplate, seedGlHeadsTx, standardGlHeads } from "../src/modules/gl/standard-heads.js";
 import { resolveCoaTemplateTx, activateFinanceProfileTx, profileFinanceSettings } from "../src/modules/gl/coa-template.js";
 
@@ -49,7 +50,7 @@ describe("finance activation pure: profileFinanceSettings", () => {
 describe("finance activation real Postgres: onboard sequence (activate -> resolve -> seed, one tx)", () => {
   // Mirrors tenant-onboard/consumer.ts exactly.
   const onboard = (t: string, profileCode: string | undefined) => scoped(t, async (tx) => {
-    await activateFinanceProfileTx(tx, t, profileCode, ACTOR);
+    await activateFinanceProfileTx(tx, t, profileCode, ACTOR, randomUUID());
     const { template, packs } = await resolveCoaTemplateTx(tx, t);
     return seedGlHeadsTx(tx, t, template, packs, ACTOR);
   });
@@ -94,6 +95,43 @@ describe("finance activation real Postgres: onboard sequence (activate -> resolv
     expect(codes(await heads(t))).toEqual(codes(glHeadsForTemplate(eff.coaTemplate)));
   });
 
+  it("B4: a NEW section8 tenant gets accrual + advisory + nonprofit coa_template + fund_accounting ON, the nonprofit heads and a GENERAL fund", async () => {
+    process.env.TENANT_PROFILES_ENABLED = "true";
+    const t = randomUUID();
+    await onboard(t, "section8");
+    const rows = await settingsRows(t);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ accountingBasis: "accrual", budgetControl: "advisory", coaTemplate: "nonprofit", profileCode: "section8", fundAccounting: true });
+    const got = await heads(t);
+    expect(codes(got)).toEqual(codes(glHeadsForTemplate("nonprofit")));
+    expect(got.length).toBeGreaterThan(0);
+    const fs = await scoped(t, (tx) => tx.select().from(funds).where(eq(funds.tenantId, t)));
+    expect(fs.map((f) => f.code)).toEqual(["GENERAL"]);
+  });
+
+  it("B4: section8 redelivery leaves the settings row, funds and heads untouched (fund flag is not re-applied)", async () => {
+    process.env.TENANT_PROFILES_ENABLED = "true";
+    const t = randomUUID();
+    await onboard(t, "section8");
+    const before = await settingsRows(t); const hb = codes(await heads(t));
+    await onboard(t, "section8");
+    expect(await settingsRows(t)).toEqual(before);
+    expect(codes(await heads(t))).toEqual(hb);
+    expect(await scoped(t, (tx) => tx.select().from(funds).where(eq(funds.tenantId, t)))).toHaveLength(1);
+  });
+
+  it("B4: govt_dept, govt_small_office and small_office never turn fund accounting on (small_office is NOT activated)", async () => {
+    process.env.TENANT_PROFILES_ENABLED = "true";
+    for (const code of ["govt_dept", "govt_small_office", "small_office"] as const) {
+      const t = randomUUID();
+      await onboard(t, code);
+      const rows = await settingsRows(t);
+      for (const r of rows) expect(r.fundAccounting === true, code).toBe(false);
+      expect(await scoped(t, (tx) => tx.select().from(funds).where(eq(funds.tenantId, t)))).toHaveLength(0);
+    }
+    expect(getProfile("small_office")!.active).toBe(false);
+  });
+
   it("idempotent: a redelivery changes nothing", async () => {
     process.env.TENANT_PROFILES_ENABLED = "true";
     const t = randomUUID();
@@ -131,7 +169,7 @@ describe("finance activation real Postgres: onboard sequence (activate -> resolv
     expect(await settingsRows(t)).toEqual(before);
   });
 
-  it("inactive profile (psu / small_office / section8 still active:false) on a PRISTINE row is a no-op: row untouched, govt heads", async () => {
+  it("inactive profile (psu / small_office still active:false; section8 is active since B4) on a PRISTINE row is a no-op: row untouched, govt heads", async () => {
     process.env.TENANT_PROFILES_ENABLED = "true";
     for (const code of ["psu", "small_office", "section8"] as const) {
       const eff = effectiveSettings(code, true);
