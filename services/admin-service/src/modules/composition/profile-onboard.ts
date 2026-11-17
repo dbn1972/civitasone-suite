@@ -1,11 +1,11 @@
 /**
  * Tenant-profile slice S5 — apply a NON-GOVT segment's module bundle at onboard.
  *
- * Listens for tenant.tenant.onboarded and, ONLY when TENANT_PROFILES_ENABLED === "true" AND the tenant's profile is
- * one of NON_GOVT_PROFILES, materialises the profile (applyProfileTx) and sets the gateway module-guard mode to
+ * Listens for tenant.tenant.onboarded and, ONLY when TENANT_PROFILES_ENABLED === "true" AND the tenant's profile has
+ * `composeOnOnboard: true` in the @civitasone/tenant-profile catalogue, materialises the profile (applyProfileTx) and sets the gateway module-guard mode to
  * `shadow` (would-deny logged, nothing blocked). Anything else is a complete no-op, so the govt pilot is
  * byte-identical: flag off, govt_dept, govt_small_office, unknown / placeholder profiles -> return before ANY read or write
- * (not even markProcessed). The allow-list (not a govt deny-list) is deliberate: a new profile code can never
+ * (not even markProcessed). The allow-list (catalogue `composeOnOnboard`, not a govt deny-list) is deliberate: a new profile code can never
  * accidentally start composing tenants.
  *
  * Idempotent and non-clobbering: skipped if the tenant already has a composition profile (a manual
@@ -18,6 +18,7 @@ import { pino } from "pino";
 import type { Queue } from "@civitasone/queue";
 import { runWithTenant } from "@civitasone/db";
 import { eq } from "drizzle-orm";
+import { composesOnOnboard, tenantProfilesEnabled } from "@civitasone/tenant-profile";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
@@ -30,12 +31,9 @@ const log = pino({ name: "admin-composition-profile-onboard" });
 const TENANT_ONBOARDED = "tenant.tenant.onboarded";
 const AUDIT_TOPIC = "audit.event.record";
 
-/** Profiles this consumer may compose. Govt profiles are intentionally absent. */
-export const NON_GOVT_PROFILES: ReadonlySet<string> = new Set(["section8", "small_office", "psu"]);
-
-/** Inlined TENANT_PROFILES_ENABLED check (same semantics as @civitasone/tenant-profile, which admin does not depend on). */
+/** TENANT_PROFILES_ENABLED === "true": delegated to the catalogue package (single source of the flag semantics). */
 export function profilesEnabled(env: Record<string, string | undefined> = process.env): boolean {
-  return env.TENANT_PROFILES_ENABLED === "true";
+  return tenantProfilesEnabled(env);
 }
 
 interface OnboardedPayload {
@@ -50,7 +48,7 @@ export function registerProfileOnboardConsumer(queue: Queue): void {
     const p = msg.payload;
     const tenantId = p.tenantId ?? msg.tenantId;
     const profileCode = p.profileCode ?? p.edition;
-    if (!tenantId || !profileCode || !NON_GOVT_PROFILES.has(profileCode)) return; // govt / unknown: exact no-op
+    if (!tenantId || !profileCode || !composesOnOnboard(profileCode)) return; // govt / unknown: exact no-op
     try {
       const profiles = await repo.loadProfiles(tenantId);
       const chosen = profiles.find((x) => x.code === profileCode);

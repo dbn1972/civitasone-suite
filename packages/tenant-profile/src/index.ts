@@ -21,6 +21,21 @@ export type CoaTemplate = (typeof COA_TEMPLATES)[number];
 export const ACCOUNTING_BASES = ["cash", "accrual"] as const;
 export type AccountingBasis = (typeof ACCOUNTING_BASES)[number];
 
+/**
+ * Admin-service directory edition strings (admin tenants.admin_tenants.edition / config.admin_editions.edition).
+ * tenant-service edition `govt` is the admin edition `govt_dept`; every other edition is the same word.
+ */
+export const ADMIN_EDITIONS = ["govt_dept", "psu", "small_office", "private", "ngo", "section8", "cooperative"] as const;
+export type AdminEdition = (typeof ADMIN_EDITIONS)[number];
+
+/** Recruitment sourcing rule carried by the profile (consumed by hrms-service in slice B6). */
+export const RECRUITMENT_POLICIES = ["requisition_first", "direct"] as const;
+export type RecruitmentPolicy = (typeof RECRUITMENT_POLICIES)[number];
+
+/** Screen-manifest family the gateway serves for this profile (consumed by gateway-service in slice B6). */
+export const MANIFEST_KEYS = ["default", "msme"] as const;
+export type ManifestKey = (typeof MANIFEST_KEYS)[number];
+
 export type StatutoryPack = "govt_in" | "commercial_in" | "nonprofit_in";
 
 /** Bumped whenever a profile definition changes; carried on tenant events as `profileVersion`. */
@@ -47,6 +62,15 @@ export type ProfileDef = {
   defaultBillHead: "fixed" | "wizard";
   /** Composition bundle / org_profile code in admin-service. */
   bundleCode: string;
+  /**
+   * true = admin-service composes this profile's module bundle when the tenant is onboarded (flag on). An allow-list
+   * driven by data: a new profile composes nothing until it is explicitly set true here.
+   */
+  composeOnOnboard: boolean;
+  /** The admin directory edition string a tenant of this profile is stored under. */
+  adminEdition: AdminEdition;
+  recruitmentPolicy: RecruitmentPolicy;
+  manifestKey: ManifestKey;
   settings: ProfileSettings;
 };
 
@@ -61,31 +85,38 @@ export const LEGACY_SETTINGS: ProfileSettings = Object.freeze({
 
 const GOVT: ProfileSettings = LEGACY_SETTINGS;
 
-const legacyPlaceholder = (code: string, label: string, edition: Edition): ProfileDef => ({
-  code, label, family: "govt", editions: [edition], active: false, defaultBillHead: "fixed", bundleCode: code, settings: GOVT,
+const legacyPlaceholder = (
+  code: string, label: string, edition: Edition, adminEdition: AdminEdition, composeOnOnboard: boolean,
+): ProfileDef => ({
+  code, label, family: "govt", editions: [edition], active: false, defaultBillHead: "fixed", bundleCode: code,
+  composeOnOnboard, adminEdition, recruitmentPolicy: "direct", manifestKey: "default", settings: GOVT,
 });
 
 export const PROFILES: readonly ProfileDef[] = Object.freeze([
-  { code: "govt_dept", label: "Government department", family: "govt", editions: ["govt"], active: true, defaultBillHead: "fixed", bundleCode: "govt_dept", settings: GOVT },
+  { code: "govt_dept", label: "Government department", family: "govt", editions: ["govt"], active: true, defaultBillHead: "fixed", bundleCode: "govt_dept",
+    composeOnOnboard: false, adminEdition: "govt_dept", recruitmentPolicy: "requisition_first", manifestKey: "default", settings: GOVT },
   {
     code: "govt_small_office", label: "Small government office", family: "govt", editions: ["govt"], active: true, defaultBillHead: "wizard",
     bundleCode: "govt_small_office",
+    composeOnOnboard: false, adminEdition: "govt_dept", recruitmentPolicy: "requisition_first", manifestKey: "default",
     // Owner decision 1 (2026-11-06): budget control is mandatory from day one.
     settings: { ...GOVT, coaPacks: ["office-pack"] },
   },
-  legacyPlaceholder("psu", "PSU / Board", "psu"),
-  legacyPlaceholder("private", "Private company", "private"),
-  legacyPlaceholder("ngo", "NGO / Trust / Society", "ngo"),
-  legacyPlaceholder("cooperative", "Cooperative society", "cooperative"),
+  legacyPlaceholder("psu", "PSU / Board", "psu", "psu", true),
+  legacyPlaceholder("private", "Private company", "private", "private", false),
+  legacyPlaceholder("ngo", "NGO / Trust / Society", "ngo", "ngo", false),
+  legacyPlaceholder("cooperative", "Cooperative society", "cooperative", "cooperative", false),
   {
     // Edition small_office is the MSME self-signup edition (tenant-service msme-onboard), not a government office.
     code: "small_office", label: "Small business / MSME", family: "commercial", editions: ["small_office"], active: false,
     defaultBillHead: "fixed", bundleCode: "small_office",
+    composeOnOnboard: true, adminEdition: "small_office", recruitmentPolicy: "direct", manifestKey: "msme",
     settings: { accountingBasis: "accrual", budgetControl: "advisory", coaTemplate: "commercial", coaPacks: [], statutoryPack: "commercial_in" },
   },
   {
     code: "section8", label: "Section 8 company", family: "nonprofit", editions: ["section8"], active: false,
     defaultBillHead: "fixed", bundleCode: "section8",
+    composeOnOnboard: true, adminEdition: "section8", recruitmentPolicy: "direct", manifestKey: "default",
     settings: { accountingBasis: "accrual", budgetControl: "advisory", coaTemplate: "nonprofit", coaPacks: [], statutoryPack: "nonprofit_in" },
   },
 ] satisfies ProfileDef[]);
@@ -99,6 +130,19 @@ export function defaultProfileCode(edition: string): string {
 
 export function getProfile(code: string | null | undefined): ProfileDef | undefined {
   return code ? BY_CODE.get(code) : undefined;
+}
+
+/**
+ * The admin directory edition for a tenant-service edition (`govt` -> `govt_dept`, otherwise the same word), read from
+ * the catalogue. An edition the catalogue does not know passes through unchanged (the admin DB CHECK then rejects it).
+ */
+export function adminEditionFor(edition: string): string {
+  return getProfile(defaultProfileCode(edition))?.adminEdition ?? edition;
+}
+
+/** Whether admin-service composes this profile's bundle at onboard. Unknown / absent profile -> false (allow-list). */
+export function composesOnOnboard(profileCode: string | null | undefined): boolean {
+  return getProfile(profileCode)?.composeOnOnboard === true;
 }
 
 export function isProfileAllowedForEdition(profileCode: string, edition: string): boolean {

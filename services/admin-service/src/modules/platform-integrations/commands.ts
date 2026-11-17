@@ -10,10 +10,11 @@
  * consumer's schema rejects anything else, so a plaintext secret can neither
  * travel through the queue/outbox/DLQ nor be stored.
  */
+import { ADMIN_EDITIONS } from "@civitasone/tenant-profile";
 import { z } from "zod";
 import { INTEGRATION_CATEGORIES, PROVIDER_STATUSES } from "./schema.js";
 
-export const EDITIONS = ["govt_dept", "psu", "small_office"] as const;
+export const EDITIONS = ADMIN_EDITIONS;
 
 const key = z.string().regex(/^[a-z][a-z0-9_]{1,63}$/);
 const httpsUrlOrNull = z.string().url().max(2048).refine((u) => u.startsWith("https://"), "must be https").nullable();

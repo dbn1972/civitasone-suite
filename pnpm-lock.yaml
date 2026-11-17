@@ -860,6 +860,9 @@ importers:
       '@civitasone/storage':
         specifier: workspace:*
         version: link:../../packages/storage
+      '@civitasone/tenant-profile':
+        specifier: workspace:*
+        version: link:../../packages/tenant-profile
       '@civitasone/types':
         specifier: workspace:*
         version: link:../../packages/types

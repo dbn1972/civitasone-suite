@@ -7,7 +7,9 @@ import { randomUUID } from "node:crypto";
 
 const { sqlClient } = await import("../src/shared/db.js");
 const { queue } = await import("../src/shared/infra.js");
-const { registerProfileOnboardConsumer, NON_GOVT_PROFILES } = await import("../src/modules/composition/profile-onboard.js");
+const { registerProfileOnboardConsumer } = await import("../src/modules/composition/profile-onboard.js");
+
+const { composesOnOnboard } = await import("@civitasone/tenant-profile");
 
 const ADMIN = "11111111-eeee-4000-8000-000000000001";
 const T = {
@@ -111,8 +113,8 @@ describe("onboarded consumer — govt golden (byte-identical)", () => {
     }
   });
   it("govt profiles are never in the allow-list", () => {
-    expect(NON_GOVT_PROFILES.has("govt_dept")).toBe(false);
-    expect(NON_GOVT_PROFILES.has("govt_small_office")).toBe(false);
+    expect(composesOnOnboard("govt_dept")).toBe(false);
+    expect(composesOnOnboard("govt_small_office")).toBe(false);
   });
 });
 

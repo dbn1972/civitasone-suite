@@ -6,6 +6,7 @@
  * failure) and publish a command. The consumer re-applies every rule inside
  * its transaction; the pre-check is courtesy, the consumer is the authority.
  */
+import { ADMIN_EDITIONS } from "@civitasone/tenant-profile";
 import { sendAccepted } from "@civitasone/schemas/validate";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import type { FastifyInstance } from "fastify";
@@ -172,7 +173,7 @@ export async function tenantLifecycleRoutes(app: FastifyInstance): Promise<void>
   app.patch("/v1/admin/tenants/:id/edition", async (req, reply) => {
     const ctx = resolveContext(req); requireSuperAdmin(ctx);
     const { id } = idParam.parse(req.params);
-    const body = z.object({ edition: z.enum(["govt_dept", "psu", "small_office"]), reason: reasonField }).parse(req.body);
+    const body = z.object({ edition: z.enum(ADMIN_EDITIONS), reason: reasonField }).parse(req.body);
     return sendAccepted(reply, acceptedResponseSchema,
       await create(ctx, id, { kind: "edit", reason: body.reason, changes: { edition: body.edition } }, false));
   });
