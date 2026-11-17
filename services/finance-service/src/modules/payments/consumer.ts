@@ -17,9 +17,10 @@ import { minorString } from "@civitasone/schemas/money";
 import * as ucRepo from "./uc-repo.js";
 import { assertUCWithinSanction, assertUCPeriodValid } from "./uc-domain.js";
 import { assertValidDdoCode, PfmsValidationError } from "../../shared/pfms.js";
-import { HoaError } from "../../shared/hoa.js";
-import { assertValidHoAWithMaster } from "../hoa/domain.js";
-import { ddoExists, paoExists, vendorExists } from "../masters/repo.js";
+import { assertBillHeadValid } from "./bill-head.js";
+import { resolveCoaTemplateTx } from "../gl/coa-template.js";
+import { templateDefaultBillHead } from "../gl/system-heads.js";
+import { vendorExists } from "../masters/repo.js";
 import * as pfmsRepo from "../pfms/repo.js";
 import { getPeriodStatusTx } from "../period-close/repo.js";
 import * as allocRepo from "../budget/allocation-repo.js";
@@ -126,7 +127,9 @@ export function registerPaymentsConsumers(queue: Queue): void {
       throw new NonRetryableError(`SCHEMA_VIOLATION: finance.bill.create payload does not match the contract (${fields})`);
     }
     const rawHead = msg.payload as { headId?: unknown; headCode?: unknown };
-    if (!rawHead.headCode && !rawHead.headId) {
+    const isWorksBill = typeof (msg.payload as { workId?: unknown }).workId === "string";
+    // B3: a works bill with no configured head code asks finance for the tenant template default (the works service holds no chart).
+    if (!rawHead.headCode && !rawHead.headId && !isWorksBill) {
       throw new NonRetryableError("SCHEMA_VIOLATION: finance.bill.create needs headCode (or a legacy headId)");
     }
     // Read the normalised payload: a bigint deduction amount would otherwise crash the jsonb write (JSON.stringify).
@@ -142,12 +145,18 @@ export function registerPaymentsConsumers(queue: Queue): void {
     // B1: when the producer (e.g. grn.accepted integration handler) omits ddoCode,
     // fall back to FINANCE_DEFAULT_DDO_CODE env var, then the tenant PFMS config
     // defaultDdo, then the constant DDO000001 (prevents dead-lettering every GRN bill).
-    let resolvedDdoCode = p.ddoCode;
-    if (!resolvedDdoCode) {
-      const tenantCfg = await pfmsRepo.getTenantConfig(msg.tenantId);
-      resolvedDdoCode = process.env.FINANCE_DEFAULT_DDO_CODE ?? tenantCfg?.defaultDdo ?? "DDO000001";
+    // B3: the bill head / DDO rules follow the tenant COA template (data key). govt (or flag off) is the pre-B3 path unchanged.
+    const { template: coaTemplate } = await db.transaction((tx) => resolveCoaTemplateTx(tx, msg.tenantId));
+    const isGovt = coaTemplate === "govt";
+    let resolvedDdoCode: string | null = p.ddoCode ?? null;
+    if (isGovt) {
+      if (!resolvedDdoCode) {
+        const tenantCfg = await pfmsRepo.getTenantConfig(msg.tenantId);
+        resolvedDdoCode = process.env.FINANCE_DEFAULT_DDO_CODE ?? tenantCfg?.defaultDdo ?? "DDO000001";
+      }
+      const ddoToCheck = resolvedDdoCode;
+      asRefusal(PfmsValidationError, () => assertValidDdoCode(ddoToCheck));
     }
-    asRefusal(PfmsValidationError, () => assertValidDdoCode(resolvedDdoCode));
     const hasMismatch = !p.poRef || !p.grnRef;
     // C3: derive the period from the bill's OWN posting/value date, not wall-clock.
     // The bill carries an optional billDate (YYYY-MM-DD); when absent we fall back
@@ -161,27 +170,21 @@ export function registerPaymentsConsumers(queue: Queue): void {
       if (!(await markProcessed(tx, msg.messageId))) return;
       // UAT b10 F94: producers name the head by CODE, resolved in the bill tenant's own chart. A literal head id from
       // one tenant (the old FINANCE_DEFAULT_HEAD_ID) never resolves for another tenant.
-      const head = p.headCode
-        ? await budgetRepo.findHeadByCodeTx(tx, p.tenantId, p.headCode)
+      const headCodeToUse = p.headCode ?? (p.headId ? undefined : (process.env.WORKS_FINANCE_BILL_HEAD_CODE?.trim() || templateDefaultBillHead(coaTemplate)));
+      const head = headCodeToUse
+        ? await budgetRepo.findHeadByCodeTx(tx, p.tenantId, headCodeToUse)
         : await budgetRepo.findHeadByIdTx(tx, p.headId as string);
-      const reader = tx as unknown as Parameters<typeof ddoExists>[2];
+      const reader = tx as unknown as Parameters<typeof vendorExists>[2];
       // M3: a referenced head that does not resolve for this tenant is a hard error,
       // not a silently-skipped control. (A head is always referenced on a bill.)
       if (!head || head.tenantId !== p.tenantId) {
-        throw p.headCode
-          ? new NonRetryableError(`UNKNOWN_HEAD_CODE: head code ${p.headCode} is not in the chart of accounts for tenant`)
+        throw headCodeToUse
+          ? new NonRetryableError(`UNKNOWN_HEAD_CODE: head code ${headCodeToUse} is not in the chart of accounts for tenant`)
           : new NonRetryableError(`UNKNOWN_HEAD: ${p.headId} not found in budget head master for tenant`);
       }
       const headId = head.id;
-      // HoA: well-formed 18-digit segmentation + major head exists in master
-      await asRefusalAsync(HoaError, () => assertValidHoAWithMaster(head.hoaCode, reader));
-      // DDO/PAO must exist in the per-tenant master (when provided)
-      if (!(await ddoExists(p.tenantId, resolvedDdoCode.toUpperCase(), reader))) {
-        throw new NonRetryableError(`UNKNOWN_DDO: ${resolvedDdoCode} not found in DDO master`);
-      }
-      if (p.paoCode && !(await paoExists(p.tenantId, p.paoCode.toUpperCase(), reader))) {
-        throw new NonRetryableError(`UNKNOWN_PAO: ${p.paoCode} not found in PAO master`);
-      }
+      // B3: template-keyed head validation. govt = HoA-with-master, DDO, PAO (as before, same order); other templates = leaf expense head.
+      await assertBillHeadValid({ coaTemplate, tenantId: p.tenantId, head, ddoCode: resolvedDdoCode, paoCode: p.paoCode, reader: reader as unknown as Parameters<typeof assertBillHeadValid>[0]["reader"] });
       // BUG FIX: vendorId previously only got a UUID-format check (Zod) —
       // never an existence/tenant lookup — so a bill citing a vendor that
       // doesn't exist anywhere (or belongs to a different tenant) was
@@ -244,7 +247,7 @@ export function registerPaymentsConsumers(queue: Queue): void {
       await repo.insertBill(tx, {
         id: p.id, tenantId: p.tenantId, billNo, vendorId: p.vendorId,
         ...(vendorBillNo ? { vendorBillNo } : {}),
-        headId, ddoCode: resolvedDdoCode.toUpperCase(),
+        headId, ...(resolvedDdoCode ? { ddoCode: resolvedDdoCode.toUpperCase() } : {}),
         ...(p.paoCode ? { paoCode: p.paoCode.toUpperCase() } : {}),
         sanctionRef: p.sanctionRef ?? null,
         grossMinor: BigInt(p.grossMinor), currency: p.currency ?? "INR",
