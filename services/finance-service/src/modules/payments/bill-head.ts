@@ -40,12 +40,20 @@ export async function assertBillHeadValid(i: BillHeadInput): Promise<void> {
     }
     return;
   }
-  const { head } = i;
-  if (headNatureOf(head.code, head.classification) !== "expense") {
-    throw new NonRetryableError(`BILL_HEAD_INVALID: head ${head.code} must be an expense head`);
-  }
-  if (head.isControl) throw new NonRetryableError(`BILL_HEAD_INVALID: head ${head.code} is a control account and cannot take a bill`);
-  if (await hasChildHeadsTx(i.reader as unknown as ChildTx, head.id)) {
-    throw new NonRetryableError(`BILL_HEAD_INVALID: head ${head.code} is a group account; choose a leaf head`);
-  }
+  const refusal = nonGovtBillHeadRefusal(i.head, await hasChildHeadsTx(i.reader as unknown as ChildTx, i.head.id));
+  if (refusal) throw new NonRetryableError(`${refusal.code}: ${refusal.message}`);
+}
+
+/**
+ * The non-govt bill-head rule, ONE definition shared by the consumer (assertBillHeadValid) and the POST /v1/finance/bills
+ * route, so the two cannot diverge: a leaf expense head that is not a control account. PURE; null = usable.
+ */
+export function nonGovtBillHeadRefusal(
+  head: { code: string; classification: string | null; isControl?: boolean | null },
+  hasChildren: boolean,
+): { code: "BILL_HEAD_INVALID"; message: string } | null {
+  if (headNatureOf(head.code, head.classification) !== "expense") return { code: "BILL_HEAD_INVALID", message: `head ${head.code} must be an expense head` };
+  if (head.isControl) return { code: "BILL_HEAD_INVALID", message: `head ${head.code} is a control account and cannot take a bill` };
+  if (hasChildren) return { code: "BILL_HEAD_INVALID", message: `head ${head.code} is a group account; choose a leaf head` };
+  return null;
 }

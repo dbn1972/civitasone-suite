@@ -19,6 +19,7 @@ import { assertUCWithinSanction, assertUCPeriodValid } from "./uc-domain.js";
 import { assertValidDdoCode, PfmsValidationError } from "../../shared/pfms.js";
 import { assertBillHeadValid } from "./bill-head.js";
 import { resolveCoaTemplateTx } from "../gl/coa-template.js";
+import { tenantProfilesEnabled } from "@civitasone/tenant-profile";
 import { templateDefaultBillHead } from "../gl/system-heads.js";
 import { vendorExists } from "../masters/repo.js";
 import * as pfmsRepo from "../pfms/repo.js";
@@ -146,7 +147,7 @@ export function registerPaymentsConsumers(queue: Queue): void {
     // fall back to FINANCE_DEFAULT_DDO_CODE env var, then the tenant PFMS config
     // defaultDdo, then the constant DDO000001 (prevents dead-lettering every GRN bill).
     // B3: the bill head / DDO rules follow the tenant COA template (data key). govt (or flag off) is the pre-B3 path unchanged.
-    const { template: coaTemplate } = await db.transaction((tx) => resolveCoaTemplateTx(tx, msg.tenantId));
+    const { template: coaTemplate } = tenantProfilesEnabled() ? await db.transaction((tx) => resolveCoaTemplateTx(tx, msg.tenantId)) : { template: "govt" as const };
     const isGovt = coaTemplate === "govt";
     let resolvedDdoCode: string | null = p.ddoCode ?? null;
     if (isGovt) {
@@ -154,6 +155,10 @@ export function registerPaymentsConsumers(queue: Queue): void {
         const tenantCfg = await pfmsRepo.getTenantConfig(msg.tenantId);
         resolvedDdoCode = process.env.FINANCE_DEFAULT_DDO_CODE ?? tenantCfg?.defaultDdo ?? "DDO000001";
       }
+      const ddoToCheck = resolvedDdoCode;
+      asRefusal(PfmsValidationError, () => assertValidDdoCode(ddoToCheck));
+    } else if (resolvedDdoCode) {
+      // A DDO that IS present is format-checked whatever the template (a bad one would trip the DB CHECK as a retryable loop).
       const ddoToCheck = resolvedDdoCode;
       asRefusal(PfmsValidationError, () => assertValidDdoCode(ddoToCheck));
     }
@@ -491,7 +496,7 @@ export function registerPaymentsConsumers(queue: Queue): void {
   sub(COMMANDS.paymentInitiate, async (msg) => {
     // B3: DDO is a govt-template concept. govt (or flag off / no settings row) keeps the DDO mandatory and validated exactly as
     // before; commercial / nonprofit may omit it (stored null). Keyed on coa_template only.
-    const { template: payTemplate } = await db.transaction((tx) => resolveCoaTemplateTx(tx, msg.tenantId));
+    const { template: payTemplate } = tenantProfilesEnabled() ? await db.transaction((tx) => resolveCoaTemplateTx(tx, msg.tenantId)) : { template: "govt" as const };
     const payIsGovt = payTemplate === "govt";
     {
       const schema = z.object({
@@ -518,6 +523,7 @@ export function registerPaymentsConsumers(queue: Queue): void {
     };
     const payDdo: string | null = payIsGovt ? p.ddoCode as string : (p.ddoCode ?? null);
     if (payIsGovt) assertValidDdoCode(p.ddoCode as string);
+    else if (payDdo) asRefusal(PfmsValidationError, () => assertValidDdoCode(payDdo));
     const paymentAmount = BigInt(p.amountMinor);
     // BUG FIX (cache poisoning): captured from inside the tx and used to prime
     // the cache with the FULL row after commit — see cache.put below.

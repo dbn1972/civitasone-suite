@@ -22,13 +22,16 @@ import { actorsQuery } from "./validators.js";
 import { assertProvisionHttp, attachBudgetWarnings } from "../budget/provision.js";
 import { todayIST } from "../../shared/ist-date.js";
 import { idempotentCreate } from "../../shared/idempotency.js";
-import { findHeadByIdAndTenant } from "../budget/repo.js";
+import { findHeadByIdAndTenant, hasChildHeadsTx } from "../budget/repo.js";
+import { nonGovtBillHeadRefusal } from "./bill-head.js";
 import { assertValidHoAWithMaster } from "../hoa/domain.js";
 import { HoaError } from "../../shared/hoa.js";
 import { resolveCoaTemplateTx } from "../gl/coa-template.js";
+import { tenantProfilesEnabled } from "@civitasone/tenant-profile";
 
 /** B3: true when the tenant COA template is govt (also when the profile flag is off / no settings row). Data-keyed on coa_template. */
 async function tenantIsGovt(tenantId: string): Promise<boolean> {
+  if (!tenantProfilesEnabled()) return true; // flag off => govt, with no DB round trip (resolveCoaTemplateTx would also return govt)
   return (await scopedRead((tx) => resolveCoaTemplateTx(tx, tenantId))).template === "govt";
 }
 
@@ -39,10 +42,16 @@ async function tenantIsGovt(tenantId: string): Promise<boolean> {
  * bill consumer runs are made here first, so the answer is an immediate 422 on headId. The
  * consumer keeps its own check (the master can change in between).
  */
-async function assertBillHeadUsable(tenantId: string, headId: string): Promise<void> {
+async function assertBillHeadUsable(tenantId: string, headId: string, govt: boolean): Promise<void> {
   const head = await findHeadByIdAndTenant(headId, tenantId);
   if (!head) {
     throw new HttpError(422, "HEAD_NOT_FOUND", "the budget head was not found", [{ field: "headId", message: "Choose an existing budget head.", code: "HEAD_NOT_FOUND" }]);
+  }
+  if (!govt) {
+    // B3: commercial / nonprofit heads carry no HoA; apply the same leaf-expense rule the consumer applies (shared function).
+    const refusal = nonGovtBillHeadRefusal(head, await scopedRead((tx) => hasChildHeadsTx(tx as never, head.id)));
+    if (refusal) throw new HttpError(422, refusal.code, refusal.message, [{ field: "headId", message: refusal.message, code: refusal.code }]);
+    return;
   }
   try {
     await assertValidHoAWithMaster(head.hoaCode);
@@ -230,7 +239,7 @@ export async function paymentsRoutes(app: FastifyInstance): Promise<void> {
     // found is tolerated (bills.vendor_id has no FK yet; see migration 0065).
     const vendor = await mastersRepo.getVendorById(ctx.tenantId, body.vendorId);
     if (vendor && !vendor.isActive) throw new HttpError(409, "VENDOR_INACTIVE", "vendor is deactivated; reactivate it before lodging bills");
-    await assertBillHeadUsable(ctx.tenantId, body.headId);
+    await assertBillHeadUsable(ctx.tenantId, body.headId, billGovt);
     // UAT b24: an unconfigured DDO used to be a 202 that dead-lettered UNKNOWN_DDO in the worker.
     if (billGovt) await assertBillDdoConfigured(ctx.tenantId, body.ddoCode);
     // UAT T-EDGE TE-09: one bill per X-Idempotency-Key (same body replays, other body 422).
