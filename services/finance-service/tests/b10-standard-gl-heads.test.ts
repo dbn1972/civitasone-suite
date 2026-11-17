@@ -43,6 +43,10 @@ const ENV_USE: Record<string, Nature> = {
   FINANCE_GRNI_CODE: "liability", FINANCE_STORES_SUSPENSE_CODE: "liability",
   // UAT T-PERIOD (b19): cash-basis disposal proceeds receipt; the year-end accumulated fund
   FINANCE_ASSET_SALE_RECEIPT_CODE: "income", FINANCE_ACCUMULATED_FUND_CODE: "equity", FINANCE_MISC_RECEIPTS_CODE: "income",
+  // Section 8 NF-1/NF-7: inter-fund heads (system-heads.ts FUND_HEAD_CODES; seeded in the nonprofit chart, standard-heads.ts)
+  FINANCE_FUND_DUE_TO_CODE: "liability", FINANCE_FUND_DUE_FROM_CODE: "asset",
+  FINANCE_FUND_TRANSFER_OUT_CODE: "equity", FINANCE_FUND_TRANSFER_IN_CODE: "equity",
+  FINANCE_FUND_RELEASE_OUT_CODE: "equity", FINANCE_FUND_RELEASE_IN_CODE: "equity",
 };
 /** Literal `accountCode: "1234"` legs (payroll accrual, integrations/consumer.ts). */
 const LITERAL_USE: Record<string, Nature> = { "5001": "expense", "5002": "expense", "2101": "liability", "2102": "liability", "2103": "liability" };
