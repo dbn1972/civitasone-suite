@@ -98,7 +98,8 @@ export const PROFILES: readonly ProfileDef[] = Object.freeze([
   {
     code: "govt_small_office", label: "Small government office", family: "govt", editions: ["govt"], active: true, defaultBillHead: "wizard",
     bundleCode: "govt_small_office",
-    composeOnOnboard: false, adminEdition: "govt_dept", recruitmentPolicy: "requisition_first", manifestKey: "default",
+    // B2: admin migration 0064 seeds the govt_small_office org_profile + bundle (17 modules), composed in shadow mode.
+    composeOnOnboard: true, adminEdition: "govt_dept", recruitmentPolicy: "requisition_first", manifestKey: "default",
     // Owner decision 1 (2026-11-06): budget control is mandatory from day one.
     settings: { ...GOVT, coaPacks: ["office-pack"] },
   },
