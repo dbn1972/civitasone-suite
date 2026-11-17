@@ -1,5 +1,5 @@
-import { eq } from "drizzle-orm";
-import { tenantProfilesEnabled, getProfile, COA_TEMPLATES, type CoaTemplate } from "@civitasone/tenant-profile";
+import { and, eq, sql } from "drizzle-orm";
+import { tenantProfilesEnabled, getProfile, effectiveSettings, LEGACY_SETTINGS, COA_TEMPLATES, type CoaTemplate, type ProfileSettings } from "@civitasone/tenant-profile";
 import { financeSettings } from "../approvals/schema.js";
 
 type SettingsReader = {
@@ -26,4 +26,49 @@ export async function resolveCoaTemplateTx(tx: unknown, tenantId: string): Promi
   // Packs ride on the stored profile (govt_small_office -> office-pack); only a govt chart can carry one.
   const packs = template === "govt" ? [...(getProfile(rows[0]?.profileCode)?.settings.coaPacks ?? [])] : [];
   return { template, packs };
+}
+
+/**
+ * The gl.finance_settings columns a profile materialises at onboard, or null when the profile resolves to LEGACY_SETTINGS
+ * (flag off, unknown/placeholder profile, govt_dept) -- in which case NO row is written and onboarding is exactly what it
+ * was before. The one edition->settings mapping point here is the tenant-profile catalogue (effectiveSettings); nothing
+ * is hard-coded. Pure.
+ */
+export function profileFinanceSettings(profileCode: string | null | undefined, flagOn: boolean = tenantProfilesEnabled()):
+  { profileCode: string; settings: ProfileSettings } | null {
+  const p = getProfile(profileCode);
+  if (!flagOn || !p) return null;
+  const settings = effectiveSettings(p.code, true);
+  const legacy = settings.coaTemplate === LEGACY_SETTINGS.coaTemplate && settings.accountingBasis === LEGACY_SETTINGS.accountingBasis
+    && settings.budgetControl === LEGACY_SETTINGS.budgetControl && settings.coaPacks.length === 0;
+  return legacy ? null : { profileCode: p.code, settings };
+}
+
+/**
+ * Tenant-profile finance activation: at tenant.onboarded, write the tenant's INITIAL gl.finance_settings (coa_template,
+ * accounting_basis, budget_control, profile_code) from its profile, in the SAME transaction that then resolves the template
+ * and seeds the heads -- so the seed sees the row (no ordering race) and a non-govt tenant gets its own chart.
+ *
+ *  - Flag off, or a profile that resolves to LEGACY (govt_dept): returns false and touches nothing (no query, no write).
+ *  - Never overwrites a tenant's settings: ON CONFLICT updates ONLY a row that is still pristine (version 1 and every
+ *    profile column at its default), so a redelivery or a row that maker-checker already changed is left alone.
+ *  - coa_template stays non-API-settable; later changes still go through the approvals maker-checker path.
+ */
+export async function activateFinanceProfileTx(tx: unknown, tenantId: string, profileCode: string | null | undefined, actorId: string): Promise<boolean> {
+  const want = profileFinanceSettings(profileCode);
+  if (!want) return false;
+  const { settings: s } = want;
+  const values = { accountingBasis: s.accountingBasis, budgetControl: s.budgetControl, coaTemplate: s.coaTemplate, profileCode: want.profileCode };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const t = tx as any;
+  await t.insert(financeSettings).values({ tenantId, ...values, updatedBy: actorId })
+    .onConflictDoUpdate({
+      target: financeSettings.tenantId,
+      set: { ...values, updatedBy: actorId, updatedAt: new Date(), version: sql`${financeSettings.version} + 1` },
+      setWhere: and(
+        eq(financeSettings.version, 1), eq(financeSettings.coaTemplate, "govt"), eq(financeSettings.accountingBasis, "cash"),
+        eq(financeSettings.budgetControl, "mandatory"), eq(financeSettings.profileCode, "govt_dept"),
+      ),
+    });
+  return true;
 }
