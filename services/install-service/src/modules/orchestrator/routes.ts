@@ -15,6 +15,7 @@ import {
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 import * as repo from "./repo.js";
+import { onboardingStepsFor } from "@civitasone/tenant-profile";
 import { defaultOnboardingSteps, ONBOARDING_WIZARD_NAME } from "./onboarding.js";
 
 const ROLES = ["install_user", "install_admin", "super_admin", "tenant_admin"];
@@ -49,13 +50,17 @@ export async function orchestratorRoutes(app: FastifyInstance): Promise<void> {
       typeof (req.body as { domainPackKey?: string } | null)?.domainPackKey === "string"
         ? (req.body as { domainPackKey: string }).domainPackKey
         : "municipal-in-v1";
+    // B8: the step set comes from the profile catalogue. No profileCode (or the TENANT_PROFILES_ENABLED flag off, or a
+    // placeholder profile) resolves to the legacy set = the municipal pack only = the pre-B8 wizard.
+    const profileCode = (req.body as { profileCode?: unknown } | null)?.profileCode;
+    const stepIds = onboardingStepsFor(typeof profileCode === "string" ? profileCode : null);
     sendAccepted(
       reply,
       acceptedResponseSchema,
       await commands.createWizard(ctx, {
         name: ONBOARDING_WIZARD_NAME,
         description: "ULB / tenant onboarding — Stage 3 activates a Domain Pack into editable drafts.",
-        steps: defaultOnboardingSteps(domainPackKey),
+        steps: defaultOnboardingSteps(domainPackKey, stepIds),
       }),
     );
   });

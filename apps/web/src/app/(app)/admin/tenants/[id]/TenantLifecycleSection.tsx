@@ -1,5 +1,6 @@
 "use client";
 
+import { ADMIN_EDITIONS } from "@civitasone/tenant-profile";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useFormatter, useTranslations } from "next-intl";
@@ -32,7 +33,8 @@ export type TenantLifecycleSectionProps = {
   policy: TenantApprovalPolicy;
 };
 
-const EDITIONS = ["govt_dept", "psu", "small_office"] as const;
+// B8: the selectable editions come from the tenant-profile catalogue (same list admin-service validates against).
+const EDITIONS = ADMIN_EDITIONS;
 
 export function TenantLifecycleSection({
   tenantId, tenantName, tenantStatus, current, initialRequests, requestsSource, policy,

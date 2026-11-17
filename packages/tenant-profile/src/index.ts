@@ -36,6 +36,16 @@ export type RecruitmentPolicy = (typeof RECRUITMENT_POLICIES)[number];
 export const MANIFEST_KEYS = ["default", "msme"] as const;
 export type ManifestKey = (typeof MANIFEST_KEYS)[number];
 
+/**
+ * B8: onboarding steps a profile adds to the tenant setup flow (install-service onboarding wizard + the web setup wizard).
+ * `municipal-pack` = the ULB Domain Pack activation step; `ddo-allotment` = DDO master + budget allotment setup.
+ */
+export const ONBOARDING_STEP_IDS = ["municipal-pack", "ddo-allotment"] as const;
+export type OnboardingStepId = (typeof ONBOARDING_STEP_IDS)[number];
+
+/** What every tenant's onboarding had before B8: the municipal Domain Pack step only. */
+export const LEGACY_ONBOARDING_STEPS: readonly OnboardingStepId[] = Object.freeze(["municipal-pack"] as OnboardingStepId[]);
+
 export type StatutoryPack = "govt_in" | "commercial_in" | "nonprofit_in";
 
 /** Bumped whenever a profile definition changes; carried on tenant events as `profileVersion`. */
@@ -78,6 +88,8 @@ export type ProfileDef = {
   adminEdition: AdminEdition;
   recruitmentPolicy: RecruitmentPolicy;
   manifestKey: ManifestKey;
+  /** B8: the onboarding steps this profile adds (data-keyed; read through onboardingStepsFor). */
+  onboardingSteps: readonly OnboardingStepId[];
   settings: ProfileSettings;
 };
 
@@ -97,16 +109,19 @@ const legacyPlaceholder = (
   code: string, label: string, edition: Edition, adminEdition: AdminEdition, composeOnOnboard: boolean,
 ): ProfileDef => ({
   code, label, family: "govt", editions: [edition], active: false, defaultBillHead: "fixed", bundleCode: code,
-  composeOnOnboard, adminEdition, recruitmentPolicy: "direct", manifestKey: "default", settings: GOVT,
+  composeOnOnboard, adminEdition, recruitmentPolicy: "direct", manifestKey: "default", onboardingSteps: LEGACY_ONBOARDING_STEPS, settings: GOVT,
 });
 
 export const PROFILES: readonly ProfileDef[] = Object.freeze([
   { code: "govt_dept", label: "Government department", family: "govt", editions: ["govt"], active: true, defaultBillHead: "fixed", bundleCode: "govt_dept",
-    composeOnOnboard: false, adminEdition: "govt_dept", recruitmentPolicy: "requisition_first", manifestKey: "default", settings: GOVT },
+    composeOnOnboard: false, adminEdition: "govt_dept", recruitmentPolicy: "requisition_first", manifestKey: "default",
+    onboardingSteps: ["municipal-pack"], settings: GOVT },
   {
     code: "govt_small_office", label: "Small government office", family: "govt", editions: ["govt"], active: true, defaultBillHead: "wizard",
     bundleCode: "govt_small_office",
     composeOnOnboard: false, adminEdition: "govt_dept", recruitmentPolicy: "requisition_first", manifestKey: "default",
+    // B8: a small government office is not a municipality: no municipal pack, but it needs a DDO + budget allotment.
+    onboardingSteps: ["ddo-allotment"],
     // Owner decision 1 (2026-11-06): budget control is mandatory from day one.
     settings: { ...GOVT, coaPacks: ["office-pack"] },
   },
@@ -118,13 +133,13 @@ export const PROFILES: readonly ProfileDef[] = Object.freeze([
     // Edition small_office is the MSME self-signup edition (tenant-service msme-onboard), not a government office.
     code: "small_office", label: "Small business / MSME", family: "commercial", editions: ["small_office"], active: false,
     defaultBillHead: "fixed", bundleCode: "small_office",
-    composeOnOnboard: true, adminEdition: "small_office", recruitmentPolicy: "direct", manifestKey: "msme",
+    composeOnOnboard: true, adminEdition: "small_office", recruitmentPolicy: "direct", manifestKey: "msme", onboardingSteps: [],
     settings: { accountingBasis: "accrual", budgetControl: "advisory", coaTemplate: "commercial", coaPacks: [], statutoryPack: "commercial_in", fundAccounting: false },
   },
   {
     code: "section8", label: "Section 8 company", family: "nonprofit", editions: ["section8"], active: true,
     defaultBillHead: "fixed", bundleCode: "section8",
-    composeOnOnboard: true, adminEdition: "section8", recruitmentPolicy: "direct", manifestKey: "default",
+    composeOnOnboard: true, adminEdition: "section8", recruitmentPolicy: "direct", manifestKey: "default", onboardingSteps: [],
     settings: { accountingBasis: "accrual", budgetControl: "advisory", coaTemplate: "nonprofit", coaPacks: [], statutoryPack: "nonprofit_in", fundAccounting: true },
   },
 ] satisfies ProfileDef[]);
@@ -224,4 +239,16 @@ export function defaultPensionSchemeFor(pack: StatutoryPack): PensionDefault {
  */
 export function suggestedDeductorCategory(profileCode: string | null | undefined): "government" | null {
   return getProfile(profileCode)?.family === "govt" ? "government" : null;
+}
+
+// ── B8: onboarding step set (setup wizard) ──
+
+/**
+ * The onboarding steps a tenant's setup flow shows. Flag off, unknown code or a placeholder (inactive) profile resolve to
+ * LEGACY_ONBOARDING_STEPS (the municipal pack only), exactly like effectiveSettings(): nothing changes until a profile is
+ * active AND the flag is on.
+ */
+export function onboardingStepsFor(profileCode: string | null | undefined, flagOn: boolean = tenantProfilesEnabled()): readonly OnboardingStepId[] {
+  const p = getProfile(profileCode);
+  return flagOn && p && p.active ? p.onboardingSteps : LEGACY_ONBOARDING_STEPS;
 }

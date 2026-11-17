@@ -11,6 +11,7 @@ import {
   BookOpen,
   Palmtree,
   Wallet,
+  Landmark,
   PartyPopper,
   type LucideIcon,
 } from "lucide-react";
@@ -38,6 +39,7 @@ const STEP_ICON: Record<WizardStepKey, LucideIcon> = {
   "finance-year-coa": BookOpen,
   "leave-policies": Palmtree,
   "pay-structure": Wallet,
+  "ddo-allotment": Landmark,
 };
 
 /**
@@ -57,6 +59,7 @@ export function SetupWizard({
   resumeIndex,
   progressUnknown,
   sampleDataEnabled,
+  profileLabel = null,
 }: {
   steps: StepView[];
   doneCount: number;
@@ -68,6 +71,8 @@ export function SetupWizard({
   progressUnknown: boolean;
   /** Whether the sample-data ("try it") controls are available (server-gated). */
   sampleDataEnabled: boolean;
+  /** B8: the resolved tenant profile, shown so the clerk knows which setup path this is. Null = not shown. */
+  profileLabel?: string | null;
 }) {
   const resumeRef = useRef<HTMLDivElement | null>(null);
 
@@ -118,6 +123,11 @@ export function SetupWizard({
   return (
     <>
       <Card padding>
+        {profileLabel && (
+          <p data-testid="setup-profile" style={{ margin: "0 0 8px", fontSize: 13, color: "var(--mut)" }}>
+            Setup for: <strong>{profileLabel}</strong>
+          </p>
+        )}
         <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 10 }}>
           <strong style={{ fontSize: 15 }}>{doneCount} of {totalCount} steps done</strong>
           <span style={{ color: "var(--mut)", fontSize: 13 }}>{encouragement}</span>

@@ -117,6 +117,9 @@ importers:
       '@civitasone/schemas':
         specifier: workspace:*
         version: link:../../packages/schemas
+      '@civitasone/tenant-profile':
+        specifier: workspace:*
+        version: link:../../packages/tenant-profile
       '@civitasone/types':
         specifier: workspace:*
         version: link:../../packages/types
@@ -3112,6 +3115,9 @@ importers:
       '@civitasone/schemas':
         specifier: workspace:*
         version: link:../../packages/schemas
+      '@civitasone/tenant-profile':
+        specifier: workspace:*
+        version: link:../../packages/tenant-profile
       '@civitasone/types':
         specifier: workspace:*
         version: link:../../packages/types
