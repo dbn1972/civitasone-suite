@@ -48,7 +48,9 @@ export const createBillBody = z.object({
   grnRef:      z.string().optional(),
   billDate:    zIsoDate({ window: billDateWindow, label: "bill date" }).optional(),
 });
-export type CreateBillBody = z.infer<typeof createBillBody>;
+export type CreateBillBody = z.infer<typeof createBillBodyNoDdo>;
+/** B3: the non-govt (commercial / nonprofit) bill body: identical, but the DDO is optional (a DDO is a govt-template concept). */
+export const createBillBodyNoDdo = createBillBody.extend({ ddoCode: ddoCodeField.optional() });
 
 export const approveBillBody = z.object({
   notes: z.string().max(500).optional(),
@@ -84,7 +86,9 @@ export const initiateEftBody = z.object({
   // amount) so the trail answers "who paid how much, and on what authority".
   reason:      z.string().trim().min(10, "Give the reason for this payment (at least 10 characters)").max(500),
 });
-export type InitiateEftBody = z.infer<typeof initiateEftBody>;
+export type InitiateEftBody = z.infer<typeof initiateEftBodyNoDdo>;
+/** B3: the non-govt payment body: identical, but the DDO is optional. */
+export const initiateEftBodyNoDdo = initiateEftBody.extend({ ddoCode: ddoCodeField.optional() });
 
 export const gemInvoiceMatchBody = z.object({
   poRef:      z.string().min(1),
