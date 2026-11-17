@@ -1,4 +1,5 @@
 import { pino } from "pino";
+import { NonRetryableError } from "@civitasone/queue";
 import type { Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
@@ -15,6 +16,7 @@ export function registerCashbookConsumers(queue: Queue): void {
       voucherNo: string; particulars: string; receiptMinor: number;
       paymentMinor: number; bankOrCash: string; reference?: string;
     };
+    try {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const { sql } = await import("drizzle-orm");
@@ -36,6 +38,12 @@ export function registerCashbookConsumers(queue: Queue): void {
       });
       await audit(tx, msg, "create_entry", "cashbook", p.id);
     });
+    } catch (err) {
+      // Section 8 NF-1: a fail-closed fund refusal from gl.tag_fund_id (FUND_ACCOUNTING_NOT_READY / FUND_ACCOUNTING_DISABLED)
+      // is deterministic; retrying cannot change it, so dead-letter it instead of poison-looping.
+      if (/\bFUND_[A-Z_]+\b/.test(String((err as { message?: unknown })?.message ?? ""))) throw new NonRetryableError(String((err as Error).message));
+      throw err;
+    }
     await cache.invalidateResource(msg.tenantId, "cashbook");
     log.info({ id: msg.messageId }, "Processed cashbook.entry_create");
   });

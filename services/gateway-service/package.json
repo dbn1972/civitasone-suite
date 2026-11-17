@@ -25,6 +25,7 @@
     "@civitasone/schemas": "workspace:*",
     "@civitasone/search": "workspace:*",
     "@civitasone/types": "workspace:*",
+    "@civitasone/tenant-profile": "workspace:*",
     "@fastify/cors": "^9.0.0",
     "@fastify/helmet": "^11.1.1",
     "@fastify/rate-limit": "^9.1.0",

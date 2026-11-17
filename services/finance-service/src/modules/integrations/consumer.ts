@@ -17,6 +17,7 @@ import { grnBillHeadCode, payrollDeductionHeads } from "../gl/system-heads.js";
 import { payrollAccrualLines, payrollAccrualJournalCommand, accrualDateOnApproval, type PayrollRunApprovedPayload } from "./payroll-accrual.js";
 import { loadSettingsTx } from "../approvals/repo.js";
 import { deterministicId } from "../gl/spine.js";
+import { resolveCoaTemplateTx } from "../gl/coa-template.js";
 import { todayIST } from "../../shared/ist-date.js";
 
 const AUDIT_TOPIC = "audit.event.record";
@@ -211,9 +212,10 @@ export function registerIntegrationConsumers(queue: Queue): void {
     const grossBig = grnAmountMinor ?? BigInt(p.grossMinor ?? 0);
     // UAT b10 F94: the AP bill head is a CODE resolved in THIS tenant's chart by finance.bill.create, never a
     // literal head id (the old default dddddddd-0001-... belongs to one tenant, so every other tenant got UNKNOWN_HEAD).
-    const headCode = grnBillHeadCode();
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      // Tenant-profile S4: the default bill head follows the tenant's COA template (govt / flag off => 2202, unchanged).
+      const headCode = grnBillHeadCode((await resolveCoaTemplateTx(tx, msg.tenantId)).template);
       // Persist the AP three-way-match read-model so a later invoice citing this
       // GRN can be reconciled even if entered manually.
       // poRef must be resolved (see above) before this AP three-way-match

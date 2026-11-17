@@ -7,6 +7,7 @@
  * tenant record) instead of being guessed. A name or domain is never fabricated: if the owner does not know the
  * tenant the event is refused, so it is retried / dead-lettered loudly rather than registering a wrong row.
  */
+import { adminEditionFor } from "@civitasone/tenant-profile";
 import { NonRetryableError } from "@civitasone/queue";
 import { missingTenantDirectoryFields, tenantTenantCreated, type TenantCreatedEvent } from "@civitasone/events/contracts";
 
@@ -37,9 +38,9 @@ export class TenantCreatedIncompleteError extends NonRetryableError {
 
 const text = (v: unknown): string | undefined => (typeof v === "string" && v.trim().length > 0 ? v : undefined);
 
-/** tenant-service edition "govt" is the admin directory edition "govt_dept"; every other edition is the same word. */
+/** tenant-service edition "govt" is the admin directory edition "govt_dept"; every other edition is the same word (catalogue `adminEdition`). */
 export function adminEdition(edition: string): string {
-  return edition === "govt" ? "govt_dept" : edition;
+  return adminEditionFor(edition);
 }
 
 export async function resolveTenantCreated(p: TenantCreatedEvent, fetchTenant: FetchTenant): Promise<TenantDirectoryRow> {

@@ -12153,7 +12153,11 @@
     "edition": {
       "govt_dept": "Government department",
       "psu": "Public sector undertaking",
-      "small_office": "Small office"
+      "small_office": "Small office",
+      "private": "Private company",
+      "ngo": "NGO / trust / society",
+      "section8": "Section 8 company",
+      "cooperative": "Cooperative society"
     },
     "editNoChange": "Change at least one field before submitting.",
     "editNameInvalid": "Enter a name of 2 to 200 characters.",
@@ -13657,7 +13661,11 @@
     "editions": {
       "govt_dept": "Government department",
       "psu": "PSU",
-      "small_office": "Small office"
+      "small_office": "Small office",
+      "private": "Private company",
+      "ngo": "NGO / trust / society",
+      "section8": "Section 8 company",
+      "cooperative": "Cooperative society"
     },
     "fieldType": {
       "text": "Text",

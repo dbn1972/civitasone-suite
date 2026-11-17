@@ -108,6 +108,8 @@ vi.mock("../src/modules/hoa/voucher.js", () => ({
   nextVoucherNo: (...args: any[]) => nextVoucherNoMock(...args),
   fyFromDate: (...args: any[]) => fyFromDateMock(...args),
 }));
+// Section 8 NF-1 (S5): the fund-accounting guard reads gl.finance_settings; this mock tx has no select(), so it is stubbed (off).
+vi.mock("../src/modules/gl/fund-context.js", () => ({ assertFundAccountingOffTx: vi.fn(async () => undefined) }));
 vi.mock("../src/modules/simplified/schema.js", () => ({
   simplifiedTransactions: { _name: "simplified_transactions" },
 }));

@@ -16,6 +16,11 @@ export type JournalLine = {
   debitMinor:  MinorAmount;
   creditMinor: MinorAmount;
   narration?:  string | undefined;
+  /**
+   * Section 8 NF-1: the fund this line belongs to. Optional input; resolved by fundContext() at the POSTING moment. With fund
+   * accounting off it is absent (and refused if given); with it on, absent means the tenant's GENERAL fund.
+   */
+  fundId?:     string | null | undefined;
 };
 
 export const financeJournals = glSchema.table("finance_journals", {
@@ -64,6 +69,8 @@ export const financeLedger = glSchema.table("finance_ledger", {
   voucherNo:   text("voucher_no").notNull(),
   postingDate: date("posting_date").notNull(),
   currency:    char("currency", { length: 3 }).notNull().default("INR"),
+  // Section 8 NF-1 (migration 0171): NULL = GENERAL at read time. Set only by fundContext().tagLedgerLine() when fund accounting is on.
+  fundId:      uuid("fund_id"),
   createdAt:   timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:   timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy:   uuid("created_by").notNull(),
@@ -90,10 +97,32 @@ export const financeJournalLines = glSchema.table("finance_journal_lines", {
   headCode:       text("head_code"),
   headName:       text("head_name"),
   headClassification: text("head_classification"),
+  // Section 8 NF-1 (migration 0171): written from the SAME source as the ledger line (fundContext().fundOfLine).
+  fundId:         uuid("fund_id"),
   createdAt:      timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
 export type JournalLineRow = typeof financeJournalLines.$inferSelect;
 export type JournalLineInsert = typeof financeJournalLines.$inferInsert;
 
-export const schema = { financeJournals, financeLedger, financeJournalLines };
+/** Section 8 NF-1 (migration 0171): the fund master. RLS-scoped; fcra/type/code are immutable once the fund has postings. */
+export const FUND_TYPES = ["corpus", "restricted", "unrestricted", "designated"] as const;
+export type FundType = (typeof FUND_TYPES)[number];
+export const funds = glSchema.table("funds", {
+  id:              uuid("id").primaryKey().defaultRandom(),
+  tenantId:        uuid("tenant_id").notNull(),
+  code:            varchar("code", { length: 32 }).notNull(),
+  name:            text("name").notNull(),
+  type:            varchar("type", { length: 16 }).$type<FundType>().notNull(),
+  fcra:            boolean("fcra").notNull().default(false),
+  sourceCondition: text("source_condition"),
+  status:          varchar("status", { length: 12 }).$type<"active" | "closed">().notNull().default("active"),
+  createdBy:       uuid("created_by").notNull(),
+  createdAt:       timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedBy:       uuid("updated_by").notNull(),
+  updatedAt:       timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  version:         integer("version").notNull().default(1),
+});
+export type FundRow = typeof funds.$inferSelect;
+
+export const schema = { financeJournals, financeLedger, financeJournalLines, funds };

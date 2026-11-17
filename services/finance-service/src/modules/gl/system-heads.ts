@@ -58,11 +58,117 @@ export const STORES_CONSUMPTION = process.env.FINANCE_STORES_CONSUMPTION_CODE ??
  * bill tenant chart of accounts). Default 2202 is the head the old literal id pointed at. It is a budget / expense
  * head: a stock receipt never credits it (UAT L2-N6 review), on accrual GRNI is cleared against it instead.
  */
-export function grnBillHeadCode(): string {
+export function grnBillHeadCode(template: "govt" | "commercial" | "nonprofit" = "govt"): string {
   const configured = process.env.FINANCE_GRN_BILL_HEAD_CODE?.trim();
-  return configured ? configured : "2202";
+  return configured ? configured : templateDefaultBillHead(template);
+}
+
+/**
+ * Tenant-profile S4: the default bill head CODE of a chart-of-accounts template. govt keeps 2202 (General Education, the
+ * head every existing tenant has); commercial and nonprofit use 5400 (Purchases / Programme Expenses). The
+ * FINANCE_GRN_BILL_HEAD_CODE / WORKS_FINANCE_BILL_HEAD_CODE env vars still win where they are read.
+ */
+export function templateDefaultBillHead(template: "govt" | "commercial" | "nonprofit"): string {
+  return template === "govt" ? "2202" : "5400";
 }
 
 export function systemHeads(): { accumulatedDepreciationCode: string; depreciationExpenseCodes: string[]; fixedAssetCode: string } {
   return { accumulatedDepreciationCode: ACCUM_DEP, depreciationExpenseCodes: [DEP_EXPENSE, DEP_EXPENSE_STAT], fixedAssetCode: FIXED_ASSET };
+}
+
+/**
+ * Section 8 NF-1/NF-2: chart codes of the inter-fund heads. ONE definition shared by the nonprofit chart (standard-heads.ts)
+ * and the fund posting path (funds.ts FUND_HEADS), so the seeded heads are exactly the heads NF-1 posts to. Env-configurable
+ * like every system head; read at call time so a test/deployment override is honoured by both sides.
+ */
+export function FUND_HEAD_CODES(): Record<"dueTo" | "dueFrom" | "transferOut" | "transferIn" | "releaseOut" | "releaseIn", string> {
+  return {
+    dueTo: process.env.FINANCE_FUND_DUE_TO_CODE ?? "2900",           // liability: owed to another fund
+    dueFrom: process.env.FINANCE_FUND_DUE_FROM_CODE ?? "1900",       // asset: owed by another fund
+    transferOut: process.env.FINANCE_FUND_TRANSFER_OUT_CODE ?? "3910", // equity: inter-fund transfer out
+    transferIn: process.env.FINANCE_FUND_TRANSFER_IN_CODE ?? "3911",   // equity: inter-fund transfer in
+    releaseOut: process.env.FINANCE_FUND_RELEASE_OUT_CODE ?? "3920",   // equity: released from restriction (out)
+    releaseIn: process.env.FINANCE_FUND_RELEASE_IN_CODE ?? "3921",     // equity: released from restriction (in)
+  };
+}
+
+/**
+ * Section 8 NF-7: the four equity-class inter-fund MOVEMENT heads (transfer out/in, release out/in). They record a fund-to-fund
+ * movement for the year in which it happens; at year end the per-fund close folds them into that fund's accumulated-fund head
+ * (year-end/domain.ts rollInterFundHeads) so they never accumulate across years. Read at call time (env-overridable).
+ */
+export function INTER_FUND_MOVEMENT_CODES(): string[] {
+  const f = FUND_HEAD_CODES();
+  return [f.transferOut, f.transferIn, f.releaseOut, f.releaseIn];
+}
+
+/**
+ * Section 8 NF-3: chart codes of the grants-in-aid heads. ONE definition shared by the nonprofit chart (standard-heads.ts) and
+ * the grants posting module (modules/grants), so the seeded heads are exactly the heads NF-3 posts to and the two cannot drift.
+ * Env-configurable like every system head (FINANCE_GRANT_*_CODE), read at call time. FAIL-SAFE: an override that is malformed,
+ * repeats another grant code, or lands on a code finance itself already posts to (the system / inter-fund / payroll / cash
+ * codes) throws GRANT_HEAD_CODE_COLLISION instead of silently mixing grant money into an unrelated head.
+ */
+export type GrantHeadCodes = {
+  revenueReceiptSalary: string;   // 2320 liability: unutilised revenue grant (salary)
+  revenueReceiptGeneral: string;  // 2330 liability: unutilised revenue grant (general)
+  revenueIncomeSalary: string;    // 4430 income: salary grant recognised on utilisation
+  revenueIncomeGeneral: string;   // 4440 income: general grant recognised on utilisation
+  capitalReceipt: string;         // 2340 liability: unutilised capital grant
+  capitalDeferred: string;        // 2350 non-current liability: deferred-income reservoir (deferred_income policy)
+  capitalRelease: string;         // 4450 income: capital grant released in step with depreciation
+  capitalFund: string;            // 3300 equity: Capital Grant Fund (capital_fund policy)
+};
+
+export class GrantHeadCodeError extends Error {
+  readonly code = "GRANT_HEAD_CODE_COLLISION";
+  constructor(message: string) { super(`GRANT_HEAD_CODE_COLLISION: ${message}`); this.name = "GrantHeadCodeError"; }
+}
+
+/** Every code finance already posts to by role (the constants above, the inter-fund heads, payroll deductions, cash). */
+export function reservedSystemCodes(): string[] {
+  return [
+    DEP_EXPENSE, DEP_EXPENSE_STAT, ACCUM_DEP, FIXED_ASSET, ASSET_SALE_RECEIPT, MISC_RECEIPTS, ACCUMULATED_FUND,
+    STORES_INVENTORY, GRNI, STORES_SUSPENSE, STORES_CONSUMPTION,
+    process.env.FINANCE_CASH_CODE ?? "1100",
+    ...Object.values(payrollDeductionHeads()),
+    ...Object.values(FUND_HEAD_CODES()),
+  ];
+}
+
+/** Pure: the codes must be well-formed, distinct from each other, and outside `reserved`. Throws GrantHeadCodeError. */
+export function assertGrantHeadCodes(codes: GrantHeadCodes, reserved: Iterable<string> = reservedSystemCodes()): void {
+  const taken = new Set(reserved);
+  const seen = new Map<string, string>();
+  for (const [role, code] of Object.entries(codes)) {
+    if (!/^[0-9A-Za-z][0-9A-Za-z._-]{0,31}$/.test(code)) throw new GrantHeadCodeError(`grant head ${role} has an invalid code "${code}"`);
+    const prior = seen.get(code);
+    if (prior) throw new GrantHeadCodeError(`grant heads ${prior} and ${role} share the code ${code}`);
+    seen.set(code, role);
+    if (taken.has(code)) throw new GrantHeadCodeError(`grant head ${role} (${code}) collides with a core system head code`);
+  }
+}
+
+/**
+ * M3: standard-heads.ts registers a provider of the core chart + nonprofit template codes (it imports this file, so the
+ * dependency is inverted to avoid a cycle). The RUNTIME guard then rejects an override that lands on any seeded chart code
+ * (AP/AR/deposit/TDS/gain-loss/revenue/bank ...), not just the system constants, even when set after seeding.
+ */
+let coreCodeProvider: (() => string[]) | undefined;
+export function registerGrantCoreCodeProvider(fn: () => string[]): void { coreCodeProvider = fn; }
+
+export function GRANT_HEAD_CODES(): GrantHeadCodes {
+  const env = (k: string, d: string) => process.env[k]?.trim() || d;
+  const codes: GrantHeadCodes = {
+    revenueReceiptSalary: env("FINANCE_GRANT_REV_RECEIPT_SALARY_CODE", "2320"),
+    revenueReceiptGeneral: env("FINANCE_GRANT_REV_RECEIPT_GENERAL_CODE", "2330"),
+    revenueIncomeSalary: env("FINANCE_GRANT_REV_INCOME_SALARY_CODE", "4430"),
+    revenueIncomeGeneral: env("FINANCE_GRANT_REV_INCOME_GENERAL_CODE", "4440"),
+    capitalReceipt: env("FINANCE_GRANT_CAP_RECEIPT_CODE", "2340"),
+    capitalDeferred: env("FINANCE_GRANT_CAP_DEFERRED_CODE", "2350"),
+    capitalRelease: env("FINANCE_GRANT_CAP_RELEASE_CODE", "4450"),
+    capitalFund: env("FINANCE_GRANT_CAP_FUND_CODE", "3300"),
+  };
+  assertGrantHeadCodes(codes, [...reservedSystemCodes(), ...(coreCodeProvider?.() ?? [])]);
+  return codes;
 }

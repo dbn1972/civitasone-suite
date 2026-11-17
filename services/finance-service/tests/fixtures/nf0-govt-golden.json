@@ -1,0 +1,409 @@
+{
+  "balanceSheet": {
+    "body": {
+      "asOf": "2027-03-31",
+      "assets": [
+        {
+          "balanceMinor": "43000025",
+          "classification": "asset",
+          "code": "1100",
+          "name": "Head 1100",
+          "openingMinor": "38000000"
+        },
+        {
+          "balanceMinor": "12000000",
+          "classification": "capital",
+          "code": "1200",
+          "name": "Head 1200",
+          "openingMinor": "12000000"
+        }
+      ],
+      "balanceCheck": {
+        "balanced": true,
+        "differenceMinor": "0",
+        "equation": "assets = liabilities + equity (incl. fund brought forward) + (this year income - expense)"
+      },
+      "equity": [
+        {
+          "balanceMinor": "50000000",
+          "classification": "fund",
+          "code": "3100",
+          "name": "Head 3100",
+          "openingMinor": "50000000"
+        }
+      ],
+      "fiscalYear": "2026-27",
+      "liabilities": [
+        {
+          "balanceMinor": "1234567",
+          "classification": "liability",
+          "code": "2100",
+          "name": "Head 2100",
+          "openingMinor": "0"
+        }
+      ],
+      "openingSource": "derived",
+      "surplusDeficitMinor": "3765458",
+      "totals": {
+        "accumulatedFundsMinor": "53765458",
+        "totalAssetsMinor": "55000025",
+        "totalEquityMinor": "50000000",
+        "totalLiabilitiesAndEquityMinor": "55000025",
+        "totalLiabilitiesMinor": "1234567"
+      }
+    },
+    "status": 200
+  },
+  "incomeExpenditure": {
+    "body": {
+      "expenditure": [
+        {
+          "balanceMinor": "2500025",
+          "classification": "expense",
+          "code": "5100",
+          "name": "Head 5100"
+        },
+        {
+          "balanceMinor": "1234567",
+          "classification": "expense",
+          "code": "5200",
+          "name": "Head 5200"
+        }
+      ],
+      "fiscalYear": "2026-27",
+      "income": [
+        {
+          "balanceMinor": "7500050",
+          "classification": "income",
+          "code": "4100",
+          "name": "Head 4100"
+        }
+      ],
+      "periodEnd": "2027-03-31",
+      "periodStart": "2026-04-01",
+      "result": "surplus",
+      "surplusDeficitMinor": "3765458",
+      "totalExpenditureMinor": "3734592",
+      "totalIncomeMinor": "7500050"
+    },
+    "status": 200
+  },
+  "ledger": [
+    {
+      "balance_minor": "50000000",
+      "credit_minor": "0",
+      "debit_minor": "50000000",
+      "head_code": "1100",
+      "posting_date": "2025-11-10",
+      "voucher_no": "G-0001"
+    },
+    {
+      "balance_minor": "-50000000",
+      "credit_minor": "50000000",
+      "debit_minor": "0",
+      "head_code": "3100",
+      "posting_date": "2025-11-10",
+      "voucher_no": "G-0001"
+    },
+    {
+      "balance_minor": "-12000000",
+      "credit_minor": "12000000",
+      "debit_minor": "0",
+      "head_code": "1100",
+      "posting_date": "2025-11-10",
+      "voucher_no": "G-0002"
+    },
+    {
+      "balance_minor": "12000000",
+      "credit_minor": "0",
+      "debit_minor": "12000000",
+      "head_code": "1200",
+      "posting_date": "2025-11-10",
+      "voucher_no": "G-0002"
+    },
+    {
+      "balance_minor": "7500050",
+      "credit_minor": "0",
+      "debit_minor": "7500050",
+      "head_code": "1100",
+      "posting_date": "2026-05-02",
+      "voucher_no": "G-0101"
+    },
+    {
+      "balance_minor": "-7500050",
+      "credit_minor": "7500050",
+      "debit_minor": "0",
+      "head_code": "4100",
+      "posting_date": "2026-05-02",
+      "voucher_no": "G-0101"
+    },
+    {
+      "balance_minor": "-2500025",
+      "credit_minor": "2500025",
+      "debit_minor": "0",
+      "head_code": "1100",
+      "posting_date": "2026-06-15",
+      "voucher_no": "G-0102"
+    },
+    {
+      "balance_minor": "2500025",
+      "credit_minor": "0",
+      "debit_minor": "2500025",
+      "head_code": "5100",
+      "posting_date": "2026-06-15",
+      "voucher_no": "G-0102"
+    },
+    {
+      "balance_minor": "-1234567",
+      "credit_minor": "1234567",
+      "debit_minor": "0",
+      "head_code": "2100",
+      "posting_date": "2026-08-01",
+      "voucher_no": "G-0103"
+    },
+    {
+      "balance_minor": "1234567",
+      "credit_minor": "0",
+      "debit_minor": "1234567",
+      "head_code": "5200",
+      "posting_date": "2026-08-01",
+      "voucher_no": "G-0103"
+    }
+  ],
+  "profitAndLoss": {
+    "body": {
+      "expenditure": [
+        {
+          "balanceMinor": "2500025",
+          "classification": "expense",
+          "code": "5100",
+          "name": "Head 5100"
+        },
+        {
+          "balanceMinor": "1234567",
+          "classification": "expense",
+          "code": "5200",
+          "name": "Head 5200"
+        }
+      ],
+      "fiscalYear": "2026-27",
+      "income": [
+        {
+          "balanceMinor": "7500050",
+          "classification": "income",
+          "code": "4100",
+          "name": "Head 4100"
+        }
+      ],
+      "periodEnd": "2027-03-31",
+      "periodStart": "2026-04-01",
+      "result": "surplus",
+      "surplusDeficitMinor": "3765458",
+      "totalExpenditureMinor": "3734592",
+      "totalIncomeMinor": "7500050"
+    },
+    "status": 200
+  },
+  "statements": {
+    "body": [
+      {
+        "closingBalance": "-12000000",
+        "head": "<uuid>",
+        "id": "<uuid>",
+        "openingBalance": "0",
+        "payments": "12000000",
+        "receipts": "0",
+        "type": "asset"
+      },
+      {
+        "closingBalance": "-43000025",
+        "head": "<uuid>",
+        "id": "<uuid>",
+        "openingBalance": "0",
+        "payments": "57500050",
+        "receipts": "14500025",
+        "type": "asset"
+      },
+      {
+        "closingBalance": "-1234567",
+        "head": "<uuid>",
+        "id": "<uuid>",
+        "openingBalance": "0",
+        "payments": "1234567",
+        "receipts": "0",
+        "type": "expenditure"
+      },
+      {
+        "closingBalance": "-2500025",
+        "head": "<uuid>",
+        "id": "<uuid>",
+        "openingBalance": "0",
+        "payments": "2500025",
+        "receipts": "0",
+        "type": "expenditure"
+      },
+      {
+        "closingBalance": "7500050",
+        "head": "<uuid>",
+        "id": "<uuid>",
+        "openingBalance": "0",
+        "payments": "0",
+        "receipts": "7500050",
+        "type": "income"
+      },
+      {
+        "closingBalance": "1234567",
+        "head": "<uuid>",
+        "id": "<uuid>",
+        "openingBalance": "0",
+        "payments": "0",
+        "receipts": "1234567",
+        "type": "liability"
+      },
+      {
+        "closingBalance": "50000000",
+        "head": "<uuid>",
+        "id": "<uuid>",
+        "openingBalance": "0",
+        "payments": "0",
+        "receipts": "50000000",
+        "type": "liability"
+      }
+    ],
+    "status": 200
+  },
+  "trialBalance": {
+    "body": {
+      "asOf": "2027-03-31",
+      "differenceMinor": "0",
+      "fiscalYear": "2026-27",
+      "isBalanced": true,
+      "lines": [
+        {
+          "carryForward": true,
+          "classification": "asset",
+          "closingMinor": "43000025",
+          "code": "1100",
+          "creditMinor": "2500025",
+          "debitMinor": "45500050",
+          "name": "Head 1100",
+          "nature": "asset",
+          "openingMinor": "38000000",
+          "periodCreditMinor": "2500025",
+          "periodDebitMinor": "7500050"
+        },
+        {
+          "carryForward": true,
+          "classification": "capital",
+          "closingMinor": "12000000",
+          "code": "1200",
+          "creditMinor": "0",
+          "debitMinor": "12000000",
+          "name": "Head 1200",
+          "nature": "asset",
+          "openingMinor": "12000000",
+          "periodCreditMinor": "0",
+          "periodDebitMinor": "0"
+        },
+        {
+          "carryForward": true,
+          "classification": "liability",
+          "closingMinor": "-1234567",
+          "code": "2100",
+          "creditMinor": "1234567",
+          "debitMinor": "0",
+          "name": "Head 2100",
+          "nature": "liability",
+          "openingMinor": "0",
+          "periodCreditMinor": "1234567",
+          "periodDebitMinor": "0"
+        },
+        {
+          "carryForward": true,
+          "classification": "fund",
+          "closingMinor": "-50000000",
+          "code": "3100",
+          "creditMinor": "50000000",
+          "debitMinor": "0",
+          "name": "Head 3100",
+          "nature": "equity",
+          "openingMinor": "-50000000",
+          "periodCreditMinor": "0",
+          "periodDebitMinor": "0"
+        },
+        {
+          "carryForward": false,
+          "classification": "income",
+          "closingMinor": "-7500050",
+          "code": "4100",
+          "creditMinor": "7500050",
+          "debitMinor": "0",
+          "name": "Head 4100",
+          "nature": "income",
+          "openingMinor": "0",
+          "periodCreditMinor": "7500050",
+          "periodDebitMinor": "0"
+        },
+        {
+          "carryForward": false,
+          "classification": "expense",
+          "closingMinor": "2500025",
+          "code": "5100",
+          "creditMinor": "0",
+          "debitMinor": "2500025",
+          "name": "Head 5100",
+          "nature": "expense",
+          "openingMinor": "0",
+          "periodCreditMinor": "0",
+          "periodDebitMinor": "2500025"
+        },
+        {
+          "carryForward": false,
+          "classification": "expense",
+          "closingMinor": "1234567",
+          "code": "5200",
+          "creditMinor": "0",
+          "debitMinor": "1234567",
+          "name": "Head 5200",
+          "nature": "expense",
+          "openingMinor": "0",
+          "periodCreditMinor": "0",
+          "periodDebitMinor": "1234567"
+        }
+      ],
+      "openingSource": "derived",
+      "periodStart": "2026-04-01",
+      "totalCreditMinor": "61234642",
+      "totalDebitMinor": "61234642"
+    },
+    "status": 200
+  },
+  "yearEnd": {
+    "body": {
+      "fiscalYear": "2026-27",
+      "fundCarriedMinor": "0",
+      "lapseTotalMinor": "0",
+      "nextFiscalYear": "2027-28",
+      "openingBalanceCount": 0,
+      "runAt": null,
+      "runBy": null,
+      "runCount": 0,
+      "status": "not_run"
+    },
+    "status": 200
+  },
+  "yearEndPrior": {
+    "body": {
+      "fiscalYear": "2025-26",
+      "fundCarriedMinor": "0",
+      "lapseTotalMinor": "0",
+      "nextFiscalYear": "2026-27",
+      "openingBalanceCount": 0,
+      "runAt": null,
+      "runBy": null,
+      "runCount": 0,
+      "status": "not_run"
+    },
+    "status": 200
+  }
+}

@@ -2,8 +2,10 @@ import { PageHeader } from "../../_components/ds";
 import { SetupWizard } from "./SetupWizard";
 import { evaluateSteps } from "./progress";
 import { getSkippedSteps } from "./skippedSteps";
+import { getSetupProfile } from "./setupProfile";
 import {
   WIZARD_STEPS,
+  PROFILE_WIZARD_STEPS,
   REQUIRED_STEP_KEYS,
   countComplete,
   countableKeys,
@@ -11,6 +13,7 @@ import {
   allRequiredComplete,
   firstIncompleteIndex,
   applySkippedSteps,
+  stepsForProfile,
   type StepStatus,
   type WizardStepKey,
 } from "@/lib/setupSteps";
@@ -36,7 +39,12 @@ export default async function SetupPage() {
   // have no moduleKey and always show. Roles are passed so super_admin /
   // platform_admin bypass module gating here, consistent with ModuleGate and
   // the help hub (GAP-HELP-HOME-03).
-  const steps = WIZARD_STEPS.filter((s) => isModuleEnabled(enabled, s.moduleKey ?? null, roles));
+  // B8: the profile-driven step set (catalogue). Legacy / flag-off tenants get no profile-only steps, so the list is
+  // exactly the pre-B8 eight.
+  const setupProfile = await getSetupProfile();
+  const steps = stepsForProfile([...WIZARD_STEPS, ...PROFILE_WIZARD_STEPS], setupProfile.onboardingSteps).filter((s) =>
+    isModuleEnabled(enabled, s.moduleKey ?? null, roles),
+  );
   const keys = steps.map((s) => s.key) as WizardStepKey[];
 
   let statuses: Record<string, StepStatus>;
@@ -84,6 +92,7 @@ export default async function SetupPage() {
         resumeIndex={resumeIndex}
         progressUnknown={progressUnknown}
         sampleDataEnabled={process.env.SAMPLE_DATA_ENABLED === "true"}
+        profileLabel={setupProfile.label}
       />
     </section>
   );

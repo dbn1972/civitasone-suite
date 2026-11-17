@@ -62,6 +62,8 @@ export function planEmployeePay(
   rules: AllowanceRules,
   /** S8 G1: present only when the CTC flag is on; absent == ctc_contract is refused exactly as before. */
   ctcContext?: CtcPlanContext,
+  /** B6: the tenant's pension default from its statutory pack (defaultPensionSchemeFor); absent == NPS (govt, today). */
+  defaultPension: PensionScheme = "NPS",
 ): PlanResult {
   const cityClass: CityClass = emp.cityClass ?? "X";
   const feed = emp.payProfile;
@@ -84,7 +86,7 @@ export function planEmployeePay(
         profileBasicMinor: BigInt(emp.basicMinor),
         applyRevisions: true, applyRunStructure: true, lopMode: "deduction", arrearDaBasis: "central",
         daRateBps: centralDaRateBps,
-        pensionScheme: emp.pensionScheme ?? "NPS",
+        pensionScheme: emp.pensionScheme ?? defaultPension,
         hraFloorMinor,
         snapshot: { ...base, daSource: "central", daRateBps: centralDaRateBps.toString() },
       },
@@ -134,7 +136,7 @@ export function planEmployeePay(
     if (dep.parentDaRateBps == null) return fail("PARENT_DA_RATE_REQUIRED", emp, "deputation DA source is 'parent' but no parent DA rate is recorded");
     daRateBps = BigInt(dep.parentDaRateBps);
   }
-  const pensionScheme: PensionScheme = dep.parentPensionScheme ?? emp.pensionScheme ?? "NPS";
+  const pensionScheme: PensionScheme = dep.parentPensionScheme ?? emp.pensionScheme ?? defaultPension;
   const depBase = {
     ...base,
     deputationId: dep.id, direction: dep.direction, option: dep.option, stationType: dep.stationType,

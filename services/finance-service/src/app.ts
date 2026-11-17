@@ -12,6 +12,8 @@ import { registerRateLimit } from "@civitasone/rate-limit";
 import { randomUUID } from "node:crypto";
 import { budgetRoutes }   from "./modules/budget/routes.js";
 import { glRoutes }       from "./modules/gl/routes.js";
+import { fundRoutes }     from "./modules/gl/fund-routes.js";
+import { grantRoutes }    from "./modules/grants/routes.js";
 import { treasuryRoutes } from "./modules/treasury/routes.js";
 import { paymentsRoutes } from "./modules/payments/routes.js";
 import { dashboardRoutes } from "./modules/dashboard/routes.js";
@@ -61,6 +63,8 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   await app.register(budgetRoutes);
   await app.register(glRoutes);
+  await app.register(fundRoutes);
+  await app.register(grantRoutes);
   await app.register(treasuryRoutes);
   await app.register(paymentsRoutes);
   await app.register(dashboardRoutes);
@@ -95,6 +99,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(gstRoutes);
   const { financialStatementsRoutes } = await import("./modules/financial-statements/routes.js");
   await app.register(financialStatementsRoutes);
+  const { fundStatementsRoutes } = await import("./modules/financial-statements/fund-routes.js");
+  await app.register(fundStatementsRoutes);
   const { yearEndRoutes } = await import("./modules/year-end/routes.js");
   await app.register(yearEndRoutes);
   const { subLedgerRoutes } = await import("./modules/subledger/routes.js");

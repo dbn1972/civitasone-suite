@@ -48,6 +48,7 @@ import {
 } from "./auto-journal.js";
 import { randomUUID } from "node:crypto";
 import { syncVoucher } from "../../shared/global-search.js";
+import { assertFundAccountingOffTx } from "../gl/fund-context.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 
@@ -84,6 +85,9 @@ async function postSimplifiedJournal(
   tx: Parameters<typeof markProcessed>[0],
   input: SimplifiedJournalInput,
 ): Promise<string | null> {
+  // Section 8 NF-1 (S5): this writer cannot tag a fund. A fund-accounted tenant must not get untagged journals, so refuse while the
+  // flag is on (FUND_UNSUPPORTED_WRITER). Strict no-op (one settings read) for every tenant with fund accounting off.
+  await assertFundAccountingOffTx(tx, input.tenantId, "the simplified (MSME) ledger");
   // DOM-010 (2) equivalent: fail closed on an unrecognized/malformed period
   // instead of ever treating it as open. getPeriodStatusTx only returns
   // "unknown" for a period that isn't even shaped like a real YYYY-MM period

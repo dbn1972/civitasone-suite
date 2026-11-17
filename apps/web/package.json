@@ -27,6 +27,7 @@
     "@civitasone/client-core": "workspace:*",
     "@civitasone/observability": "workspace:*",
     "@civitasone/schemas": "workspace:*",
+    "@civitasone/tenant-profile": "workspace:*",
     "@civitasone/types": "workspace:*",
     "@civitasone/ui-kit": "workspace:*",
     "@fontsource/noto-sans-devanagari": "5.3.0",

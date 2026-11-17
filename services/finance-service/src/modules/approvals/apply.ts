@@ -13,6 +13,7 @@ import type { Db } from "../../shared/db.js";
 import { financeHeads } from "../budget/schema.js";
 import { assertOpeningBalancesBalanced, DomainError } from "../masters/domain.js";
 import { assertFiscalYearActivationAllowed } from "./domain.js";
+import { assertOpeningBalancedPerFund, openingEntryConflicts } from "../gl/funds.js";
 import { loadSettingsTx } from "./repo.js";
 import { financeSettings } from "./schema.js";
 import { tenantProfilesEnabled } from "@civitasone/tenant-profile";
@@ -46,6 +47,8 @@ const openingBalances = glSchema.table("finance_opening_balances", {
   debitMinor: bigint("debit_minor", { mode: "bigint" }).notNull().default(0n),
   creditMinor: bigint("credit_minor", { mode: "bigint" }).notNull().default(0n),
   narration: text("narration"),
+  // Section 8 NF-1 (migration 0171). NULL = GENERAL. Tagged by the BEFORE INSERT trigger gl.tag_fund_id (gl.resolve_fund).
+  fundId: uuid("fund_id"),
   enteredAt: timestamp("entered_at", { withTimezone: true }).notNull().defaultNow(),
   enteredBy: uuid("entered_by").notNull(),
   version: integer("version").notNull().default(1),
@@ -114,20 +117,25 @@ export async function applyFiscalYearActivation(
 
 export type OpeningBalanceEntry = {
   id: string; accountCode: string; debitMinor: string | number; creditMinor: string | number; narration: string | null;
+  /** Section 8 NF-1: the fund this opening balance belongs to (only when fund accounting is on; absent = GENERAL). */
+  fundId?: string | null;
 };
 
 export async function applyOpeningBalances(
   tx: Tx, meta: ActorMeta, p: { id: string; fyCode: string; entries: OpeningBalanceEntry[]; reason: string; requestId?: string },
 ): Promise<void> {
   assertOpeningBalancesBalanced(p.entries);
+  assertOpeningBalancedPerFund(p.entries); // no-op unless an entry names a fund (fund accounting only)
   await lockTenant(tx, "ob", meta.tenantId);
   const codes = [...new Set(p.entries.map((e) => e.accountCode))];
-  const existing = await tx.select({ accountCode: openingBalances.accountCode }).from(openingBalances)
+  const existing = await tx.select({ accountCode: openingBalances.accountCode, fundId: openingBalances.fundId }).from(openingBalances)
     .where(and(eq(openingBalances.tenantId, meta.tenantId), eq(openingBalances.fyCode, p.fyCode), inArray(openingBalances.accountCode, codes)));
-  if (existing.length > 0) {
+  // Same account AND same fund collides (a NULL fund is GENERAL). With no fund anywhere this is the old "same account" rule.
+  const clash = p.entries.find((e) => openingEntryConflicts(existing, e));
+  if (clash) {
     throw new DomainError(
       "OPENING_BALANCE_ALREADY_EXISTS",
-      `an opening balance for account ${existing[0]?.accountCode} in FY ${p.fyCode} already exists`,
+      `an opening balance for account ${clash.accountCode} in FY ${p.fyCode} already exists`,
     );
   }
   for (const entry of p.entries) {
@@ -135,6 +143,9 @@ export async function applyOpeningBalances(
       id: entry.id, tenantId: meta.tenantId, fyCode: p.fyCode, accountCode: entry.accountCode,
       debitMinor: BigInt(entry.debitMinor), creditMinor: BigInt(entry.creditMinor),
       narration: entry.narration, enteredBy: meta.actorId,
+      // fund_id: written only for an entry that names a fund; the BEFORE INSERT trigger (gl.resolve_fund) tags the rest GENERAL
+      // when fund accounting is on and leaves them NULL when it is off -- the opening-balance leg of the fund seam.
+      ...(entry.fundId ? { fundId: entry.fundId } : {}),
     }).onConflictDoNothing().returning({ id: openingBalances.id });
     if (inserted.length === 0) {
       throw new DomainError(

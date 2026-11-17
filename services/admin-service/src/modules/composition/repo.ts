@@ -200,6 +200,27 @@ export async function applyProfile(tenantId: string, profileCode: string, defaul
 }
 
 /**
+ * Tx-scoped sibling of applyProfile (S5 profile-onboard consumer). Same writes; caller owns the transaction and
+ * runWithTenant. applyProfile above is deliberately left untouched (manual onboard route).
+ */
+export async function applyProfileTx(
+  tx: { insert: typeof db.insert; delete: typeof db.delete },
+  tenantId: string,
+  profileCode: string,
+  defaultModules: string[],
+  actorId: string,
+): Promise<void> {
+  await tx
+    .insert(tenantProfile)
+    .values({ tenantId, profileCode, appliedBy: actorId })
+    .onConflictDoUpdate({ target: tenantProfile.tenantId, set: { profileCode, appliedBy: actorId, appliedAt: new Date() } });
+  await tx.delete(tenantEntitlement).where(eq(tenantEntitlement.tenantId, tenantId));
+  if (defaultModules.length > 0) {
+    await tx.insert(tenantEntitlement).values(defaultModules.map((id) => ({ tenantId, moduleId: id, source: "user", createdBy: actorId })));
+  }
+}
+
+/**
  * ST-M01-03 — tx-scoped applier write, used ONLY by the composition consumer
  * (plan-to-composition applier). Replaces the tenant's user-module selection
  * set and, when a profileCode is supplied, upserts tenant_profile — all inside
