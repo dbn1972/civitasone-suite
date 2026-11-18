@@ -282,6 +282,13 @@ describe("L3 — Double-entry invariant (finance GL)", () => {
                          WHERE c3.table_schema = c.table_schema
                            AND c3.table_name = c.table_name
                            AND c3.column_name = 'journal_id')
+            -- The canary inserts the journal HEADER into <schema>.finance_journals, so
+            -- only a schema that owns that header table can be the GL. This excludes the
+            -- AR sub-ledger (ar.ledger_entries also has debit_minor/credit_minor/journal_id
+            -- but no finance_journals header) which sorts before gl.
+            AND EXISTS (SELECT 1 FROM information_schema.tables t
+                         WHERE t.table_schema = c.table_schema
+                           AND t.table_name = 'finance_journals')
           ORDER BY 1 LIMIT 1`,
       ),
       "GL journal-lines table resolution",
