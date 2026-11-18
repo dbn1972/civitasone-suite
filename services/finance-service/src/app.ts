@@ -101,6 +101,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(financialStatementsRoutes);
   const { fundStatementsRoutes } = await import("./modules/financial-statements/fund-routes.js");
   await app.register(fundStatementsRoutes);
+  const { commercialStatementsRoutes } = await import("./modules/financial-statements/commercial-routes.js");
+  await app.register(commercialStatementsRoutes);
   const { yearEndRoutes } = await import("./modules/year-end/routes.js");
   await app.register(yearEndRoutes);
   const { subLedgerRoutes } = await import("./modules/subledger/routes.js");
