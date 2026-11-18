@@ -12,16 +12,16 @@ import type { CommercialRow, Framework, PresentationConfig } from "./commercial-
 type Row = Record<string, unknown>;
 const rowsOf = (r: unknown): Row[] => (Array.isArray(r) ? r : ((r as { rows?: Row[] })?.rows ?? [])) as Row[];
 
-export type StatementSettings = { coaTemplate: string | null; entityType: string | null; accountingBasis: string; accountingStandard: Framework | null };
+export type StatementSettings = { coaTemplate: string | null; entityType: string | null; accountingBasis: string; accountingStandard: Framework | null; govtOwned: boolean; auditProfile: string };
 
 /** The stored settings the selector keys on (never an edition / profile). No settings row => govt (resolver fail-safe). */
 export async function loadStatementSettings(tx: Tx, tenantId: string): Promise<StatementSettings> {
-  const [r] = rowsOf(await tx.execute(sql`SELECT coa_template, entity_type, accounting_basis, accounting_standard FROM gl.finance_settings WHERE tenant_id = ${tenantId}::uuid LIMIT 1`));
-  return { coaTemplate: (r?.coa_template as string | null) ?? null, entityType: (r?.entity_type as string | null) ?? null, accountingBasis: (r?.accounting_basis as string | null) ?? "cash", accountingStandard: toFramework(r?.accounting_standard) };
+  const [r] = rowsOf(await tx.execute(sql`SELECT coa_template, entity_type, accounting_basis, accounting_standard, govt_owned, audit_profile FROM gl.finance_settings WHERE tenant_id = ${tenantId}::uuid LIMIT 1`));
+  return { coaTemplate: (r?.coa_template as string | null) ?? null, entityType: (r?.entity_type as string | null) ?? null, accountingBasis: (r?.accounting_basis as string | null) ?? "cash", accountingStandard: toFramework(r?.accounting_standard), govtOwned: r?.govt_owned === true, auditProfile: (r?.audit_profile as string | null) ?? "standard" };
 }
 
 /** Line-grouping codes inside the stored classes: the shared system-head codes (system-heads.ts) + the commercial chart's seeded codes. */
-export function commercialPresentation(): PresentationConfig {
+export function commercialPresentation(o: { dividendCodes?: ReadonlySet<string> } = {}): PresentationConfig {
   const set = (...c: string[]) => new Set(c);
   return {
     accumulatedFund: ACCUMULATED_FUND,
@@ -34,7 +34,7 @@ export function commercialPresentation(): PresentationConfig {
     financeCostCodes: set("6200"),
     depreciationCodes: set(DEP_EXPENSE, DEP_EXPENSE_STAT),
     taxExpenseCodes: set(),
-    dividendCodes: set(),
+    dividendCodes: o.dividendCodes ?? set(),
   };
 }
 
