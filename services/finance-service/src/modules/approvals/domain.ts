@@ -48,10 +48,17 @@ export type FinanceSettings = {
   gstEffectiveFrom: string | null;
   /** Legal entity type driving the commercial statement set (M8). NULL for government tenants. */
   entityType: EntityType | null;
+  /** PSU v1-A (migration 0186): per-tenant accounting framework for the commercial statements. NULL = use the deployment default. */
+  accountingStandard: AccountingStandard | null;
 };
 
 export const ENTITY_TYPES = ["company", "llp", "partnership", "proprietorship"] as const;
 export type EntityType = (typeof ENTITY_TYPES)[number];
+export const ACCOUNTING_STANDARDS = ["as", "ind_as"] as const;
+export type AccountingStandard = (typeof ACCOUNTING_STANDARDS)[number];
+export function toAccountingStandard(v: unknown): AccountingStandard | null {
+  return (ACCOUNTING_STANDARDS as readonly string[]).includes(v as string) ? (v as AccountingStandard) : null;
+}
 /** Same pattern as the migration 0173 CHECK. */
 export const GSTIN_PATTERN = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
 
@@ -88,6 +95,7 @@ export const SETTINGS_DEFAULTS: FinanceSettings = {
   gstin: null,
   gstEffectiveFrom: null,
   entityType: null,
+  accountingStandard: null,
 };
 
 const BUDGET_CONTROL_RANK: Record<BudgetControl, number> = { off: 0, advisory: 1, mandatory: 2 };
@@ -145,7 +153,7 @@ export function isRelaxingControl(current: FinanceSettings, changes: Partial<Fin
   // UAT L2-N6 review: switching the accounting basis changes what every later stock movement books -- a second admin.
   if (changes.accountingBasis !== undefined && changes.accountingBasis !== current.accountingBasis) return true;
   // MSME commercial M0: the GST identity and entity type shape every later commercial posting and return -- a second admin.
-  if ((["gstRegistered", "gstin", "gstEffectiveFrom", "entityType"] as const).some((k) => changes[k] !== undefined && changes[k] !== current[k])) return true;
+  if ((["gstRegistered", "gstin", "gstEffectiveFrom", "entityType", "accountingStandard"] as const).some((k) => changes[k] !== undefined && changes[k] !== current[k])) return true;
   return RELAXABLE_SETTINGS.some((k) => current[k] === true && changes[k] === false);
 }
 

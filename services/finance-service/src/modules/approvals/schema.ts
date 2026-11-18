@@ -31,6 +31,8 @@ export const financeSettings = glSchema.table("finance_settings", {
   gstin:                               varchar("gstin", { length: 15 }),
   gstEffectiveFrom:                    date("gst_effective_from"),
   entityType:                          text("entity_type"),
+  // PSU v1-A (migration 0186): per-tenant AS / Ind AS. Maker-checker only. NULL = deployment default.
+  accountingStandard:                  text("accounting_standard"),
   updatedBy:                           uuid("updated_by").notNull(),
   updatedAt:                           timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   version:                             integer("version").notNull().default(1),

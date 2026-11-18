@@ -17,7 +17,7 @@ import { scopedRead } from "../../shared/db.js";
 import type { FinanceSettings } from "./domain.js";
 import { todayIST } from "../../shared/ist-date.js";
 import { tenantProfilesEnabled } from "@civitasone/tenant-profile";
-import { resolveBasisEffectiveFrom, BUDGET_CONTROLS, alwaysDistinctApprover, assertDebtHeadsValid, assertDistinctApprover, CHANGE_REQUEST_KINDS, configuredDebtHeads, DomainError, isRelaxingControl, ENTITY_TYPES, GSTIN_PATTERN, assertGstSettingsValid } from "./domain.js";
+import { resolveBasisEffectiveFrom, BUDGET_CONTROLS, alwaysDistinctApprover, assertDebtHeadsValid, assertDistinctApprover, CHANGE_REQUEST_KINDS, configuredDebtHeads, DomainError, isRelaxingControl, ENTITY_TYPES, ACCOUNTING_STANDARDS, GSTIN_PATTERN, assertGstSettingsValid } from "./domain.js";
 import type { ChangeRequestRow } from "./schema.js";
 import { assertPeriodFyOpenHttp } from "../period-close/routes.js";
 
@@ -49,6 +49,8 @@ const settingsBody = z.object({
   gstin: z.string().trim().toUpperCase().regex(GSTIN_PATTERN, "GSTIN must be 15 characters in the standard format").nullable().optional(),
   gstEffectiveFrom: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
   entityType: z.enum(ENTITY_TYPES).nullable().optional(),
+  // PSU v1-A: per-tenant accounting framework; always held for a second admin (isRelaxingControl).
+  accountingStandard: z.enum(ACCOUNTING_STANDARDS).nullable().optional(),
   // Owner decision 3: optional; when profiles are enabled it must be the next 1 April (default), applied at the FY rollover.
   accountingBasisEffectiveFrom: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   reason: z.string().trim().min(10, "Reason must be at least 10 characters").max(500),
