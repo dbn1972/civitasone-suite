@@ -25,6 +25,7 @@ import {
 } from "./fund-statements.js";
 import { loadCashRows, loadCoaTemplate, loadFunds, loadStatementInput, loadUcFacts, statementCodes } from "./fund-statements-repo.js";
 import { statementSetFor } from "./statement-set.js";
+import { loadStatementSettings } from "./commercial-statements-repo.js";
 
 const READER_ROLES = ["finance_officer", "finance_admin", "super_admin", "audit_officer"];
 const query = z.object({
@@ -88,8 +89,10 @@ export async function fundStatementsRoutes(app: FastifyInstance): Promise<void> 
   app.get("/v1/finance/statements/set-for-tenant", async (req) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
-    const template = await scopedRead((tx) => loadCoaTemplate(tx, ctx.tenantId));
-    return { coaTemplate: template ?? "govt", ...statementSetFor(template) };
+    const st = await scopedRead((tx) => loadStatementSettings(tx, ctx.tenantId));
+    const template = st.coaTemplate;
+    // entityType is reported for a commercial tenant only, so the govt / nonprofit payload is byte-identical to before M8
+    return { coaTemplate: template ?? "govt", ...(template === "commercial" ? { entityType: st.entityType } : {}), ...statementSetFor(template, st.entityType) };
   });
   app.get("/v1/finance/statements/fund-wise/balance-sheet", serve(balanceSheetFor));
   app.get("/v1/finance/statements/fund-wise/income-expenditure", serve(incomeExpenditureFor));

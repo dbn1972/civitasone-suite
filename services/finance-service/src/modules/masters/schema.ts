@@ -49,6 +49,8 @@ export const financeVendors = paymentsSchema.table("finance_vendors", {
   category:      text("category").notNull(),
   pan:           varchar("pan", { length: 10 }).notNull(),
   gstin:         varchar("gstin", { length: 15 }),
+  // MSME M1 (migration 0174): Udyam class micro | small | medium | not_msme, NULL = not captured. Needed later for 43B(h).
+  udyamCategory: varchar("udyam_category", { length: 10 }),
   address:       text("address").notNull(),
   contactPerson: text("contact_person"),
   phone:         varchar("phone", { length: 20 }),

@@ -23,6 +23,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import { NonRetryableError } from "@civitasone/queue";
 import type { CoaTemplate } from "@civitasone/tenant-profile";
 import { financeHeads } from "../budget/schema.js";
+import { GST_HEADS } from "./gst-heads.js";
 import { headNatureOf } from "../../shared/head-nature.js";
 import { FUND_HEAD_CODES, GRANT_HEAD_CODES, GrantHeadCodeError, assertGrantHeadCodes, registerGrantCoreCodeProvider, type GrantHeadCodes, templateDefaultBillHead, DEP_EXPENSE, DEP_EXPENSE_STAT, ACCUM_DEP, FIXED_ASSET, STORES_INVENTORY, STORES_CONSUMPTION, GRNI, STORES_SUSPENSE, ASSET_SALE_RECEIPT, ACCUMULATED_FUND, payrollDeductionHeads } from "./system-heads.js";
 
@@ -122,7 +123,7 @@ function coreHeadsPost(): StandardGlHead[] {
  * HoA (chk_finance_heads_hoa_code allows NULL). The two env vars still win when set.
  */
 function defaultBillHeads(template: SeedTemplate): StandardGlHead[] {
-  const code = (name: string) => envTrim(name, templateDefaultBillHead(template));
+  const code = (name: string) => (template === "commercial" ? templateDefaultBillHead(template) : envTrim(name, templateDefaultBillHead(template)));
   if (template === "govt") {
     return [
       { code: code("FINANCE_GRN_BILL_HEAD_CODE"), name: "General Education", classification: "expense", hoaCode: BILL_HEAD_HOA },
@@ -238,6 +239,8 @@ function templateAdditions(template: SeedTemplate): StandardGlHead[] {
       th("5440", "Repairs and Maintenance", "expense", "expense"),
       th("5450", "Office Administration", "expense", "expense"),
       th("6200", "Bank Charges and Interest", "expense", "expense"),
+      // MSME M3a: per-tax ITC heads, the RCM-pending ITC head and the RCM payable (gl/gst-heads.ts). Commercial template only.
+      ...GST_HEADS.map((h) => th(h.code, h.name, h.classification, h.statementClass)),
     ];
   }
   if (template === "nonprofit") return nonprofitHeads();

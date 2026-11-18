@@ -59,6 +59,8 @@ export type VendorWriteInput = {
   category: string;
   pan: string;
   gstin: string | null;
+  /** MSME M1: Udyam class (micro | small | medium | not_msme); omitted = leave NULL. */
+  udyamCategory?: string | null;
   address: string;
   contactPerson: string | null;
   phone: string | null;
@@ -78,6 +80,7 @@ export type VendorPatch = {
   name?: string | undefined;
   category?: string | undefined;
   gstin?: string | null | undefined;
+  udyamCategory?: string | null | undefined;
   address?: string | undefined;
   contactPerson?: string | null | undefined;
   phone?: string | null | undefined;

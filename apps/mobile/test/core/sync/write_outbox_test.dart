@@ -34,6 +34,14 @@ void main() {
       expect(route.method, 'POST');
     });
 
+    test('resolves invoice.create to the sales mobile-sync endpoint (no longer dead-letters)', () {
+      final route = SyncRouteRegistry.resolve('invoice.create');
+      expect(route, isNotNull);
+      expect(route!.service, 'finance');
+      expect(route.endpoint, '/v1/finance/sales/mobile/invoices');
+      expect(route.method, 'POST');
+    });
+
     test('resolves update action with PATCH method', () {
       final route = SyncRouteRegistry.resolve('leave.update');
       expect(route, isNotNull);

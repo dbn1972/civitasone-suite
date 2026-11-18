@@ -66,7 +66,9 @@ describe("S4 pure: default bill head", () => {
 });
 
 describe("S4 pure: commercial and nonprofit head sets", () => {
-  const commercial = ["5400", "1500", "1600", "1700", "1800", "2300", "2310", "2400", "2500", "3000", "3200", "4400", "5410", "5420", "5430", "5440", "5450", "6200"];
+  const commercial = ["5400", "1500", "1600", "1700", "1800", "2300", "2310", "2400", "2500", "3000", "3200", "4400", "5410", "5420", "5430", "5440", "5450", "6200",
+    // MSME M3a: per-tax ITC heads, RCM-pending ITC and RCM payable (gl/gst-heads.ts)
+    "1701", "1702", "1703", "1704", "1705", "2301"];
   // NF-2 owns the full nonprofit head set (tests/nf2-nonprofit-coa.test.ts); here only the S4 invariants on it.
   const nonprofit = codes(templateGlHeads("nonprofit"));
   it("commercial template heads are exactly the design list; default bill head 5400 has no HoA", () => {

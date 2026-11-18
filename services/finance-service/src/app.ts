@@ -101,6 +101,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(financialStatementsRoutes);
   const { fundStatementsRoutes } = await import("./modules/financial-statements/fund-routes.js");
   await app.register(fundStatementsRoutes);
+  const { commercialStatementsRoutes } = await import("./modules/financial-statements/commercial-routes.js");
+  await app.register(commercialStatementsRoutes);
   const { yearEndRoutes } = await import("./modules/year-end/routes.js");
   await app.register(yearEndRoutes);
   const { subLedgerRoutes } = await import("./modules/subledger/routes.js");
@@ -150,6 +152,13 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   const { scanLinkRoutes } = await import("./modules/scan-link/routes.js");
   await app.register(scanLinkRoutes);
+
+  // MSME commercial M2: customer master + sales invoicing + AR. Every route sits behind the centralised commercial-tenant gate (404 for govt).
+  const { salesRoutes } = await import("./modules/sales/routes.js");
+  await app.register(salesRoutes);
+  // MSME commercial M4: GSTR-1 / GSTR-3B prepare + JSON export (new module; behind the same commercial gate; billing gstn/ untouched).
+  const { gstReturnRoutes } = await import("./modules/gst-returns/routes.js");
+  await app.register(gstReturnRoutes);
 
 
   return app;

@@ -20,7 +20,8 @@ import { assertValidDdoCode, PfmsValidationError } from "../../shared/pfms.js";
 import { assertBillHeadValid } from "./bill-head.js";
 import { resolveCoaTemplateTx } from "../gl/coa-template.js";
 import { tenantProfilesEnabled } from "@civitasone/tenant-profile";
-import { templateDefaultBillHead } from "../gl/system-heads.js";
+import { billHeadCodeFor } from "../gl/system-heads.js";
+import { assertCommercialChartReadyTx } from "../gl/commercial-chart.js";
 import { vendorExists } from "../masters/repo.js";
 import * as pfmsRepo from "../pfms/repo.js";
 import { getPeriodStatusTx } from "../period-close/repo.js";
@@ -30,6 +31,9 @@ import type { Deduction, PaymentRow } from "./schema.js";
 import { enqueueSpineJournal } from "../gl/spine.js";
 import { clearGrniTx } from "../gl/grni-clearing.js";
 import { loadSettingsTx } from "../approvals/repo.js";
+import { parseBillGst, validateBillGst, buildBillGstPosting, gstToWire, resolveItcCategory } from "../gst/itc.js";
+import { assertGstEnabledTx } from "../gst/producer.js";
+import { slabsEffectiveOn } from "../gst/rate-master.js";
 import { postCashBook } from "../../shared/cashbook.js";
 import type { JournalLine } from "../gl/schema.js";
 import { todayIST } from "../../shared/ist-date.js";
@@ -175,7 +179,7 @@ export function registerPaymentsConsumers(queue: Queue): void {
       if (!(await markProcessed(tx, msg.messageId))) return;
       // UAT b10 F94: producers name the head by CODE, resolved in the bill tenant's own chart. A literal head id from
       // one tenant (the old FINANCE_DEFAULT_HEAD_ID) never resolves for another tenant.
-      const headCodeToUse = p.headCode ?? (p.headId ? undefined : (process.env.WORKS_FINANCE_BILL_HEAD_CODE?.trim() || templateDefaultBillHead(coaTemplate)));
+      const headCodeToUse = p.headCode ?? (p.headId ? undefined : billHeadCodeFor(coaTemplate, process.env.WORKS_FINANCE_BILL_HEAD_CODE));
       const head = headCodeToUse
         ? await budgetRepo.findHeadByCodeTx(tx, p.tenantId, headCodeToUse)
         : await budgetRepo.findHeadByIdTx(tx, p.headId as string);
@@ -188,6 +192,10 @@ export function registerPaymentsConsumers(queue: Queue): void {
           : new NonRetryableError(`UNKNOWN_HEAD: ${p.headId} not found in budget head master for tenant`);
       }
       const headId = head.id;
+      // MSME M1 (fail-closed by classification): a commercial tenant whose required commercial heads are absent is refused.
+      if (coaTemplate === "commercial") {
+        await assertCommercialChartReadyTx(tx, p.tenantId);
+      }
       // B3: template-keyed head validation. govt = HoA-with-master, DDO, PAO (as before, same order); other templates = leaf expense head.
       await assertBillHeadValid({ coaTemplate, tenantId: p.tenantId, head, ddoCode: resolvedDdoCode, paoCode: p.paoCode, reader: reader as unknown as Parameters<typeof assertBillHeadValid>[0]["reader"] });
       // BUG FIX: vendorId previously only got a UUID-format check (Zod) —
@@ -237,6 +245,25 @@ export function registerPaymentsConsumers(queue: Queue): void {
       const { docNo: billNo } = await nextDocNo(
         tx as unknown as Parameters<typeof nextDocNo>[0], p.tenantId, billFy, "BILL",
       );
+      // MSME M3a: GST input tax / reverse charge. Absent on every govt and non-GST bill (nothing below runs, nothing is stored).
+      // Present: the tenant must be GST-registered on a commercial chart (refused otherwise, never silently dropped), the rate must be a
+      // slab IN FORCE on the bill date (rate master), and an RCM bill must be a CA-configured category and gets a gapless self-invoice number.
+      let gstCols: Partial<Parameters<typeof repo.insertBill>[1]> = {};
+      const rawGst = (msg.payload as { gst?: unknown }).gst;
+      if (rawGst !== undefined && rawGst !== null) {
+        const g = parseBillGst(rawGst);
+        await assertGstEnabledTx(tx, p.tenantId);
+        const slabSet = new Set<number>();
+        for (const h of new Set(g.lines.map((l) => l.hsnCode ?? null))) for (const s of await slabsEffectiveOn(tx, billDate, h)) slabSet.add(s);
+        validateBillGst(g, netMinor, [...slabSet]);
+        const selfInvoice = g.rcm
+          ? (await nextDocNo(tx as unknown as Parameters<typeof nextDocNo>[0], p.tenantId, billFy, "RCMINV")).docNo
+          : null;
+        gstCols = {
+          gstLines: gstToWire(g).lines as unknown as Array<Record<string, unknown>>,
+          supplierGstin: g.supplierGstin ?? null, rcm: g.rcm, rcmCategory: g.rcmCategory ?? null, rcmSelfInvoiceNo: selfInvoice,
+        };
+      }
       // R5: resolve authoritative PO + GRN(accepted) amounts for the 3-way match
       // snapshot — prefer the values carried on the command, else fall back to
       // the AP read-model populated from procurement.grn.accepted (keyed by grnRef).
@@ -261,6 +288,7 @@ export function registerPaymentsConsumers(queue: Queue): void {
         ...(poAmountMinor != null ? { poAmountMinor } : {}),
         ...(grnAmountMinor != null ? { grnAmountMinor } : {}),
         billDate,
+        ...gstCols,
         stage: "section", status: hasMismatch ? "on_hold" : "pending",
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });
@@ -439,13 +467,28 @@ export function registerPaymentsConsumers(queue: Queue): void {
         // GL spine: bill passed -> Dr expense head / Cr Accounts-Payable control.
         const apHeadId = await headIdByCode(tx, p.tenantId, AP_CONTROL_CODE, "accounts_payable");
         const billDate = billDateForClose;
-        const lines: JournalLine[] = [
+        let lines: JournalLine[] = [
           { accountCode: bill.headId,  debitMinor: bill.netMinor, creditMinor: 0n },
           { accountCode: apHeadId,     debitMinor: 0n,            creditMinor: bill.netMinor },
         ];
+        // MSME M3a: a bill that carries GST input-tax lines posts the input-tax / RCM legs and tells the GL consumer to emit the GST rows in
+        // the posting tx. Re-gated here on the STORED settings: if the tenant stopped being GST-registered since the bill was lodged,
+        // the approval is refused (nothing half-posted). A bill without gst_lines takes the unchanged two-line path.
+        let gstMeta: Record<string, unknown> | undefined;
+        if (Array.isArray(bill.gstLines) && bill.gstLines.length > 0) {
+          await assertGstEnabledTx(tx, p.tenantId);
+          const g = parseBillGst({ supplierGstin: bill.supplierGstin ?? undefined, rcm: bill.rcm === true, rcmCategory: bill.rcmCategory ?? undefined, lines: bill.gstLines });
+          const built = buildBillGstPosting({
+            expenseAccount: bill.headId, apAccount: apHeadId, netMinor: bill.netMinor, rcm: g.rcm,
+            lines: g.lines.map((l) => ({ ...l, itcCategory: resolveItcCategory(l) })),
+          });
+          lines = built.lines;
+          gstMeta = { gst: { sourceDocType: "bill", sourceDocId: p.id, invoiceNo: bill.vendorBillNo ?? bill.billNo, invoiceDate: billDate, partyGstin: bill.supplierGstin ?? null, entries: built.entries } };
+        }
         await enqueueSpineJournal(tx, {
           tenantId: p.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
           sourceKey: `bill:${p.id}`, type: "bill", postingDate: billDate, lines,
+          ...(gstMeta ? { extra: gstMeta } : {}),
         });
         // UAT L2-N6 review: on the ACCRUAL basis a bill drafted from an accepted GRN also clears the GRNI its stock
         // receipt credited (Dr GRNI / Cr this bill head, for the stocked value) -- see gl/grni-clearing.ts. Cash basis

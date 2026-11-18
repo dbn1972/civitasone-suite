@@ -88,6 +88,14 @@ class SyncRouteRegistry {
       topic: 'finance.payment.create',
       endpoint: '/v1/finance/payments',
     ),
+    // MSME commercial M2: the offline sales invoice. Previously unregistered, so the write outbox dead-lettered it
+    // ("No endpoint configured"). The server lands it as a DRAFT (idempotent on the invoice id) and answers 404 for a
+    // government tenant (centralised commercial gate), which the push service dead-letters with that reason.
+    'invoice.create': const SyncRoute(
+      service: 'finance',
+      topic: 'finance.sales_invoice.create',
+      endpoint: '/v1/finance/sales/mobile/invoices',
+    ),
 
     // ── Procurement ───────────────────────────────────────────────────────
     'indent.create': const SyncRoute(

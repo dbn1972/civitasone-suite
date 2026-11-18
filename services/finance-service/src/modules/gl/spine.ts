@@ -24,6 +24,8 @@ type SpineJournalInput = {
   postingDate: string;
   /** Lines already resolved to head UUIDs in accountCode; amounts are bigint paise. */
   lines: JournalLine[];
+  /** MSME M3a: extra journalPost payload keys (e.g. the `gst` block the GL consumer turns into finance.gst.entry_record in the posting tx). */
+  extra?: Record<string, unknown>;
 };
 
 /**
@@ -60,6 +62,7 @@ export async function enqueueSpineJournal(
       type: j.type,
       postingDate: j.postingDate,
       lines,
+      ...(j.extra ?? {}),
     },
   });
   return journalId;

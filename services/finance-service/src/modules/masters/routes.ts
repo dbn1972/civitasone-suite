@@ -45,6 +45,7 @@ const vendorIdParam = z.object({ id: z.string().uuid() });
 
 const PAN_RE = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
 const GSTIN_RE = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/;
+const UDYAM_CATEGORIES = ["micro", "small", "medium", "not_msme"] as const;
 const IFSC_RE = /^[A-Z]{4}0[A-Z0-9]{6}$/;
 
 const createVendorBody = z.object({
@@ -52,6 +53,7 @@ const createVendorBody = z.object({
   category:      z.string().min(1).max(100),
   pan:           z.string().length(10).transform((v) => v.toUpperCase()).refine((v) => PAN_RE.test(v), "invalid PAN format (expect AAAAA9999A)"),
   gstin:         z.string().length(15).transform((v) => v.toUpperCase()).refine((v) => GSTIN_RE.test(v), "invalid GSTIN format").optional(),
+  udyamCategory: z.enum(UDYAM_CATEGORIES).optional(),
   address:       z.string().min(2).max(500),
   contactPerson: z.string().min(1).max(200).optional(),
   phone:         z.string().min(6).max(20).optional(),
@@ -66,6 +68,7 @@ const updateVendorBody = z.object({
   name:          z.string().min(2).max(200).optional(),
   category:      z.string().min(1).max(100).optional(),
   gstin:         z.string().length(15).transform((v) => v.toUpperCase()).refine((v) => GSTIN_RE.test(v), "invalid GSTIN format").optional(),
+  udyamCategory: z.enum(UDYAM_CATEGORIES).nullable().optional(),
   address:       z.string().min(2).max(500).optional(),
   contactPerson: z.string().min(1).max(200).optional(),
   phone:         z.string().min(6).max(20).optional(),
@@ -127,6 +130,7 @@ function toVendorDetail(r: VendorRow, showFullBankDetails: boolean, mode: "read"
     status: r.status,
     pan: read ? maskPan(r.pan) : r.pan,
     gstin: r.gstin,
+    udyamCategory: r.udyamCategory ?? null,
     address: r.address,
     contactPerson: r.contactPerson,
     email: read ? maskEmail(r.email) : r.email,
@@ -257,6 +261,7 @@ export async function mastersRoutes(app: FastifyInstance): Promise<void> {
         category: body.category,
         pan: body.pan,
         gstin: body.gstin ?? null,
+        udyamCategory: body.udyamCategory ?? null,
         address: body.address,
         contactPerson: body.contactPerson ?? null,
         phone: body.phone ?? null,

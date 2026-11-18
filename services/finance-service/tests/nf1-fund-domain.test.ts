@@ -73,12 +73,12 @@ describe("single settings read per posting (S4)", () => {
   };
   it("loadPostingSettingsTx issues ONE select and returns budget control + fund flag + GENERAL id", async () => {
     const { tx, select } = makeTx([row]);
-    expect(await loadPostingSettingsTx(tx, "t")).toEqual({ budgetControl: "advisory", fundAccounting: true, generalFundId: G, capitalGrantPolicy: "deferred_income" });
+    expect(await loadPostingSettingsTx(tx, "t")).toEqual({ budgetControl: "advisory", fundAccounting: true, generalFundId: G, capitalGrantPolicy: "deferred_income", coaTemplate: "govt" });
     expect(select).toHaveBeenCalledTimes(1);
   });
   it("no settings row => mandatory budget control, fund accounting OFF", async () => {
     const { tx } = makeTx([]);
-    expect(await loadPostingSettingsTx(tx, "t")).toEqual({ budgetControl: "mandatory", fundAccounting: false, generalFundId: null, capitalGrantPolicy: "deferred_income" });
+    expect(await loadPostingSettingsTx(tx, "t")).toEqual({ budgetControl: "mandatory", fundAccounting: false, generalFundId: null, capitalGrantPolicy: "deferred_income", coaTemplate: "govt" });
   });
   it("NULL fund_accounting reads OFF", async () => {
     const { tx } = makeTx([{ m: "off", f: null, g: null }]);

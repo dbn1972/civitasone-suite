@@ -59,8 +59,18 @@ export const STORES_CONSUMPTION = process.env.FINANCE_STORES_CONSUMPTION_CODE ??
  * head: a stock receipt never credits it (UAT L2-N6 review), on accrual GRNI is cleared against it instead.
  */
 export function grnBillHeadCode(template: "govt" | "commercial" | "nonprofit" = "govt"): string {
-  const configured = process.env.FINANCE_GRN_BILL_HEAD_CODE?.trim();
-  return configured ? configured : templateDefaultBillHead(template);
+  return billHeadCodeFor(template, process.env.FINANCE_GRN_BILL_HEAD_CODE);
+}
+
+/**
+ * MSME M1: the default bill head code for a template, given the (optional) deployment env override. A commercial tenant's
+ * default comes from its STORED coa_template (5400) and IGNORES the env override: those env vars are deployment-global and
+ * hard-set to a govt head (2202) in places, which would otherwise point a commercial tenant at a head it does not have.
+ * govt / nonprofit are unchanged (the env var still wins when set).
+ */
+export function billHeadCodeFor(template: "govt" | "commercial" | "nonprofit", configured: string | undefined): string {
+  const c = configured?.trim();
+  return template !== "commercial" && c ? c : templateDefaultBillHead(template);
 }
 
 /**
