@@ -48,7 +48,28 @@ export type FinanceSettings = {
   gstEffectiveFrom: string | null;
   /** Legal entity type driving the commercial statement set (M8). NULL for government tenants. */
   entityType: EntityType | null;
+  /** PSU v1-B (migration 0187): government-owned company. false for every tenant that is not a PSU. Maker-checker only. */
+  govtOwned: boolean;
+  /** PSU v1-B (migration 0187): standard | cag_caro (CAG supplementary audit / CARO). Maker-checker only. */
+  auditProfile: AuditProfile;
 };
+
+export const AUDIT_PROFILES = ["standard", "cag_caro"] as const;
+export type AuditProfile = (typeof AUDIT_PROFILES)[number];
+
+export function toAuditProfile(v: unknown): AuditProfile {
+  return (AUDIT_PROFILES as readonly string[]).includes(v as string) ? (v as AuditProfile) : "standard";
+}
+
+/**
+ * govt_owned marks a government-owned COMPANY: it needs the commercial chart and entity_type company, so a government
+ * (coa_template govt) tenant can never be flagged govt_owned. Keyed on the stored settings, never on an edition string.
+ */
+export function assertGovtOwnedValid(s: Pick<FinanceSettings, "govtOwned" | "coaTemplate" | "entityType">): void {
+  if (s.govtOwned && !(s.coaTemplate === "commercial" && s.entityType === "company")) {
+    throw new DomainError("GOVT_OWNED_REQUIRES_COMMERCIAL_COMPANY", "govt_owned applies only to a commercial-chart tenant whose entity type is company");
+  }
+}
 
 export const ENTITY_TYPES = ["company", "llp", "partnership", "proprietorship"] as const;
 export type EntityType = (typeof ENTITY_TYPES)[number];
@@ -88,6 +109,8 @@ export const SETTINGS_DEFAULTS: FinanceSettings = {
   gstin: null,
   gstEffectiveFrom: null,
   entityType: null,
+  govtOwned: false,
+  auditProfile: "standard",
 };
 
 const BUDGET_CONTROL_RANK: Record<BudgetControl, number> = { off: 0, advisory: 1, mandatory: 2 };
@@ -144,8 +167,8 @@ export function isRelaxingControl(current: FinanceSettings, changes: Partial<Fin
   if (changes.budgetControl !== undefined && BUDGET_CONTROL_RANK[changes.budgetControl] < BUDGET_CONTROL_RANK[current.budgetControl]) return true;
   // UAT L2-N6 review: switching the accounting basis changes what every later stock movement books -- a second admin.
   if (changes.accountingBasis !== undefined && changes.accountingBasis !== current.accountingBasis) return true;
-  // MSME commercial M0: the GST identity and entity type shape every later commercial posting and return -- a second admin.
-  if ((["gstRegistered", "gstin", "gstEffectiveFrom", "entityType"] as const).some((k) => changes[k] !== undefined && changes[k] !== current[k])) return true;
+  // PSU v1-B: govt_owned / audit_profile mark a PSU and drive its audit disclosures -- a second admin. MSME commercial M0: the GST identity and entity type shape every later commercial posting and return -- a second admin.
+  if ((["gstRegistered", "gstin", "gstEffectiveFrom", "entityType", "govtOwned", "auditProfile"] as const).some((k) => changes[k] !== undefined && changes[k] !== current[k])) return true;
   return RELAXABLE_SETTINGS.some((k) => current[k] === true && changes[k] === false);
 }
 

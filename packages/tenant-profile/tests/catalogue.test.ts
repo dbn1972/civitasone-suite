@@ -30,8 +30,8 @@ describe("tenant-profile catalogue", () => {
     expect(getProfile("govt_small_office")!.defaultBillHead).toBe("wizard");
     expect(getProfile("govt_dept")!.defaultBillHead).toBe("fixed");
   });
-  it("owner decision 2: psu, private, ngo, cooperative behave as today, with the flag on too", () => {
-    for (const c of ["psu", "private", "ngo", "cooperative", "small_office"]) {
+  it("owner decision 2: private, ngo, cooperative behave as today, with the flag on too (psu is active since PSU v1-B)", () => {
+    for (const c of ["private", "ngo", "cooperative", "small_office"]) {
       expect(getProfile(c)!.active, c).toBe(false);
       expect(effectiveSettings(c, true), c).toEqual(LEGACY_SETTINGS);
     }
@@ -64,7 +64,23 @@ describe("tenant-profile catalogue", () => {
     expect(s8).toMatchObject({ composeOnOnboard: true, adminEdition: "section8", recruitmentPolicy: "direct", manifestKey: "default" });
     expect(effectiveSettings("section8", true)).toEqual(s8.settings);
     expect(getProfile("small_office")!.active).toBe(false);
-    expect(PROFILES.filter((p) => p.active).map((p) => p.code).sort()).toEqual(["govt_dept", "govt_small_office", "section8"]);
+    expect(PROFILES.filter((p) => p.active).map((p) => p.code).sort()).toEqual(["govt_dept", "govt_small_office", "psu", "section8"]);
+  });
+  it("PSU v1-B: psu is a commercial company profile carrying the PSU flags; no other profile carries them; flag off => legacy", () => {
+    const psu = getProfile("psu")!;
+    expect(psu).toMatchObject({ active: true, family: "commercial", adminEdition: "psu", bundleCode: "psu", composeOnOnboard: true, manifestKey: "default", recruitmentPolicy: "direct" });
+    expect(psu.settings).toEqual({
+      accountingBasis: "accrual", budgetControl: "advisory", coaTemplate: "commercial", coaPacks: [], statutoryPack: "commercial_in", fundAccounting: false,
+      entityType: "company", govtOwned: true, auditProfile: "cag_caro",
+    });
+    expect(effectiveSettings("psu", true)).toEqual(psu.settings);
+    expect(effectiveSettings("psu", false)).toBe(LEGACY_SETTINGS);
+    for (const p of PROFILES.filter((x) => x.code !== "psu")) {
+      expect(p.settings, p.code).not.toHaveProperty("govtOwned");
+      expect(p.settings, p.code).not.toHaveProperty("auditProfile");
+      expect(p.settings, p.code).not.toHaveProperty("entityType");
+    }
+    expect(LEGACY_SETTINGS).not.toHaveProperty("govtOwned");
   });
   it("B4: with the flag OFF section8 still resolves to LEGACY_SETTINGS (no production change)", () => {
     expect(effectiveSettings("section8", false)).toBe(LEGACY_SETTINGS);

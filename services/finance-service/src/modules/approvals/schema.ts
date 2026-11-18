@@ -31,6 +31,9 @@ export const financeSettings = glSchema.table("finance_settings", {
   gstin:                               varchar("gstin", { length: 15 }),
   gstEffectiveFrom:                    date("gst_effective_from"),
   entityType:                          text("entity_type"),
+  // PSU v1-B (migration 0187): a PSU is entity_type company + these flags. Changed only via the maker-checker route.
+  govtOwned:                           boolean("govt_owned").notNull().default(false),
+  auditProfile:                        text("audit_profile").notNull().default("standard"),
   updatedBy:                           uuid("updated_by").notNull(),
   updatedAt:                           timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   version:                             integer("version").notNull().default(1),
