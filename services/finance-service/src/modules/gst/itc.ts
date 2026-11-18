@@ -130,7 +130,8 @@ export type JournalLineOut = { accountCode: string; debitMinor: bigint; creditMi
 /** One GST-ledger entry per input tax line, as it will be sent on finance.gst.entry_record. */
 export type GstLedgerEntry = {
   gstType: GstTaxType; ratePct: number; taxableMinor: string; taxMinor: string; hsnCode?: string;
-  itcCategory: ItcCategory; rcm: boolean;
+  /** Input rows only; an OUTPUT (sales) entry carries none. */
+  itcCategory?: ItcCategory; rcm: boolean;
   /** The head that carries this tax in the GL; null when the tax was costed into the expense. */
   glHeadCode: string | null;
 };
@@ -178,6 +179,8 @@ export type GstJournalMeta = {
   sourceDocType: string; sourceDocId: string; invoiceNo: string; invoiceDate: string;
   partyGstin?: string | null; partyName?: string | null;
   entries?: GstLedgerEntry[];
+  /** M3b: "output" for a sales document (default "input"). Output credit-note entries carry NEGATIVE taxable / tax (s.34 reduction). */
+  direction?: "input" | "output";
   /** RCM ITC claim: the bill whose pending ITC this journal moves to the per-tax heads. */
   rcmClaimOf?: string;
 };

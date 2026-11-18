@@ -148,6 +148,8 @@ export const creditDebitNotes = arSchema.table("credit_debit_notes", {
   noteDate:       date("note_date").notNull(),
   reason:         varchar("reason", { length: 40 }).$type<NoteReason>().notNull(),
   reasonText:     text("reason_text"),
+  /** M3b: the GST rate the note was computed at (needed to post its per-rate output gst rows); NULL for a none-supply note. */
+  gstRatePct:     numeric("gst_rate_pct", { precision: 5, scale: 2 }),
   supplyType:     varchar("supply_type", { length: 5 }).$type<SupplyType>().notNull(),
   taxableMinor:   bigint("taxable_minor", { mode: "bigint" }).notNull(),
   cgstMinor:      bigint("cgst_minor", { mode: "bigint" }).notNull().default(0n),
