@@ -81,11 +81,13 @@ export async function listGrantsTx(tx: Tx, tenantId: string): Promise<GrantRow[]
   return tx.select().from(grants).where(eq(grants.tenantId, tenantId)).orderBy(asc(grants.sanctionDate), asc(grants.sanctionRef));
 }
 
-/** Running totals by posting kind, computed on read from the append-only trail. */
+/** Running totals by posting kind, computed on read from the append-only trail. A VOIDED posting (journal refused by the GL, migration 0185) is excluded. */
 export async function grantTotalsTx(tx: Tx, tenantId: string, grantId: string): Promise<GrantTotals> {
   const rows = rowsOf(await tx.execute(sql`
-    SELECT kind, COALESCE(SUM(amount_minor), 0)::text AS total FROM gl.grant_postings
-     WHERE tenant_id = ${tenantId}::uuid AND grant_id = ${grantId}::uuid GROUP BY kind`));
+    SELECT kind, COALESCE(SUM(amount_minor), 0)::text AS total FROM gl.grant_postings gp
+     WHERE gp.tenant_id = ${tenantId}::uuid AND gp.grant_id = ${grantId}::uuid
+       AND NOT EXISTS (SELECT 1 FROM gl.grant_posting_voids v WHERE v.tenant_id = gp.tenant_id AND v.journal_id = gp.journal_id)
+     GROUP BY kind`));
   const t = { ...ZERO_TOTALS };
   for (const r of rows) t[String(r.kind) as GrantPostingKind] = BigInt(String(r.total));
   return t;
@@ -103,8 +105,7 @@ export async function getGrantTx(tx: Tx, tenantId: string, grantId: string): Pro
  * B1 (accept-time): refuse, with a 422 DomainError, a posting the GL consumer could never post. Same rule the consumer
  * applies (gl/posting-rules.ts periodPostingRefusal over getPeriodStatusTx) and the manual-journal route applies up front
  * (gl/routes.ts assertPeriodAcceptsPosting). Journal type is "journal", as published.
- * Forward-note: a finance.gl.rejected reconciler + gl.grant_posting_voids table (for refusals that only show at posting time)
- * is a follow-up that MUST land before fund_accounting is enabled for any real Section 8 tenant.
+ * Refusals that only show at posting time are reconciled by grants/reconciler.ts (finance.gl.rejected -> gl.grant_posting_voids).
  */
 async function assertPeriodAcceptsGrantPostingTx(tx: Tx, tenantId: string, postingDate: string): Promise<void> {
   const period = postingDate.slice(0, 7);
@@ -170,6 +171,10 @@ export async function postGrantEventTx(
   const [existing] = await tx.select().from(grantPostings).where(and(eq(grantPostings.tenantId, meta.tenantId), eq(grantPostings.id, postingId))).limit(1);
   if (existing) {
     if (existing.grantId !== input.grantId || existing.kind !== kind) throw new DomainError("GRANT_POSTING_ID_REUSED", "this posting id was already used for a different grant event");
+    // Reconciled: the GL refused this posting's journal and the finance.gl.rejected reconciler voided it. It is final -- submit a new
+    // posting (new id) once the cause is fixed; replaying the voided one would resurrect a posting the register has already reversed.
+    const [voided] = rowsOf(await tx.execute(sql`SELECT reject_code FROM gl.grant_posting_voids WHERE tenant_id = ${meta.tenantId}::uuid AND journal_id = ${existing.journalId}::uuid`));
+    if (voided) throw new DomainError("GRANT_POSTING_VOIDED", `this posting was voided because the ledger refused it (${String(voided.reject_code)}); submit it again as a new posting`);
     // B1 recoverability: the journal is published after the register row commits. If the consumer refused it (e.g. the period was
     // closed) no journal exists; a retry with the same idempotency key re-publishes the SAME deterministic journal (postJournal is
     // idempotent by journal id), so it posts exactly once after the period reopens. grant_postings (append-only) is not touched.

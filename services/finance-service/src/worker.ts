@@ -44,6 +44,7 @@ import { registerSubledgerConsumers }     from "./modules/subledger/consumer.js"
 import { registerTdsConsumers }           from "./modules/tds/consumer.js";
 import { registerVoucherPrintConsumers }  from "./modules/voucher-print/consumer.js";
 import { registerAnomalyConsumers }       from "./modules/anomaly/consumer.js";
+import { registerGrantReconciler }        from "./modules/grants/reconciler.js";
 import { registerResolutionIntakeConsumers } from "./modules/resolution-intake/consumer.js";
 import { registerReconConsumers } from "./modules/recon/consumer.js";
 import { registerRevenueGlConsumers } from "./modules/revenue-gl/consumer.js";
@@ -110,6 +111,7 @@ registerSubledgerConsumers(queue);
 registerTdsConsumers(queue);
 registerVoucherPrintConsumers(queue);
 registerAnomalyConsumers(queue);
+registerGrantReconciler(queue);
 registerResolutionIntakeConsumers(queue);
 registerReconConsumers(queue);
 registerRevenueGlConsumers(queue);

@@ -150,6 +150,8 @@ export const EVENTS = {
 
 /** Topics consumed from other services (cross-service stitching) */
 export const CONSUMED_EVENTS = {
+  /** Section 8 NF-3: finance's own refusal event, consumed by the grant reconciler (grants/reconciler.ts) to void a refused grant posting. */
+  glRejected:               "finance.gl.rejected",
   eftInitiate:              "finance.payment.eft.initiate",
   auditParaPendingRecovery: "audit.para.pending_recovery",
   payrollRunApproved:       "payroll.run.approved",

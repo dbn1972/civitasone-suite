@@ -95,6 +95,7 @@ export async function loadUcFacts(tx: Tx, tenantId: string, fy: string): Promise
     SELECT g.id::text AS id, g.fund_id::text AS fund_id, g.grantor, g.sanction_ref, g.category, g.amount_sanctioned_minor::text AS sanctioned,
       COALESCE((SELECT SUM(p.amount_minor) FROM gl.grant_postings p
                  WHERE p.tenant_id = g.tenant_id AND p.grant_id = g.id AND p.kind = 'receipt'
+                   AND NOT EXISTS (SELECT 1 FROM gl.grant_posting_voids v WHERE v.tenant_id = p.tenant_id AND v.journal_id = p.journal_id)
                    AND p.posting_date >= ${start}::date AND p.posting_date <= ${end}::date), 0)::text AS received,
       COALESCE((SELECT SUM(u.amount_utilised_minor) FROM gl.grant_utilisation u
                  WHERE u.tenant_id = g.tenant_id AND u.grant_id = g.id AND u.period >= ${p0} AND u.period <= ${p1}), 0)::text AS utilised,
