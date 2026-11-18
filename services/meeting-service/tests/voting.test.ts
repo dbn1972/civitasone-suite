@@ -306,3 +306,90 @@ describe("reads (200)", () => {
     expect(data.tally.total).toBe(2);
   });
 });
+
+// ─── Recuse (conflict-of-interest) — a 6th voting endpoint present in routes.ts but not covered
+// by the nominal "5 endpoints" count in the module docblock. integration-governance.test.ts
+// exercises its business behaviour (recusal excludes a member from the tally/quorum); this block
+// closes the same status-code matrix gap the rest of this file applies to the other 5 endpoints.
+describe("recuse (conflict-of-interest)", () => {
+  it("401 when unauthenticated", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: `/v1/meetings/${MEETING}/votes/${R_OPEN}/recuse`,
+      payload: { reason: "financial interest in the vendor" },
+    });
+    expect(res.statusCode).toBe(401);
+  });
+
+  it("403 when role is not permitted to record a recusal", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: `/v1/meetings/${MEETING}/votes/${R_OPEN}/recuse`,
+      headers: writeHeaders(["observer"]),
+      payload: { reason: "financial interest in the vendor" },
+    });
+    expect(res.statusCode).toBe(403);
+  });
+
+  it("400 when X-Idempotency-Key header is missing", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: `/v1/meetings/${MEETING}/votes/${R_OPEN}/recuse`,
+      headers: readHeaders(), // no idempotency key
+      payload: { reason: "financial interest in the vendor" },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it("400 when the reason is missing", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: `/v1/meetings/${MEETING}/votes/${R_OPEN}/recuse`,
+      headers: writeHeaders(),
+      payload: {},
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it("404 on recuse for an unknown resolution", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: `/v1/meetings/${MEETING}/votes/${UNKNOWN}/recuse`,
+      headers: writeHeaders(),
+      payload: { reason: "financial interest in the vendor" },
+    });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it("404 on recuse when the resolution belongs to a different meeting", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: `/v1/meetings/${UNKNOWN}/votes/${R_OPEN}/recuse`,
+      headers: writeHeaders(),
+      payload: { reason: "financial interest in the vendor" },
+    });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it("202 records a self-recusal (CQRS accept)", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: `/v1/meetings/${MEETING}/votes/${R_OPEN}/recuse`,
+      headers: writeHeaders(),
+      payload: { reason: "financial interest in the vendor", registerRef: "ROI-2026-099" },
+    });
+    expect(res.statusCode).toBe(202);
+    expect(res.json().data.id).toBe(R_OPEN);
+  });
+
+  it("202 records a chair/secretary-recorded recusal naming another member", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: `/v1/meetings/${MEETING}/votes/${R_OPEN}/recuse`,
+      headers: writeHeaders(["committee_secretary"]),
+      payload: { memberId: MEMBER_B, reason: "spouse employed by the counterparty" },
+    });
+    expect(res.statusCode).toBe(202);
+    expect(res.json().data.id).toBe(R_OPEN);
+  });
+});
