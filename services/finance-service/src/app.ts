@@ -159,6 +159,9 @@ export async function buildApp(): Promise<FastifyInstance> {
   // MSME commercial M4: GSTR-1 / GSTR-3B prepare + JSON export (new module; behind the same commercial gate; billing gstn/ untouched).
   const { gstReturnRoutes } = await import("./modules/gst-returns/routes.js");
   await app.register(gstReturnRoutes);
+  // PSU v1 slice C: cap table / dividends / CSR (new module; behind the stored commercial + govt_owned gate; govt and plain-company tenants get 404).
+  const { psuRoutes } = await import("./modules/psu-disclosures/routes.js");
+  await app.register(psuRoutes);
 
 
   return app;

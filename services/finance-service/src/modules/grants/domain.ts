@@ -150,3 +150,11 @@ export function assertHeadroom(
 
 /** Unspent revenue-grant balance after the postings in `t` (received less recognised). Meaningful for salary / general grants. */
 export const unspentMinor = (t: GrantTotals): bigint => t.receipt - t.recognition;
+
+/**
+ * True when running totals still satisfy the headroom invariants assertHeadroom enforces one posting at a time: nothing recognised
+ * or capitalised beyond what was received, nothing released beyond what was capitalised. Used by the finance.gl.rejected reconciler
+ * to flag (needs_review) a grant whose remaining live postings leaned on a voided one.
+ */
+export const totalsAreConsistent = (t: GrantTotals): boolean =>
+  t.recognition <= t.receipt && t.capitalisation <= t.receipt && t.release <= t.capitalisation;

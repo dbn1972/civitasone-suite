@@ -44,6 +44,7 @@ const C = `${B}/commercial`;
 const SCHEDULE_III: StatementDescriptor[] = [
   { key: "profit_and_loss", title: "Statement of Profit and Loss (Schedule III)", route: `${C}/profit-and-loss` },
   { key: "balance_sheet", title: "Balance Sheet (Schedule III)", route: `${C}/balance-sheet` },
+  { key: "changes_in_equity", title: "Statement of Changes in Equity", route: `${C}/changes-in-equity` },
   { key: "cash_flow", title: "Cash Flow Statement (indirect)", route: `${C}/cash-flow` },
   { key: "notes", title: "Notes to the financial statements", route: `${C}/set` },
 ];

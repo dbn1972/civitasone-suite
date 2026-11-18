@@ -5,39 +5,55 @@
  *
  *  GET .../commercial/set?fy=               the family's whole set (P&L, Balance Sheet, Cash Flow | Trading Account, notes)
  *  GET .../commercial/profit-and-loss?fy=   GET .../commercial/balance-sheet?fy=
+ *  GET .../commercial/changes-in-equity?fy= (schedule_iii family; PSU v1-A SOCIE)
+ *  GET .../commercial/psu-disclosures?fy=   (PSU v1-C: cap table, dividends, CARO / C&AG stubs, CSR; 404 PSU_NOT_ENABLED unless stored govt_owned)
  *  GET .../commercial/cash-flow?fy=         (schedule_iii family)    GET .../commercial/trading-account?fy=   (trading_pl_bs family)
  */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { resolveContext, requireRole, HttpError, financeErrorHandler } from "../../shared/context.js";
 import { scopedRead } from "../../shared/db.js";
-import { currentFyIST } from "../../shared/ist-date.js";
+import { currentFyIST, previousFy } from "../../shared/ist-date.js";
 import { CommercialChartIncompleteError } from "../gl/commercial-chart.js";
 import type { Tx } from "../year-end/repo.js";
 import { buildCommercialSet, StatementClassMissingError, type CommercialSet } from "./commercial-statements.js";
-import { commercialPresentation, frameworkFromEnv, loadCommercialRows, loadStatementSettings } from "./commercial-statements-repo.js";
+import { commercialPresentation, loadCommercialRows, loadRowsForFy, loadStatementSettings, resolveFramework } from "./commercial-statements-repo.js";
 import { statementSetFor } from "./statement-set.js";
+import { PSU_DIVIDEND_APPROPRIATION_CODE } from "../psu-disclosures/config.js";
+import { loadPsuDisclosuresTx, type PsuDisclosures } from "../psu-disclosures/service.js";
 
 const READER_ROLES = ["finance_officer", "finance_admin", "super_admin", "audit_officer"];
 const query = z.object({ fy: z.string().regex(/^\d{4}-\d{2}$/, "fy must be a financial year such as 2026-27").optional() });
 
-async function buildFor(tx: Tx, tenantId: string, fy: string): Promise<CommercialSet> {
+type BuiltSet = CommercialSet & { disclosures?: PsuDisclosures };
+
+async function buildFor(tx: Tx, tenantId: string, fy: string): Promise<BuiltSet> {
   const st = await loadStatementSettings(tx, tenantId);
   const set = statementSetFor(st.coaTemplate, st.entityType);
   if (set.id !== "commercial" || !set.available || !set.family) throw new HttpError(404, "STATEMENT_SET_NOT_AVAILABLE", "the commercial statement set is not available for this tenant (needs the commercial chart and a stored entity type)");
   const rows = await loadCommercialRows(tx, tenantId, fy);
-  return buildCommercialSet(rows, commercialPresentation(), { family: set.family, fy, framework: frameworkFromEnv(process.env), accountingBasis: st.accountingBasis, llp: st.entityType === "llp" });
+  const priorRows = await loadRowsForFy(tx, tenantId, previousFy(fy));
+  // PSU v1-C: the dividends head feeds SOCIE and the PSU-only disclosures attach ONLY for a stored govt_owned commercial company;
+  // every other tenant's presentation config and output are exactly what they were (no dividend codes, no `disclosures` key).
+  const psu = st.coaTemplate === "commercial" && st.govtOwned;
+  const pres = commercialPresentation(psu ? { dividendCodes: new Set([PSU_DIVIDEND_APPROPRIATION_CODE]) } : {});
+  const built: BuiltSet = buildCommercialSet(rows, pres, {
+    family: set.family, fy, framework: resolveFramework(st.accountingStandard, process.env), accountingBasis: st.accountingBasis, llp: st.entityType === "llp",
+    priorFy: previousFy(fy), priorRows,
+  });
+  if (psu) built.disclosures = await loadPsuDisclosuresTx(tx, tenantId, fy, { auditProfile: st.auditProfile, rows, pres });
+  return built;
 }
 
 export async function commercialStatementsRoutes(app: FastifyInstance): Promise<void> {
-  const serve = (pick: (s: CommercialSet) => unknown, needs?: "cashFlow" | "tradingAccount") =>
+  const serve = (pick: (s: BuiltSet) => unknown, needs?: "cashFlow" | "tradingAccount" | "changesInEquity" | "disclosures") =>
     async (req: FastifyRequest, reply: FastifyReply) => {
       const ctx = resolveContext(req);
       requireRole(ctx, READER_ROLES);
       const fy = query.parse(req.query).fy ?? currentFyIST();
       try {
         const s = await scopedRead((tx) => buildFor(tx, ctx.tenantId, fy));
-        if (needs && !s[needs]) throw new HttpError(404, "STATEMENT_NOT_IN_FAMILY", `${needs === "cashFlow" ? "the Cash Flow Statement" : "the Trading Account"} is not part of the ${s.family} family`);
+        if (needs && !s[needs]) throw new HttpError(404, needs === "disclosures" ? "PSU_NOT_ENABLED" : "STATEMENT_NOT_IN_FAMILY", needs === "disclosures" ? "the PSU disclosures are not available for this tenant" : `${needs === "cashFlow" ? "the Cash Flow Statement" : needs === "changesInEquity" ? "the Statement of Changes in Equity" : "the Trading Account"} is not part of the ${s.family} family`);
         return reply.send(pick(s));
       } catch (err) {
         if (err instanceof StatementClassMissingError) throw new HttpError(409, err.code, err.message);
@@ -48,7 +64,9 @@ export async function commercialStatementsRoutes(app: FastifyInstance): Promise<
   app.get("/v1/finance/statements/commercial/set", serve((s) => s));
   app.get("/v1/finance/statements/commercial/profit-and-loss", serve((s) => ({ fiscalYear: s.fiscalYear, family: s.family, framework: s.framework, ...s.profitAndLoss })));
   app.get("/v1/finance/statements/commercial/balance-sheet", serve((s) => ({ fiscalYear: s.fiscalYear, ...s.balanceSheet })));
+  app.get("/v1/finance/statements/commercial/changes-in-equity", serve((s) => ({ fiscalYear: s.fiscalYear, ...s.changesInEquity }), "changesInEquity"));
   app.get("/v1/finance/statements/commercial/cash-flow", serve((s) => ({ fiscalYear: s.fiscalYear, ...s.cashFlow }), "cashFlow"));
+  app.get("/v1/finance/statements/commercial/psu-disclosures", serve((s) => s.disclosures, "disclosures"));
   app.get("/v1/finance/statements/commercial/trading-account", serve((s) => ({ fiscalYear: s.fiscalYear, ...s.tradingAccount }), "tradingAccount"));
   app.setErrorHandler(financeErrorHandler);
 }
