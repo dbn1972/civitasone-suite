@@ -19,8 +19,9 @@ describe("B8 onboardingStepsFor (catalogue-driven setup steps)", () => {
     expect(onboardingStepsFor("nope", true)).toBe(LEGACY_ONBOARDING_STEPS);
     expect(onboardingStepsFor(null, true)).toBe(LEGACY_ONBOARDING_STEPS);
     expect(onboardingStepsFor(undefined, true)).toBe(LEGACY_ONBOARDING_STEPS);
-    // psu is an inactive placeholder: behaves as legacy even with the flag on
-    expect(onboardingStepsFor("psu", true)).toBe(LEGACY_ONBOARDING_STEPS);
+    // PSU v1-B: psu is active; a company is not a municipality, so with the flag on it adds no onboarding steps (flag off: legacy)
+    expect(onboardingStepsFor("psu", true)).toEqual([]);
+    expect(onboardingStepsFor("psu", false)).toBe(LEGACY_ONBOARDING_STEPS);
     expect(onboardingStepsFor("small_office", true)).toBe(LEGACY_ONBOARDING_STEPS);
   });
   it("every profile only lists known step ids", () => {

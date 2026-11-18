@@ -1,4 +1,4 @@
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import { tenantProfilesEnabled, getProfile, effectiveSettings, LEGACY_SETTINGS, COA_TEMPLATES, type CoaTemplate, type ProfileSettings } from "@civitasone/tenant-profile";
 import { randomUUID } from "node:crypto";
 import { financeSettings } from "../approvals/schema.js";
@@ -60,7 +60,14 @@ export async function activateFinanceProfileTx(tx: unknown, tenantId: string, pr
   const want = profileFinanceSettings(profileCode);
   if (!want) return false;
   const { settings: s } = want;
-  const values = { accountingBasis: s.accountingBasis, budgetControl: s.budgetControl, coaTemplate: s.coaTemplate, profileCode: want.profileCode };
+  // PSU v1-B: the optional finance identity a profile carries (absent on every non-PSU profile => the values object, and so the
+  // INSERT/UPDATE column set, is exactly what it was before).
+  const values = {
+    accountingBasis: s.accountingBasis, budgetControl: s.budgetControl, coaTemplate: s.coaTemplate, profileCode: want.profileCode,
+    ...(s.entityType !== undefined ? { entityType: s.entityType } : {}),
+    ...(s.govtOwned !== undefined ? { govtOwned: s.govtOwned } : {}),
+    ...(s.auditProfile !== undefined ? { auditProfile: s.auditProfile } : {}),
+  };
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const t = tx as any;
   const applied = await t.insert(financeSettings).values({ tenantId, ...values, updatedBy: actorId })
@@ -70,6 +77,7 @@ export async function activateFinanceProfileTx(tx: unknown, tenantId: string, pr
       setWhere: and(
         eq(financeSettings.version, 1), eq(financeSettings.coaTemplate, "govt"), eq(financeSettings.accountingBasis, "cash"),
         eq(financeSettings.budgetControl, "mandatory"), eq(financeSettings.profileCode, "govt_dept"),
+        eq(financeSettings.govtOwned, false), eq(financeSettings.auditProfile, "standard"), isNull(financeSettings.entityType),
       ),
     }).returning({ tenantId: financeSettings.tenantId });
   // Fund accounting (Section 8): never a raw column write (DB trigger gl.guard_fund_accounting_flip). Only when THIS call

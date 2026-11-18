@@ -65,7 +65,18 @@ export type ProfileSettings = {
    * govt and every profile that does not set it; only the active section8 profile sets it true.
    */
   fundAccounting: boolean;
+  /**
+   * PSU v1-B: optional finance identity a profile seeds on gl.finance_settings at onboard (activateFinanceProfileTx). All three
+   * are ABSENT on every profile except psu, so every other profile (govt, section8, MSME) materialises exactly what it did before.
+   * They are plain data: nothing forks on the profile string. Later changes go through the approvals maker-checker route only.
+   */
+  entityType?: "company";
+  govtOwned?: boolean;
+  auditProfile?: AuditProfile;
 };
+
+export const AUDIT_PROFILES = ["standard", "cag_caro"] as const;
+export type AuditProfile = (typeof AUDIT_PROFILES)[number];
 
 export type ProfileDef = {
   code: string;
@@ -126,7 +137,18 @@ export const PROFILES: readonly ProfileDef[] = Object.freeze([
     // Owner decision 1 (2026-11-06): budget control is mandatory from day one.
     settings: { ...GOVT, coaPacks: ["office-pack"] },
   },
-  legacyPlaceholder("psu", "PSU / Board", "psu", "psu", true),
+  {
+    // PSU v1-B: a public-sector undertaking is a COMPANY (entity_type stays company; no new entity_type value), marked by
+    // govt_owned + audit_profile. It reuses the commercial chart, accrual basis and the seeded `psu`
+    // module bundle (admin migration 0062: full commercial ERP). Active only when TENANT_PROFILES_ENABLED is on.
+    code: "psu", label: "PSU / Board", family: "commercial", editions: ["psu"], active: true,
+    defaultBillHead: "fixed", bundleCode: "psu",
+    composeOnOnboard: true, adminEdition: "psu", recruitmentPolicy: "direct", manifestKey: "default", onboardingSteps: [],
+    settings: {
+      accountingBasis: "accrual", budgetControl: "advisory", coaTemplate: "commercial", coaPacks: [], statutoryPack: "commercial_in", fundAccounting: false,
+      entityType: "company", govtOwned: true, auditProfile: "cag_caro",
+    },
+  },
   legacyPlaceholder("private", "Private company", "private", "private", false),
   legacyPlaceholder("ngo", "NGO / Trust / Society", "ngo", "ngo", false),
   legacyPlaceholder("cooperative", "Cooperative society", "cooperative", "cooperative", false),
