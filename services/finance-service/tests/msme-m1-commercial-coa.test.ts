@@ -27,9 +27,9 @@ describe("M1 required commercial head set", () => {
       expect(["asset", "liability", "equity", "income", "expense"]).toContain(nature);
     }
   });
-  it("contains the design list: 5400, 1500/1600/1700/1800, 2300/2310/2400/2500, 3000/3200, 4400, 5410-5450, 6200", () => {
+  it("contains the design list: 5400, 1500/1600/1700/1800, 2300/2310/2400/2500, 3000/3200, 4400, 5410-5450, 6200 (+ M3a per-tax GST heads 1701-1705, 2301)", () => {
     expect(Object.keys(REQUIRED_COMMERCIAL_HEADS).sort()).toEqual(
-      ["1500", "1600", "1700", "1800", "2300", "2310", "2400", "2500", "3000", "3200", "4400", "5400", "5410", "5420", "5430", "5440", "5450", "6200"]);
+      ["1500", "1600", "1700", "1701", "1702", "1703", "1704", "1705", "1800", "2300", "2301", "2310", "2400", "2500", "3000", "3200", "4400", "5400", "5410", "5420", "5430", "5440", "5450", "6200"]);
   });
   it("govt seed is untouched: no statementClass on any govt row, no commercial-only code leaks in", () => {
     for (const h of standardGlHeads()) {

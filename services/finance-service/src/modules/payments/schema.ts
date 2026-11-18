@@ -29,6 +29,12 @@ export const financeBills = paymentsSchema.table("finance_bills", {
   poAmountMinor:  bigint("po_amount_minor", { mode: "bigint" }),   // R5: authoritative PO value snapshot (paise)
   grnAmountMinor: bigint("grn_amount_minor", { mode: "bigint" }),  // R5: authoritative GRN accepted value snapshot (paise)
   billDate:    date("bill_date"),
+  // MSME M3a (migration 0180): GST input-tax capture. NULL / false on every govt and non-GST bill.
+  gstLines:    jsonb("gst_lines").$type<Array<Record<string, unknown>>>(),
+  supplierGstin: varchar("supplier_gstin", { length: 15 }),
+  rcm:         boolean("rcm").notNull().default(false),
+  rcmCategory: text("rcm_category"),
+  rcmSelfInvoiceNo: text("rcm_self_invoice_no"),
   ddoCode:     varchar("ddo_code", { length: 12 }),
   paoCode:     varchar("pao_code", { length: 12 }),
   agencyCode:  varchar("agency_code", { length: 12 }),

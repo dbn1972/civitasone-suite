@@ -3,6 +3,7 @@ import type { RequestContext } from "@civitasone/types";
 import { idempotentId } from "@civitasone/auth";
 import { queue, cache } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
+import { gstToWire } from "../gst/itc.js";
 import type { CreateBillBody, ApproveBillBody, InitiateEftBody, GemInvoiceMatchBody, CreateAdvanceBody, CreateUCBody, AdjustAdvanceBody } from "./validators.js";
 
 export type Accepted = { id: string; status: string; correlationId: string };
@@ -18,7 +19,7 @@ export async function createBill(ctx: RequestContext, body: CreateBillBody): Pro
     // billNo is the VENDOR's invoice number (the web form and the user manual call it that): sent as vendorBillNo, which
     // the consumer stores. The internal BILL/<fy>/<seq> number is still allocated there. Producers that publish
     // finance.bill.create directly (GRN, works) do not send vendorBillNo and are unaffected.
-    payload: { id, tenantId: ctx.tenantId, netMinor, ...body, vendorBillNo: body.billNo },
+    payload: { id, tenantId: ctx.tenantId, netMinor, ...body, vendorBillNo: body.billNo, ...(body.gst ? { gst: gstToWire(body.gst) } : {}) },
   });
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }

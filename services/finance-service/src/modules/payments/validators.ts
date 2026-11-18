@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { zMoneyMinor as zMoneyMinorBase } from "@civitasone/schemas/money";
 import { zIsoDate, zTrimmedCode, DATE_WINDOWS, istToday, yearsFromEnv, boundedMinorBigint } from "@civitasone/schemas/validators";
+import { billGstInput } from "../gst/itc.js";
 import { PFMS_DDO_REGEX, PFMS_HOA_REGEX, PFMS_AGENCY_REGEX, PFMS_SCHEME_REGEX } from "../../shared/pfms.js";
 
 const ddoCodeField = z.string().regex(PFMS_DDO_REGEX, "DDO code must be 6–12 alphanumeric characters (PFMS format)");
@@ -47,6 +48,8 @@ export const createBillBody = z.object({
   poRef:       z.string().optional(),
   grnRef:      z.string().optional(),
   billDate:    zIsoDate({ window: billDateWindow, label: "bill date" }).optional(),
+  // MSME M3a: GST input-tax lines / reverse charge. Accepted only for a GST-registered commercial tenant (the consumer refuses otherwise).
+  gst:         billGstInput.optional(),
 });
 export type CreateBillBody = z.infer<typeof createBillBodyNoDdo>;
 /** B3: the non-govt (commercial / nonprofit) bill body: identical, but the DDO is optional (a DDO is a govt-template concept). */

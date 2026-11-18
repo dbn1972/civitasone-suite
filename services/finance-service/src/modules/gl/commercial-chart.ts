@@ -13,6 +13,7 @@
 import { and, eq, inArray } from "drizzle-orm";
 import { NonRetryableError } from "@civitasone/queue";
 import { financeHeads } from "../budget/schema.js";
+import { GST_HEADS } from "./gst-heads.js";
 
 /** code -> required classification. 5400 is the default bill head. */
 export const REQUIRED_COMMERCIAL_HEADS: Readonly<Record<string, "asset" | "liability" | "equity" | "income" | "expense">> = {
@@ -23,6 +24,8 @@ export const REQUIRED_COMMERCIAL_HEADS: Readonly<Record<string, "asset" | "liabi
   "4400": "income",
   "5410": "expense", "5420": "expense", "5430": "expense", "5440": "expense", "5450": "expense",
   "6200": "expense",
+  // MSME M3a: per-tax ITC heads + RCM heads (the same single definition the seed uses).
+  ...Object.fromEntries(GST_HEADS.map((h) => [h.code, h.classification])),
 };
 
 /** The refusal code. Matches gl/refusal.ts JOURNAL_* so a journal rejected for it is reported to the producer with this code. */
