@@ -25,7 +25,7 @@ const ROWS: CommercialRow[] = [
 describe("resolver: keyed on the stored entity_type", () => {
   it("company -> schedule_iii; llp -> schedule_iii + Form 8/11 v2 marker; partnership / proprietorship -> trading_pl_bs", () => {
     expect(statementSetFor("commercial", "company")).toMatchObject({ id: "commercial", available: true, family: "schedule_iii" });
-    expect(statementSetFor("commercial", "company").statements.map((s) => s.key)).toEqual(["profit_and_loss", "balance_sheet", "cash_flow", "notes"]);
+    expect(statementSetFor("commercial", "company").statements.map((s) => s.key)).toEqual(["profit_and_loss", "balance_sheet", "changes_in_equity", "cash_flow", "notes"]);
     expect(statementSetFor("commercial", "llp")).toMatchObject({ family: "schedule_iii", markers: ["LLP_FORM_8_11_V2"] });
     for (const e of ["partnership", "proprietorship"]) {
       const s = statementSetFor("commercial", e);

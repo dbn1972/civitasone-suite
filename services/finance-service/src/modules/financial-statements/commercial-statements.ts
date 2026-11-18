@@ -45,6 +45,7 @@ export type PresentationConfig = {
   financeCostCodes: ReadonlySet<string>;
   depreciationCodes: ReadonlySet<string>;
   taxExpenseCodes: ReadonlySet<string>;
+  dividendCodes?: ReadonlySet<string>;      // reserve heads whose DEBITS are dividends (SOCIE); other reserve debits print as other deductions
 };
 
 export type StLine = { code: string | null; name: string; amountMinor: string; priorYearMinor?: string };
@@ -110,6 +111,8 @@ export type ProfitAndLoss = {
   family: CommercialFamily; groups: StGroup[];
   totalRevenueMinor: string; totalExpensesMinor: string; profitBeforeTaxMinor: string; taxExpenseMinor: string; profitAfterTaxMinor: string;
   result: "profit" | "loss";
+  /** PSU v1-A: prior-year comparative totals (present only when a prior year was supplied). */
+  priorYear?: { fiscalYear: string; totalRevenueMinor: string; totalExpensesMinor: string; profitBeforeTaxMinor: string; taxExpenseMinor: string; profitAfterTaxMinor: string };
 };
 
 /** Schedule III Statement of Profit and Loss: I revenue, II other income, III total, IV expenses, V PBT, VI tax, VII PAT. */
@@ -142,6 +145,8 @@ export function tradingAccount(cs: Cl[], cfg: PresentationConfig): TradingAccoun
 
 export type TradingPl = {
   grossProfitMinor: string; groups: StGroup[]; indirectExpensesMinor: string; netProfitMinor: string; result: "net_profit" | "net_loss";
+  /** PSU v1-A: prior-year comparative totals. */
+  priorYear?: { fiscalYear: string; grossProfitMinor: string; indirectExpensesMinor: string; netProfitMinor: string };
 };
 /** Profit & Loss Account (ITR shape): gross profit b/d + other income - indirect expenses (all expense heads not in the Trading Account). */
 export function tradingProfitAndLoss(cs: Cl[], cfg: PresentationConfig): TradingPl {
@@ -194,6 +199,73 @@ export function balanceSheet(cs: Cl[], cfg: PresentationConfig, family: Commerci
     totalEquityAndLiabilitiesMinor: s(tel), totalAssetsMinor: s(ta), priorYearTotalEquityAndLiabilitiesMinor: s(priorTotal(el)), priorYearTotalAssetsMinor: s(priorTotal(as)),
     balanced: tel === ta, differenceMinor: s(ta - tel), surplusForYearMinor: s(surplus),
   };
+}
+
+// ---- P&L comparatives (PSU v1-A) ------------------------------------------------------------------------------------------
+
+/**
+ * Attach the prior-year comparative to a P&L built over the SAME presentation config: groups pair by key, lines by head code (a head
+ * with prior-year activity only prints with a current amount of 0). The prior year is the previous FY's own movements from the same
+ * ledger reader the current year uses, so its arithmetic is the current year's arithmetic. Every group / line gets priorYear* fields.
+ */
+export function withPlComparatives<T extends { groups: StGroup[] }>(cur: T, prior: T): T["groups"] {
+  const pg = new Map(prior.groups.map((g) => [g.key, g]));
+  const seen = new Set<string>();
+  const merged = cur.groups.map((g): StGroup => {
+    seen.add(g.key);
+    const p = pg.get(g.key);
+    const pl = new Map((p?.lines ?? []).filter((l) => l.code !== null).map((l) => [l.code as string, l]));
+    const lines = g.lines.map((l): StLine => ({ ...l, priorYearMinor: l.code !== null ? (pl.get(l.code)?.amountMinor ?? "0") : "0" }));
+    const have = new Set(g.lines.map((l) => l.code));
+    for (const l of p?.lines ?? []) if (l.code !== null && !have.has(l.code)) lines.push({ code: l.code, name: l.name, amountMinor: "0", priorYearMinor: l.amountMinor });
+    return { ...g, lines, priorYearTotalMinor: p?.totalMinor ?? "0" };
+  });
+  for (const p of prior.groups) if (!seen.has(p.key)) merged.push({ key: p.key, label: p.label, lines: p.lines.map((l) => ({ code: l.code, name: l.name, amountMinor: "0", priorYearMinor: l.amountMinor })), totalMinor: "0", priorYearTotalMinor: p.totalMinor });
+  return merged;
+}
+
+// ---- Statement of Changes in Equity (Schedule III family, PSU v1-A) ------------------------------------------------------
+
+export type SocieRow = {
+  code: string | null; name: string; component: "equity_share_capital" | "reserves_and_surplus";
+  openingMinor: string; profitForYearMinor: string; additionsMinor: string; dividendsMinor: string; otherDeductionsMinor: string; closingMinor: string;
+};
+export type Socie = {
+  rows: SocieRow[];
+  totals: { openingMinor: string; profitForYearMinor: string; additionsMinor: string; dividendsMinor: string; otherDeductionsMinor: string; closingMinor: string };
+  /** Closing equity as the Balance Sheet prints it (share capital + reserves and surplus incl. the year's surplus). */
+  balanceSheetEquityMinor: string; tiesToBalanceSheet: boolean;
+};
+
+/**
+ * Statement of Changes in Equity: opening equity / reserves -> movements -> closing, per stored equity-nature head, plus the year's profit.
+ * Same classified rows and same split as the Balance Sheet (capital = stored class `equity` other than the accumulated fund; everything
+ * else of equity nature = reserves), so `closing` equals the BS equity section by construction (`tiesToBalanceSheet` is the proof).
+ * Movements per head: additions = credits in the year, deductions = debits in the year; debits on a head in cfg.dividendCodes are
+ * dividends, other debits are other deductions (transfers / utilisation). PAT is the year's income - expense (the BS "surplus" line).
+ */
+export function changesInEquity(cs: Cl[], cfg: PresentationConfig): Socie {
+  const eq = cs.filter((c) => c.nature === "equity");
+  const surplus = t(cs.filter((c) => c.nature === "income")) - t(cs.filter((c) => c.nature === "expense"));
+  const isFund = (c: Cl) => c.code === cfg.accumulatedFund;
+  const div = cfg.dividendCodes ?? new Set<string>();
+  const row = (c: Cl): SocieRow => {
+    const component = c.statementClass === "equity" && !isFund(c) ? "equity_share_capital" : "reserves_and_surplus";
+    const dividends = div.has(c.code) ? c.debitMinor : 0n;
+    return {
+      code: c.code, name: c.name, component, openingMinor: s(c.naturalOpening), profitForYearMinor: "0", additionsMinor: s(c.creditMinor),
+      dividendsMinor: s(dividends), otherDeductionsMinor: s(c.debitMinor - dividends), closingMinor: s(c.natural),
+    };
+  };
+  const rows: SocieRow[] = [
+    ...eq.filter((c) => c.statementClass === "equity" && !isFund(c)).map(row), ...eq.filter((c) => c.statementClass !== "equity" || isFund(c)).map(row),
+    { code: null, name: "Surplus / (deficit) for the year", component: "reserves_and_surplus", openingMinor: "0", profitForYearMinor: s(surplus), additionsMinor: "0", dividendsMinor: "0", otherDeductionsMinor: "0", closingMinor: s(surplus) },
+  ];
+  const col = (k: keyof Omit<SocieRow, "code" | "name" | "component">): string => s(rows.reduce((a, r) => a + BigInt(r[k]), 0n));
+  const totals = { openingMinor: col("openingMinor"), profitForYearMinor: col("profitForYearMinor"), additionsMinor: col("additionsMinor"), dividendsMinor: col("dividendsMinor"), otherDeductionsMinor: col("otherDeductionsMinor"), closingMinor: col("closingMinor") };
+  const bs = balanceSheet(cs, cfg, "schedule_iii");
+  const bsEquity = bs.equityAndLiabilities.filter((g) => g.key === "capital" || g.key === "reserves").reduce((a, g) => a + BigInt(g.totalMinor), 0n);
+  return { rows, totals, balanceSheetEquityMinor: s(bsEquity), tiesToBalanceSheet: BigInt(totals.closingMinor) === bsEquity };
 }
 
 // ---- Cash Flow (indirect, AS 3) -----------------------------------------------------------------------------------------
@@ -252,6 +324,7 @@ export type CommercialMarkers = { framework: Framework; caVerify: string[]; llpF
 export type CommercialSet = {
   family: CommercialFamily; fiscalYear: string; framework: Framework; accountingBasis: string;
   profitAndLoss: ProfitAndLoss | TradingPl; tradingAccount?: TradingAccount; balanceSheet: BalanceSheet; cashFlow?: CashFlow;
+  changesInEquity?: Socie; priorFiscalYear?: string;
   notes: Array<{ ref: string; statement: string; title: string; lines: StLine[]; totalMinor: string }>;
   markers: CommercialMarkers;
 };
@@ -260,16 +333,29 @@ const CA_VERIFY = [
   "Schedule III line grouping inside each stored statement_class is configurable presentation (CA to confirm)",
   "AS vs Ind AS applicability by threshold is a config toggle; default AS",
   "Presumptive taxation (Sec 44AD / 44ADA) is not built",
-  "Profit & Loss comparatives are not produced; the Balance Sheet carries the prior-year column",
+  "Prior-year comparatives: Balance Sheet prior-year column = opening balances; P&L prior-year column = the previous FY's own movements (Trading Account and Cash Flow carry no comparative; SOCIE shows the current year only)",
+  "Ind AS behaviour (segment reporting, Ind AS statement formats) is not built; accounting_standard records the framework and labels the statements (v1 is AS)",
 ];
+
+function attachPriorYear(cur: ProfitAndLoss | TradingPl, prior: ProfitAndLoss | TradingPl, fy: string): ProfitAndLoss | TradingPl {
+  const groups = withPlComparatives(cur, prior);
+  if ("profitAfterTaxMinor" in cur && "profitAfterTaxMinor" in prior) {
+    return { ...cur, groups, priorYear: { fiscalYear: fy, totalRevenueMinor: prior.totalRevenueMinor, totalExpensesMinor: prior.totalExpensesMinor, profitBeforeTaxMinor: prior.profitBeforeTaxMinor, taxExpenseMinor: prior.taxExpenseMinor, profitAfterTaxMinor: prior.profitAfterTaxMinor } };
+  }
+  if ("netProfitMinor" in cur && "netProfitMinor" in prior) {
+    return { ...cur, groups, priorYear: { fiscalYear: fy, grossProfitMinor: prior.grossProfitMinor, indirectExpensesMinor: prior.indirectExpensesMinor, netProfitMinor: prior.netProfitMinor } };
+  }
+  return cur;
+}
 
 export function buildCommercialSet(
   rows: ReadonlyArray<CommercialRow>, cfg: PresentationConfig,
-  o: { family: CommercialFamily; fy: string; framework: Framework; accountingBasis: string; llp?: boolean },
+  o: { family: CommercialFamily; fy: string; framework: Framework; accountingBasis: string; llp?: boolean; priorFy?: string; priorRows?: ReadonlyArray<CommercialRow> },
 ): CommercialSet {
   const cs = classify(rows);
   const sched = o.family === "schedule_iii";
-  const pl = sched ? scheduleIIIProfitAndLoss(cs, cfg) : tradingProfitAndLoss(cs, cfg);
+  let pl: ProfitAndLoss | TradingPl = sched ? scheduleIIIProfitAndLoss(cs, cfg) : tradingProfitAndLoss(cs, cfg);
+  if (o.priorRows && o.priorFy) pl = attachPriorYear(pl, sched ? scheduleIIIProfitAndLoss(classify(o.priorRows), cfg) : tradingProfitAndLoss(classify(o.priorRows), cfg), o.priorFy);
   const bs = balanceSheet(cs, cfg, o.family);
   const notes: CommercialSet["notes"] = [];
   const add = (statement: string, gs: StGroup[]) => gs.filter((g) => g.lines.length > 0).forEach((g) => notes.push({ ref: `N${notes.length + 1}`, statement, title: g.label, lines: g.lines, totalMinor: g.totalMinor }));
@@ -277,6 +363,7 @@ export function buildCommercialSet(
   return {
     family: o.family, fiscalYear: o.fy, framework: o.framework, accountingBasis: o.accountingBasis,
     profitAndLoss: pl, ...(sched ? { cashFlow: cashFlow(cs, cfg) } : { tradingAccount: tradingAccount(cs, cfg) }), balanceSheet: bs, notes,
+    ...(sched ? { changesInEquity: changesInEquity(cs, cfg) } : {}), ...(o.priorFy && o.priorRows ? { priorFiscalYear: o.priorFy } : {}),
     markers: { framework: o.framework, caVerify: CA_VERIFY, ...(o.llp ? { llpForm8Form11: "v2" as const } : {}) },
   };
 }
