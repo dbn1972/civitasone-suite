@@ -2,7 +2,7 @@
  * Section 8 NF-3 (migration 0172): drizzle mirror of the grants-in-aid tables. RLS-scoped (tenant policy, FORCE); amounts are
  * paise (bigint). gl.grant_postings is append-only (database trigger), so it has no update path here.
  */
-import { pgSchema, uuid, text, varchar, bigint, date, integer, timestamp, char } from "drizzle-orm/pg-core";
+import { pgSchema, uuid, text, varchar, bigint, date, integer, timestamp, char, boolean } from "drizzle-orm/pg-core";
 
 const glSchema = pgSchema("gl");
 
@@ -71,3 +71,19 @@ export const grantUtilisation = glSchema.table("grant_utilisation", {
   updatedAt:           timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 export type GrantUtilisationRow = typeof grantUtilisation.$inferSelect;
+
+/** Migration 0185: append-only void of a grant posting whose journal the GL consumer refused (finance.gl.rejected reconciler). */
+export const grantPostingVoids = glSchema.table("grant_posting_voids", {
+  id:             uuid("id").primaryKey().defaultRandom(),
+  tenantId:       uuid("tenant_id").notNull(),
+  grantId:        uuid("grant_id").notNull(),
+  grantPostingId: uuid("grant_posting_id").notNull(),
+  journalId:      uuid("journal_id").notNull(),
+  kind:           text("kind").$type<GrantPostingKind>().notNull(),
+  amountMinor:    bigint("amount_minor", { mode: "bigint" }).notNull(),
+  rejectCode:     text("reject_code").notNull(),
+  rejectReason:   text("reject_reason"),
+  needsReview:    boolean("needs_review").notNull().default(false),
+  createdAt:      timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+export type GrantPostingVoidRow = typeof grantPostingVoids.$inferSelect;
