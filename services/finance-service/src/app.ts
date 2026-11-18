@@ -151,6 +151,10 @@ export async function buildApp(): Promise<FastifyInstance> {
   const { scanLinkRoutes } = await import("./modules/scan-link/routes.js");
   await app.register(scanLinkRoutes);
 
+  // MSME commercial M2: customer master + sales invoicing + AR. Every route sits behind the centralised commercial-tenant gate (404 for govt).
+  const { salesRoutes } = await import("./modules/sales/routes.js");
+  await app.register(salesRoutes);
+
 
   return app;
 }

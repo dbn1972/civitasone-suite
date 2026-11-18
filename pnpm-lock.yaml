@@ -2459,9 +2459,15 @@ importers:
       '@civitasone/events':
         specifier: workspace:*
         version: link:../../packages/events
+      '@civitasone/gst':
+        specifier: workspace:*
+        version: link:../../packages/gst
       '@civitasone/module-licence':
         specifier: workspace:*
         version: link:../../packages/module-licence
+      '@civitasone/numbering':
+        specifier: workspace:*
+        version: link:../../packages/numbering
       '@civitasone/observability':
         specifier: workspace:*
         version: link:../../packages/observability
