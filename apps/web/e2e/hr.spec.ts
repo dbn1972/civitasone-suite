@@ -15,7 +15,8 @@ test.describe('HR', () => {
     // "Headcount", so the untargeted text match now resolves to 3 elements.
     // exact:true pins this back to the KPI strip's own "Headcount" label.
     await expect(page.getByText('Headcount', { exact: true })).toBeVisible();
-    await expect(page.getByText(/attendance/i)).toBeVisible();
+    // The sidebar's "My attendance" link also matches /attendance/i; target the KPI.
+    await expect(page.getByText('Live attendance', { exact: true })).toBeVisible();
   });
 
   // ── List ─────────────────────────────────────────────────────────────────
@@ -61,8 +62,8 @@ test.describe('HR', () => {
 
   test('employee detail breadcrumb links back to employees list', async ({ page }) => {
     await page.goto('/hr/employees/EMP-001');
-    // exact: the sidebar/other links contain "Employees" too (strict-mode violation otherwise).
-    await expect(page.getByRole('link', { name: 'Employees', exact: true })).toBeVisible();
+    // Scope to the breadcrumb: the sidebar also has a current-page "Employees" link.
+    await expect(page.getByLabel('Breadcrumb').getByRole('link', { name: 'Employees', exact: true })).toBeVisible();
   });
 
   test('navigating employees list → detail shows profile', async ({ page }) => {

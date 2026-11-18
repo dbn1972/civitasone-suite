@@ -66,8 +66,20 @@ test.describe('Finance', () => {
 
   test('new voucher form validates debit/credit balance', async ({ page }) => {
     await page.goto('/finance/accounting/vouchers/new');
-    await page.getByRole('button', { name: /submit|post/i }).click();
-    await expect(page.getByText(/required|balance|error/i).first()).toBeVisible();
+    // UX-R2: the form no longer lets an unbalanced voucher be submitted and
+    // then errors -- "Post Journal Entry" stays disabled (with a visible reason)
+    // until debit == credit. Assert that guard, end to end.
+    const post = page.getByRole('button', { name: /post journal entry/i });
+    await expect(post).toBeDisabled();
+    await expect(page.getByText(/debit and credit must be equal/i).first()).toBeVisible();
+    // Debit only -> out of balance, still blocked.
+    await page.getByLabel('Debit amount, line 1').fill('1000');
+    await expect(page.getByText(/out of balance/i)).toBeVisible();
+    await expect(post).toBeDisabled();
+    // Matching credit -> balanced, submit unlocked.
+    await page.getByLabel('Credit amount, line 2').fill('1000');
+    await expect(page.getByText('Balanced').first()).toBeVisible();
+    await expect(post).toBeEnabled();
   });
 
   // ── Budget ────────────────────────────────────────────────────────────────

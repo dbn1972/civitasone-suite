@@ -10,7 +10,8 @@ test.describe('Estab', () => {
     await page.goto('/estab');
     await expect(page.getByRole('heading', { name: 'Establishment' })).toBeVisible();
     await expect(page.getByRole('link', { name: 'File Register' })).toBeVisible();
-    await expect(page.getByRole('link', { name: 'Meetings' })).toBeVisible();
+    // Scope to <main>: the sidebar also has "Meetings"/"All meetings" links.
+    await expect(page.getByRole('main').getByRole('link', { name: 'Meetings' })).toBeVisible();
     // Scope to <main>: the sidebar also has a "Fleet" link (strict-mode violation otherwise).
     await expect(page.getByRole('main').getByRole('link', { name: 'Fleet' })).toBeVisible();
     await expect(page.getByRole('link', { name: 'Guest House' })).toBeVisible();
