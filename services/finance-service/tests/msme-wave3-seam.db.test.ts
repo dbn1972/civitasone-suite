@@ -151,7 +151,7 @@ afterAll(async () => {
 describe("seam: ledger after M2 + M3a posting", () => {
   it.each([COMPANY, PROP])("$entityType: AR 1300, revenue 4001, ITC 1702/1703/1705, AP 2050, RCM payable 2301 hold the exact amounts", async (t) => {
     const b = await balances(t.tenantId);
-    expect(b["1300"]).toBe(100000n); expect(b["4001"]).toBe(-100000n);
+    expect(b["1300"]).toBe(118000n); expect(b["4001"]).toBe(-100000n); expect(b["2300"]).toBe(-18000n); // M3b: AR carries the GST, 2300 the output tax
     expect(b["5400"]).toBe(200000n);
     expect(b["1702"]).toBe(9000n); expect(b["1703"]).toBe(9000n); expect(b["1705"]).toBe(5000n);
     expect(b["2050"]).toBe(-218000n); expect(b["2301"]).toBe(-5000n);
@@ -177,11 +177,11 @@ describe("company -> Schedule III over the posted books (no 409)", () => {
       expect(pl.totalRevenueMinor).toBe("100000"); expect(pl.totalExpensesMinor).toBe("200000"); expect(pl.profitAfterTaxMinor).toBe("-100000");
       const bs = all.body.balanceSheet;
       expect(bs.balanced).toBe(true);
-      expect(bs.totalAssetsMinor).toBe("123000"); expect(bs.totalEquityAndLiabilitiesMinor).toBe("123000");
+      expect(bs.totalAssetsMinor).toBe("141000"); expect(bs.totalEquityAndLiabilitiesMinor).toBe("141000");
       const assetCodes = bs.assets.flatMap((g: any) => g.lines.map((l: any) => l.code));
       for (const c of ["1300", "1702", "1703", "1705"]) expect(assetCodes, c).toContain(c);
       const cl = codesIn(bs.equityAndLiabilities, "current_liabilities");
-      expect(cl["2050"]).toBe("218000"); expect(cl["2301"]).toBe("5000");
+      expect(cl["2050"]).toBe("218000"); expect(cl["2301"]).toBe("5000"); expect(cl["2300"]).toBe("18000"); // M3b output tax under current liabilities
       expect(all.body.cashFlow.reconciles).toBe(true);
       for (const p of ["profit-and-loss", "balance-sheet", "cash-flow"]) expect((await get(app, COMPANY.tenantId, `${B}/${p}?fy=${FY}`)).status, p).toBe(200);
     } finally { await app.close(); }
@@ -199,7 +199,7 @@ describe("proprietorship -> Trading + P&L + Balance Sheet over the posted books 
       expect(all.body.tradingAccount.grossProfitMinor).toBe("-100000");
       expect(all.body.profitAndLoss.netProfitMinor).toBe("-100000");
       expect(all.body.balanceSheet.balanced).toBe(true);
-      expect(all.body.balanceSheet.totalAssetsMinor).toBe("123000");
+      expect(all.body.balanceSheet.totalAssetsMinor).toBe("141000");
       expect((await get(app, PROP.tenantId, `${B}/trading-account?fy=${FY}`)).status).toBe(200);
       expect((await get(app, PROP.tenantId, `${B}/cash-flow?fy=${FY}`)).status).toBe(404);
     } finally { await app.close(); }

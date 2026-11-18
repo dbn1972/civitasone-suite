@@ -2,21 +2,20 @@
  * MSME commercial M2 -- customer master, sales invoice, advance receipt, credit / debit note and AR sub-ledger services.
  * Everything runs inside the caller's tenant-scoped transaction (RLS on every ar.* table).
  *
- * POSTING BOUNDARY (design contract; slice M2 vs M3b): issuing a document books
- *     Dr  AR control (1300)      taxable value
- *     Cr  Sales revenue (4001)   taxable value
- * to gl.finance_ledger through the EXISTING journal path (enqueueSpineJournal -> finance.gl.post -> gl/consumer.ts, which is NOT
- * edited here). The GST OUTPUT GL line (Cr 2300 GST Payable / Dr AR for the tax) and the gl.finance_gst_ledger entry are NOT posted
- * here: they are slice M3b, which needs M3a's producer. This slice STORES the computed CGST / SGST / IGST on the document
- * (ar.sales_invoices / ar.credit_debit_notes) so M3b posts from the stored split. Until M3b lands the GL AR control balance of an
- * invoice is its taxable value while the AR sub-ledger (ar.ledger_entries) carries the full invoice total -- by design, and it
- * reconciles to zero once M3b adds the tax line.
+ * POSTING (M2 + M3b): issuing a document books the FULL entry to gl.finance_ledger through the EXISTING journal path
+ * (enqueueSpineJournal -> finance.gl.post -> gl/consumer.ts, which is NOT edited here):
+ *     invoice / debit note:  Dr AR control (1300) total   Cr Sales revenue (4001) taxable   Cr GST Payable (2300) output tax
+ *     credit note:           Dr Sales revenue (4001) taxable   Dr GST Payable (2300) tax    Cr AR control (1300) total
+ * so the GL AR balance equals the ar.ledger_entries sub-ledger. The commercial chart has ONE output-tax head (2300); the CGST / SGST /
+ * IGST split lives on the gl.finance_gst_ledger rows (gl_head_code 2300), emitted with direction "output" through M3a's producer
+ * (`extra.gst` -> emitGstEntriesTx, in the posting tx). A credit note's rows carry NEGATIVE taxable / tax (s.34 reduction of output
+ * liability). The GST line and rows exist ONLY for a GST-registered, non-govt-chart tenant; otherwise tax is 0 and nothing changes.
  *
  * Gate: these functions are reached only through routes.ts, behind the centralised commercial-tenant preHandler
  * (shared/commercial-gate.ts); no function here checks a tenant type.
  */
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
-import { GSTIN_RE } from "@civitasone/gst";
+import { GSTIN_RE, splitIntraStateTax } from "@civitasone/gst";
 import { allocateReference } from "@civitasone/numbering";
 import { DomainError } from "../approvals/domain.js";
 import { auditEvent, type ActorMeta } from "../approvals/apply.js";
@@ -24,6 +23,7 @@ import { loadPostingSettingsTx } from "../approvals/posting-settings.js";
 import { financeSettings } from "../approvals/schema.js";
 import { assertCommercialChartReadyTx } from "../gl/commercial-chart.js";
 import { deterministicId, enqueueSpineJournal } from "../gl/spine.js";
+import type { GstLedgerEntry, GstJournalMeta } from "../gst/itc.js";
 import { periodPostingRefusal } from "../gl/posting-rules.js";
 import { fyClosedReasonTx, fyClosedMessage } from "../gl/fy-guard.js";
 import { fyFromDate } from "../hoa/voucher.js";
@@ -31,7 +31,7 @@ import { getPeriodStatusTx } from "../period-close/repo.js";
 import {
   arCustomers, salesInvoices, salesInvoiceLines, advanceReceipts, creditDebitNotes, arLedgerEntries,
   type ArCustomerRow, type SalesInvoiceRow, type SalesInvoiceLineRow, type AdvanceReceiptRow, type CreditDebitNoteRow,
-  type NoteReason, type NoteType,
+  type NoteReason, type NoteType, type SupplyType,
 } from "./schema.js";
 import {
   AR_SEQ_CONFIG, ageingBucket, computeInvoice, computeNote, fySegment, mintInstant, specFor, s34Cutoff, splitTax, withinS34, assertRule46,
@@ -47,6 +47,8 @@ const ISO = /^\d{4}-\d{2}-\d{2}$/;
 /** The head codes the sales postings use. Core heads present in every chart; env-overridable like the other producers. */
 export const AR_CONTROL_CODE = (): string => process.env.FINANCE_AR_CONTROL_CODE?.trim() || "1300";
 export const SALES_REVENUE_CODE = (): string => process.env.FINANCE_SALES_REVENUE_CODE?.trim() || "4001";
+/** Output GST (GST Payable on outward supplies). Fixed commercial-chart head (gl/standard-heads.ts); CGST/SGST/IGST are split on the gst ledger rows. */
+export const GST_PAYABLE_CODE = "2300";
 
 // ---- business identity (stored settings) ---------------------------------------------------------------------------------------
 
@@ -286,10 +288,55 @@ async function nextDocNoTx(tx: Tx, tenantId: string, docType: DocType, dateIso: 
 }
 
 /** Dr/Cr on the AR control and sales revenue heads for `amount` (taxable value). debitAr = true for an invoice / debit note. */
-function revenueJournal(debitAr: boolean, amount: bigint, narration: string) {
-  const ar = { accountCode: AR_CONTROL_CODE(), debitMinor: debitAr ? amount : 0n, creditMinor: debitAr ? 0n : amount, narration };
-  const rev = { accountCode: SALES_REVENUE_CODE(), debitMinor: debitAr ? 0n : amount, creditMinor: debitAr ? amount : 0n, narration };
-  return debitAr ? [ar, rev] : [rev, ar];
+function salesJournal(debitAr: boolean, taxable: bigint, tax: bigint, narration: string) {
+  const ar = { accountCode: AR_CONTROL_CODE(), debitMinor: debitAr ? taxable + tax : 0n, creditMinor: debitAr ? 0n : taxable + tax, narration };
+  const rev = { accountCode: SALES_REVENUE_CODE(), debitMinor: debitAr ? 0n : taxable, creditMinor: debitAr ? taxable : 0n, narration };
+  const gst = { accountCode: GST_PAYABLE_CODE, debitMinor: debitAr ? 0n : tax, creditMinor: debitAr ? tax : 0n, narration };
+  const taxLeg = tax > 0n ? [gst] : [];
+  return debitAr ? [ar, rev, ...taxLeg] : [rev, ...taxLeg, ar];
+}
+
+// ---- output GST rows (M3b) ----------------------------------------------------------------------------------------------------------
+
+type RateGroup = { ratePct: number; taxableMinor: bigint; taxMinor: bigint };
+/** Invoice lines grouped by GST rate (the gst ledger keeps one row per tax type and rate per source document). */
+function rateGroups(lines: SalesInvoiceLineRow[]): RateGroup[] {
+  const m = new Map<number, RateGroup>();
+  for (const l of lines) {
+    const r = Number(l.gstRatePct);
+    const g = m.get(r) ?? { ratePct: r, taxableMinor: 0n, taxMinor: 0n };
+    g.taxableMinor += l.taxableMinor; g.taxMinor += l.taxMinor; m.set(r, g);
+  }
+  return [...m.values()].filter((g) => g.taxMinor > 0n);
+}
+
+/**
+ * The output gst-ledger entries of a document, summing EXACTLY to its stored CGST / SGST / IGST (`want`): each rate group is split on
+ * its own, then any rounding residual against the document-level split is carried by the largest group. CGST / SGST rows use half the
+ * slab rate (the consumer validates them against half a slab); IGST the full rate. `sign` -1 makes a credit note's rows negative.
+ */
+function outputEntries(supply: SupplyType, groups: RateGroup[], want: { cgstMinor: bigint; sgstMinor: bigint; igstMinor: bigint }, sign: 1n | -1n): GstLedgerEntry[] {
+  if (supply === "none" || groups.length === 0) return [];
+  const big = groups.reduce((bi, g, i) => (g.taxMinor > groups[bi]!.taxMinor ? i : bi), 0);
+  const intra = supply === "intra";
+  const per = groups.map((g) => (intra ? splitIntraStateTax(g.taxMinor) : { cgstMinor: 0n, sgstMinor: 0n }));
+  const igst = groups.map((g) => (intra ? 0n : g.taxMinor));
+  const fix = (arr: bigint[], target: bigint): void => { arr[big] = arr[big]! + (target - arr.reduce((a, b) => a + b, 0n)); };
+  const cg = per.map((p) => p.cgstMinor); const sg = per.map((p) => p.sgstMinor);
+  fix(cg, intra ? want.cgstMinor : 0n); fix(sg, intra ? want.sgstMinor : 0n); fix(igst, intra ? 0n : want.igstMinor);
+  const out: GstLedgerEntry[] = [];
+  const push = (gstType: "CGST" | "SGST" | "IGST", ratePct: number, g: RateGroup, tax: bigint): void => {
+    if (tax === 0n) return;
+    out.push({ gstType, ratePct, taxableMinor: (g.taxableMinor * sign).toString(), taxMinor: (tax * sign).toString(), rcm: false, glHeadCode: GST_PAYABLE_CODE });
+  };
+  groups.forEach((g, i) => {
+    push("CGST", g.ratePct / 2, g, cg[i]!); push("SGST", g.ratePct / 2, g, sg[i]!); push("IGST", g.ratePct, g, igst[i]!);
+  });
+  return out;
+}
+
+function outputGstMeta(sourceDocType: string, sourceDocId: string, invoiceNo: string, invoiceDate: string, partyGstin: string | null, partyName: string, entries: GstLedgerEntry[]): GstJournalMeta {
+  return { sourceDocType, sourceDocId, invoiceNo, invoiceDate, partyGstin, partyName, direction: "output", entries };
 }
 
 // ---- advance receipts (Rule 50) -----------------------------------------------------------------------------------------------------
@@ -338,6 +385,9 @@ export async function issueInvoiceTx(tx: Tx, meta: ActorMeta, id: string, opts: 
   if (biz.gstRegistered && lines.some((l) => !l.hsnSac)) throw new DomainError("INVOICE_HSN_REQUIRED", "every line of a GST invoice needs its HSN/SAC code");
   const ps = await loadPostingSettingsTx(tx, meta.tenantId);
   await assertPostingAllowedTx(tx, meta.tenantId, inv.invoiceDate, ps.coaTemplate);
+  // M3b gate (same as M3a): GST rows / the output line exist only for a registered tenant on a non-govt chart.
+  const gstOn = biz.gstRegistered && ps.coaTemplate !== "govt";
+  if (inv.taxMinor > 0n && !gstOn) throw new DomainError("INVOICE_GST_NOT_REGISTERED", "this invoice carries GST but the business is not GST-registered on a commercial chart");
 
   // advances: whole receipts of this customer, adjusted up to the invoice total
   let advance = 0n;
@@ -376,10 +426,11 @@ export async function issueInvoiceTx(tx: Tx, meta: ActorMeta, id: string, opts: 
       entryDate: inv.invoiceDate, dueDate: inv.dueDate, debitMinor: 0n, creditMinor: advance, journalId: null, createdBy: meta.actorId,
     });
   }
-  // Dr AR / Cr revenue for the TAXABLE value only. The GST output line is slice M3b (needs M3a's producer); see the file header.
+  // Dr AR (total) / Cr revenue (taxable) / Cr GST Payable (tax) + the output gst-ledger rows, in the one posting tx (see the file header).
   await enqueueSpineJournal(tx, {
     tenantId: meta.tenantId, actorId: meta.actorId, correlationId: meta.correlationId, sourceKey: `sales_invoice:${id}`, type: "journal",
-    postingDate: inv.invoiceDate, lines: revenueJournal(true, inv.taxableMinor, `Sales invoice ${invoiceNo} - ${inv.customerName}`),
+    postingDate: inv.invoiceDate, lines: salesJournal(true, inv.taxableMinor, inv.taxMinor, `Sales invoice ${invoiceNo} - ${inv.customerName}`),
+    ...(inv.taxMinor > 0n ? { extra: { gst: outputGstMeta("sales_invoice", id, invoiceNo, inv.invoiceDate, inv.customerGstin, inv.customerName, outputEntries(inv.supplyType, rateGroups(lines), inv, 1n)) } } : {}),
   });
   await auditEvent(tx, meta, "issue_sales_invoice", "sales_invoice", id, { invoiceNo, totalMinor: inv.totalMinor.toString(), taxMinor: inv.taxMinor.toString(), journalId });
   return { ...row, lines };
@@ -412,7 +463,7 @@ export async function createNoteTx(tx: Tx, meta: ActorMeta, i: NoteInput): Promi
   }
   const [row] = await tx.insert(creditDebitNotes).values({
     tenantId: meta.tenantId, noteType: i.noteType, invoiceId: inv.id, customerId: inv.customerId, noteDate: i.noteDate, reason: i.reason, reasonText: i.reasonText ?? null,
-    supplyType: n.supplyType, taxableMinor: n.taxableMinor, cgstMinor: n.cgstMinor, sgstMinor: n.sgstMinor, igstMinor: n.igstMinor, cessMinor: 0n,
+    gstRatePct: inv.supplyType === "none" ? null : String(rate), supplyType: n.supplyType, taxableMinor: n.taxableMinor, cgstMinor: n.cgstMinor, sgstMinor: n.sgstMinor, igstMinor: n.igstMinor, cessMinor: 0n,
     taxMinor: n.taxMinor, totalMinor: n.totalMinor, s34CutoffDate: s34Cutoff(inv.invoiceDate), withinS34Window: withinS34(inv.invoiceDate, i.noteDate),
     createdBy: meta.actorId, updatedBy: meta.actorId,
   }).returning();
@@ -427,6 +478,10 @@ export async function issueNoteTx(tx: Tx, meta: ActorMeta, id: string): Promise<
   const inv = await lockInvoiceTx(tx, meta.tenantId, n.invoiceId);
   const ps = await loadPostingSettingsTx(tx, meta.tenantId);
   await assertPostingAllowedTx(tx, meta.tenantId, n.noteDate, ps.coaTemplate);
+  const biz = await loadBusinessTx(tx, meta.tenantId);
+  const gstOn = biz.gstRegistered && ps.coaTemplate !== "govt";
+  if (n.taxMinor > 0n && !gstOn) throw new DomainError("NOTE_GST_NOT_REGISTERED", "this note carries GST but the business is not GST-registered on a commercial chart");
+  if (n.taxMinor > 0n && n.gstRatePct == null) throw new DomainError("NOTE_RATE", "the note has tax but no stored GST rate");
   const docType: DocType = n.noteType === "credit" ? "credit_note" : "debit_note";
   const noteNo = await nextDocNoTx(tx, meta.tenantId, docType, n.noteDate);
   const journalId = deterministicId(`${docType}:${id}`);
@@ -438,10 +493,12 @@ export async function issueNoteTx(tx: Tx, meta: ActorMeta, id: string): Promise<
     tenantId: meta.tenantId, customerId: n.customerId, invoiceId: n.invoiceId, entryType: credit ? "credit_note" : "debit_note", sourceDocId: id, sourceDocNo: noteNo,
     entryDate: n.noteDate, dueDate: inv.dueDate, debitMinor: credit ? 0n : n.totalMinor, creditMinor: credit ? n.totalMinor : 0n, journalId, createdBy: meta.actorId,
   });
-  // credit note: Dr revenue / Cr AR; debit note: Dr AR / Cr revenue -- taxable value only (GST line = slice M3b)
+  // credit note: Dr revenue + Dr GST Payable / Cr AR (s.34 reduces output tax); debit note: Dr AR / Cr revenue + Cr GST Payable.
   await enqueueSpineJournal(tx, {
     tenantId: meta.tenantId, actorId: meta.actorId, correlationId: meta.correlationId, sourceKey: `${docType}:${id}`, type: "journal",
-    postingDate: n.noteDate, lines: revenueJournal(!credit, n.taxableMinor, `${credit ? "Credit" : "Debit"} note ${noteNo} against ${inv.invoiceNo}`),
+    postingDate: n.noteDate, lines: salesJournal(!credit, n.taxableMinor, n.taxMinor, `${credit ? "Credit" : "Debit"} note ${noteNo} against ${inv.invoiceNo}`),
+    ...(n.taxMinor > 0n ? { extra: { gst: outputGstMeta(docType, id, noteNo, n.noteDate, inv.customerGstin, inv.customerName,
+      outputEntries(n.supplyType, [{ ratePct: Number(n.gstRatePct), taxableMinor: n.taxableMinor, taxMinor: n.taxMinor }], n, credit ? -1n : 1n)) } } : {}),
   });
   await auditEvent(tx, meta, "issue_note", "credit_debit_note", id, { noteNo, noteType: n.noteType, withinS34Window: n.withinS34Window });
   return row;

@@ -6,7 +6,8 @@
  *   3. invoice draft computes the stored intra-state (CGST+SGST) vs inter-state (IGST) split with @civitasone/gst; effective-dated rate master
  *   4. Rule-46 gapless numbering (concurrent issue, rollback burns nothing) and the immutability trigger (no UPDATE / DELETE once issued)
  *   5. credit / debit notes link to the invoice, s.34 flag, cumulative cap; AR ageing nets notes and advances
- *   6. posting: Dr AR / Cr revenue reaches gl.finance_ledger through the existing journal path; NO GST line, NO gst-ledger row (M3b)
+ *   6. posting: the full Dr AR (total) / Cr revenue (taxable) / Cr GST Payable (tax) entry reaches gl.finance_ledger (M3b); the output
+ *      gst-ledger rows are proved in msme-m3b-sales-output-tax.db.test.ts
  *   7. fail-closed on a partial commercial chart; an unregistered business carries no GST
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
@@ -363,8 +364,8 @@ describe("5. credit / debit notes, advances and AR ageing", () => {
   });
 });
 
-describe("6. posting: Dr AR / Cr revenue reaches gl.finance_ledger; the GST line and gst-ledger entry are NOT posted (M3b)", () => {
-  it("issued invoices and notes post balanced taxable-value journals through the existing journal path; no GST payable line, no gl.finance_gst_ledger row", async () => {
+describe("6. posting: Dr AR (total) / Cr revenue (taxable) / Cr GST Payable (tax) reaches gl.finance_ledger (M3b)", () => {
+  it("issued invoices and notes post balanced journals through the existing journal path; GL AR equals the AR sub-ledger", async () => {
     const t = randomUUID();
     await seed(t, { template: "commercial", gst: true, chart: "full" });
     const c = await scoped(t, (tx) => createCustomerTx(tx, meta(t), { customerCode: "P-1", name: "Post", gstin: "29AAAAA0000A1Z5" }));
@@ -374,19 +375,19 @@ describe("6. posting: Dr AR / Cr revenue reaches gl.finance_ledger; the GST line
     const note = await scoped(t, async (tx) => (await createNoteTx(tx, meta(t), { invoiceId: i1.id, noteType: "credit", noteDate: "2026-11-12", reason: "sales_return", taxableMinor: 10000n })).id);
     await scoped(t, (tx) => issueNoteTx(tx, meta(t), note));
     expect(await drainJournals(t)).toBe(0); // nothing dead-lettered
-    expect(await headNet(t, "1300")).toBe(100000n + 25000n - 10000n); // Dr AR: taxable only
-    expect(await headNet(t, "4001")).toBe(-(100000n + 25000n - 10000n)); // Cr revenue
-    expect(await headNet(t, "2300")).toBe(0n); // GST Payable untouched: the output-tax line is slice M3b
+    expect(await headNet(t, "1300")).toBe(118000n + 29500n - 11800n); // Dr AR: the full totals incl. GST
+    expect(await headNet(t, "4001")).toBe(-(100000n + 25000n - 10000n)); // Cr revenue: taxable only
+    expect(await headNet(t, "2300")).toBe(-(18000n + 4500n - 1800n)); // Cr GST Payable: output tax net of the credit note (M3b)
     expect(await headNet(t, "1700")).toBe(0n);
-    expect(Number((await q1(t, sql`SELECT count(*)::int AS n FROM gl.finance_gst_ledger`))[0]?.n)).toBe(0);
     // the journals are balanced and carry the invoice number in their narration
     const js = await q1(t, sql`SELECT status, lines::text AS lines FROM gl.finance_journals WHERE tenant_id = ${t}::uuid`);
     expect(js).toHaveLength(3);
     expect(js.every((j) => j.status === "posted")).toBe(true);
     expect(js.some((j) => /INV\/2627\/000001/.test(String(j.lines)))).toBe(true);
-    // the AR sub-ledger carries the FULL totals (incl. tax), which M3b reconciles
+    // the AR sub-ledger carries the FULL totals (incl. tax) and the GL AR control balance now equals it (the M2 gap, closed by M3b)
     const sub = await q1(t, sql`SELECT SUM(debit_minor - credit_minor)::text AS n FROM ar.ledger_entries WHERE tenant_id = ${t}::uuid`);
     expect(BigInt(String(sub[0]?.n))).toBe(118000n + 29500n - 11800n);
+    expect(await headNet(t, "1300")).toBe(BigInt(String(sub[0]?.n)));
     // replay is idempotent (deterministic journal id): a second drain posts nothing new
     const before = await headNet(t, "1300");
     await drainJournals(t);

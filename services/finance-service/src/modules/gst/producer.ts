@@ -63,18 +63,20 @@ export async function emitGstEntriesTx(
     });
     return;
   }
+  // M3b: sales documents emit direction "output" through this same producer (default stays "input" -- M3a bills are unchanged).
+  const direction = meta.direction ?? "input";
   for (const e of meta.entries ?? []) {
     await enqueue(tx, {
       topic: GST_ENTRY_TOPIC, eventType: GST_ENTRY_TOPIC, ...base,
       payload: {
-        id: deterministicId(`gst:${meta.sourceDocType}:${meta.sourceDocId}:${e.gstType}:${e.ratePct}:input`),
+        id: deterministicId(`gst:${meta.sourceDocType}:${meta.sourceDocId}:${e.gstType}:${e.ratePct}:${direction}`),
         tenantId: journal.tenantId,
         invoiceId: meta.sourceDocId, invoiceNo: meta.invoiceNo, invoiceDate: meta.invoiceDate,
         partyGstin: meta.partyGstin ?? null, partyName: meta.partyName ?? null,
-        gstType: e.gstType, direction: "input", taxableMinor: e.taxableMinor, taxMinor: e.taxMinor, ratePct: e.ratePct,
+        gstType: e.gstType, direction, taxableMinor: e.taxableMinor, taxMinor: e.taxMinor, ratePct: e.ratePct,
         ...(e.hsnCode ? { hsnCode: e.hsnCode } : {}), period: gstPeriodOf(meta.invoiceDate),
         sourceDocType: meta.sourceDocType, sourceDocId: meta.sourceDocId, journalId: journal.id, ledgerVoucherNo: voucherNo,
-        itcCategory: e.itcCategory, rcm: e.rcm, glHeadCode: e.glHeadCode,
+        ...(e.itcCategory ? { itcCategory: e.itcCategory } : {}), rcm: e.rcm, glHeadCode: e.glHeadCode,
       },
     });
   }
