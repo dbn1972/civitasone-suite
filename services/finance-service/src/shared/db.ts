@@ -27,6 +27,7 @@ import { schema as reconModule } from "../modules/recon/schema.js";
 import { officeSchema } from "../modules/budget/office-schema.js";
 import { schema as approvalsModule } from "../modules/approvals/schema.js";
 import { schema as salesModule }  from "../modules/sales/schema.js";
+import { schema as gstReturnsModule } from "../modules/gst-returns/schema.js";
 import { outboxSchema }             from "./outbox.js";
 
 const SCHEMA = {
@@ -52,6 +53,7 @@ const SCHEMA = {
   ...reconModule,
   ...scanLinkModule,
   ...salesModule,
+  ...gstReturnsModule,
   ...outboxSchema,
 };
 
