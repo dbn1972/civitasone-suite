@@ -88,6 +88,10 @@ vi.mock("../src/modules/org-structure/schema.js", () => ({
   costCenters: Symbol("costCenters"),
   profitCenters: Symbol("profitCenters"),
 }));
+// MSME M3a: the GST consumer now gates on stored settings and reads the effective-dated rate master (both covered against a real DB in
+// msme-m3a-gst.db.test.ts); this mock-DB suite only exercises registration / idempotency / event shape.
+vi.mock("../src/modules/gst/producer.js", () => ({ assertGstEnabledTx: vi.fn(async () => undefined), gstEnabledTx: vi.fn(async () => true) }));
+vi.mock("../src/modules/gst/rate-master.js", () => ({ slabsEffectiveOn: vi.fn(async () => [0, 5, 12, 18, 28]) }));
 vi.mock("drizzle-orm", () => ({
   eq: vi.fn(),
   sql: (strings: TemplateStringsArray, ..._values: any[]) => strings.join(""),

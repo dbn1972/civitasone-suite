@@ -41,7 +41,7 @@
  * by a runtime test here; its absence is what the grep in this file's header
  * comment establishes.
  */
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeAll } from "vitest";
 import { randomUUID } from "node:crypto";
 import { MemoryQueue } from "@civitasone/queue";
 import { runWithTenant, withTenantScope } from "@civitasone/db";
@@ -49,7 +49,8 @@ import { sql } from "drizzle-orm";
 import { db } from "../src/shared/db.js";
 import { registerGstConsumers } from "../src/modules/gst/consumer.js";
 
-const TENANT = "00000000-0000-0000-0000-000000000001";
+// MSME M3a: the consumer refuses a tenant that is not GST-registered on a commercial chart, so this test owns a registered one.
+const TENANT = randomUUID();
 const ACTOR = "bb000001-ec00-4000-8000-0000000000ff";
 
 /** Mirrors worker.ts's global subscribe wrap: every handler runs under the
@@ -69,6 +70,13 @@ function makeMsg(type: string, payload: Record<string, unknown>) {
     correlationId: randomUUID(), schemaVersion: "1.0", payload,
   };
 }
+
+beforeAll(async () => {
+  await withTenantScope(db, TENANT, (tx: any) => tx.execute(sql`
+    INSERT INTO gl.finance_settings (tenant_id, coa_template, gst_registered, gstin, updated_by)
+    VALUES (${TENANT}::uuid, 'commercial', true, '27AAPFU0939F1ZV', ${ACTOR}::uuid)
+    ON CONFLICT (tenant_id) DO UPDATE SET coa_template = 'commercial', gst_registered = true, gstin = '27AAPFU0939F1ZV'`));
+});
 
 describe("gst consumer — gl.finance_gst_ledger created_by (real DB, no mocks)", () => {
   it("a valid CGST entry is written end-to-end with created_by = actorId", async () => {

@@ -82,10 +82,10 @@ export async function gstRoutes(app: FastifyInstance): Promise<void> {
 
     const rows = await scopedRead((tx) => tx.execute(sql`
       SELECT gst_type,
-             COALESCE(SUM(CASE WHEN direction = 'input' THEN tax_minor ELSE 0 END), 0)::bigint AS itc_available,
+             COALESCE(SUM(CASE WHEN direction = 'input' AND COALESCE(itc_category, 'eligible') = 'eligible' THEN tax_minor ELSE 0 END), 0)::bigint AS itc_available,
              COALESCE(SUM(CASE WHEN direction = 'output' THEN tax_minor ELSE 0 END), 0)::bigint AS output_liability,
              (COALESCE(SUM(CASE WHEN direction = 'output' THEN tax_minor ELSE 0 END), 0) -
-              COALESCE(SUM(CASE WHEN direction = 'input' THEN tax_minor ELSE 0 END), 0))::bigint AS net_payable
+              COALESCE(SUM(CASE WHEN direction = 'input' AND COALESCE(itc_category, 'eligible') = 'eligible' THEN tax_minor ELSE 0 END), 0))::bigint AS net_payable
       FROM gl.finance_gst_ledger
       WHERE tenant_id = ${ctx.tenantId}::uuid AND period = ${q.period}
       GROUP BY gst_type
@@ -108,5 +108,18 @@ export async function gstRoutes(app: FastifyInstance): Promise<void> {
       filtered: z.boolean().default(false),
     }).parse(req.body);
     return sendAccepted(reply, acceptedResponseSchema, await commands.recordLedgerExport(ctx, body));
+  });
+
+  // POST /v1/finance/gst/rcm-claim - MSME M3a. The reverse-charge tax on a bill has been PAID (challan ref), so its ITC may be claimed.
+  // Publishes a command only; the consumer re-checks the GST gate (registered + non-govt chart) and posts the claim journal.
+  app.post("/v1/finance/gst/rcm-claim", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, FINANCE_ROLES);
+    const body = z.object({
+      billId: z.string().uuid(),
+      paidOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      challanRef: z.string().trim().min(1).max(64),
+    }).parse(req.body);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.claimRcmItc(ctx, body));
   });
 }

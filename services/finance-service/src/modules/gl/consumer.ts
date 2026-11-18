@@ -34,6 +34,8 @@ import { fundContext } from "./fund-context.js";
 import { loadPostingSettingsTx } from "../approvals/posting-settings.js";
 import { assertCommercialChartReadyTx } from "./commercial-chart.js";
 import { prepareFundPostingTx, assertFundsBalanced } from "./funds.js";
+import { emitGstEntriesTx } from "../gst/producer.js";
+import type { GstJournalMeta } from "../gst/itc.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 const log = pino({ name: "finance:gl-consumer" });
@@ -151,6 +153,8 @@ type StandardJournal = {
   // ever enqueued, so by the time it reaches this consumer the override is
   // already authorized; this flag is not itself an authorization check.
   budgetOverride?: boolean; overrideReason?: string;
+  // MSME M3a: set only by a GST-aware producer (commercial bill approval, RCM ITC claim). Absent on every other journal.
+  gst?: GstJournalMeta;
 };
 
 async function postJournal(
@@ -445,6 +449,9 @@ async function postJournal(
       ...(head?.classification ? { headClassification: head.classification } : {}),
     }, lineFund));
   }
+  // MSME M3a: GST producer, via the outbox in THIS tx (the ledger lines above and the GST rows commit or roll back together).
+  // Gated on stored settings inside; a journal without a `gst` block (every govt posting) skips it.
+  if (journal.gst) await emitGstEntriesTx(tx, msg, journal, journal.gst, voucherNo);
   await enqueue(tx, {
     topic: EVENTS.glPosted, eventType: EVENTS.glPosted,
     tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,

@@ -1,50 +1,30 @@
 /**
- * GST rate validation (DOM-013).
+ * GST rate validation (DOM-013), now driven by the EFFECTIVE-DATED rate master (MSME M3a).
  *
- * Pre-fix, `finance.gst.entry_record`'s `ratePct` was typed but never
- * checked before being written to gl.finance_gst_ledger -- any number
- * (including a typo, a negative value, or NaN) would be silently stored as
- * an authoritative GST rate.
+ * Pre-fix, `finance.gst.entry_record`'s `ratePct` was typed but never checked before being written to gl.finance_gst_ledger.
+ * DOM-013 then checked it against a hard-coded 0/0.25/3/5/12/18/28 list. That list is wrong from 2025-09-22 (the 56th GST Council
+ * rationalisation closed 12% and 28% and added 40%), and a hard-coded list cannot be effective-dated. The slabs now come from
+ * gl.finance_gst_rate_master (migration 0175, global, effective_from/effective_to) read AS OF the invoice date -- see
+ * rate-master.ts. The master rows are placeholders flagged verify_by_ca; nothing here is law.
  *
- * Standard GST slabs (stable since the 2017 rollout): 0%, 0.25% (rough
- * precious/semi-precious stones), 3% (gold/silver/precious metals), and the
- * four general slabs 5/12/18/28%. This is NOT a comprehensive HSN/SAC-level
- * table -- the GST Council periodically reclassifies specific goods/
- * services between these slabs -- but the slab *structure* itself has held
- * for years.
+ * IMPORTANT -- CGST/SGST split: for an intra-state supply the total slab rate is split evenly between CGST and SGST (an 18% slab item
+ * is a 9% CGST line + a 9% SGST line), so a CGST/SGST row legitimately carries HALF a slab. IGST carries the full slab.
  *
- * IMPORTANT — CGST/SGST split: for an intra-state supply the total slab
- * rate is split evenly between CGST and SGST (e.g. an 18% slab item is
- * recorded as a 9% CGST line + a 9% SGST line, not two 18% lines) —
- * `gl.finance_gst_ledger` stores one row per component, so a CGST/SGST row
- * legitimately carries HALF a standard slab. IGST (inter-state) carries the
- * full slab rate directly. This first fix caught exactly this: an earlier
- * draft validated every gst_type against the full-slab list and would have
- * rejected a completely valid CGST/SGST row (e.g. 9%) written by an
- * existing, tested code path.
- *
- * CESS is intentionally NOT validated against a fixed rate list here: GST
- * compensation cess is item-specific (ad valorem percentages, flat per-unit
- * amounts, and formula-based rates depending on the good), not a small
- * closed set of slabs, and asserting a specific CESS rate table without
- * verified per-HSN reference data would be guessing at real tax facts.
- * CESS rows only get the same sanity bound as everything else.
+ * CESS is intentionally NOT validated against the slab list: compensation cess is item-specific (ad valorem, specific, or
+ * formula-based), not a small closed set. CESS rows only get the 0-100 sanity bound.
  */
-const FULL_SLABS: readonly number[] = [0, 0.25, 3, 5, 12, 18, 28];
-const HALF_SLABS: readonly number[] = FULL_SLABS.map((r) => r / 2); // CGST/SGST component rate
-
-export const VALID_GST_RATES: readonly number[] = FULL_SLABS;
+export const LEGACY_SLABS: readonly number[] = [0, 0.25, 3, 5, 12, 18, 28];
+/** @deprecated the pre-2025-09-22 slab list, kept for pure unit tests of the CGST/SGST split; production reads the rate master. */
+export const VALID_GST_RATES: readonly number[] = LEGACY_SLABS;
 
 /**
- * `gstType` is one of "CGST" | "SGST" | "IGST" | "CESS" on
- * gl.finance_gst_ledger. CGST/SGST rows are checked against the halved
- * slabs, IGST against the full slabs. CESS only gets the 0-100 sanity
- * bound below (see file header for why).
+ * @param slabs the full-slab rates effective on the invoice date (from the rate master). Defaults to the legacy list ONLY for
+ *              pure callers that have no database (tests of the split rule); every production caller passes the master's slabs.
  */
-export function isValidGstRate(ratePct: number, gstType?: string): boolean {
+export function isValidGstRate(ratePct: number, gstType?: string, slabs: readonly number[] = LEGACY_SLABS): boolean {
   if (!Number.isFinite(ratePct) || ratePct < 0 || ratePct > 100) return false;
-  if (gstType === "CGST" || gstType === "SGST") return HALF_SLABS.includes(ratePct);
-  if (gstType === "IGST") return FULL_SLABS.includes(ratePct);
+  if (gstType === "CGST" || gstType === "SGST") return slabs.some((s) => s / 2 === ratePct);
+  if (gstType === "IGST") return slabs.includes(ratePct);
   // CESS, or gstType not supplied: only the sanity bound applies.
   return true;
 }
