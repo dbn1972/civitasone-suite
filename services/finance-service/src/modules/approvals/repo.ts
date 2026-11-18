@@ -1,7 +1,7 @@
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { scopedRead } from "../../shared/db.js";
 import { financeSettings, financeChangeRequests, type ChangeRequestRow } from "./schema.js";
-import { SETTINGS_DEFAULTS, toBudgetControl, toCoaTemplate, assertDebtHeadsValid, configuredDebtHeads, DomainError, type DebtGlHeads, type FinanceSettings } from "./domain.js";
+import { SETTINGS_DEFAULTS, toEntityType, toBudgetControl, toCoaTemplate, assertDebtHeadsValid, configuredDebtHeads, DomainError, type DebtGlHeads, type FinanceSettings } from "./domain.js";
 import { financeHeads } from "../budget/schema.js";
 import { effectiveHeadType } from "../budget/domain.js";
 
@@ -25,6 +25,10 @@ function toSettings(row: typeof financeSettings.$inferSelect | undefined): Finan
     profileCode: row.profileCode || SETTINGS_DEFAULTS.profileCode,
     pendingAccountingBasis: row.pendingAccountingBasis === "accrual" ? "accrual" : row.pendingAccountingBasis === "cash" ? "cash" : null,
     pendingBasisEffectiveFrom: row.pendingBasisEffectiveFrom ?? null,
+    gstRegistered: row.gstRegistered === true,
+    gstin: row.gstin ?? null,
+    gstEffectiveFrom: row.gstEffectiveFrom ?? null,
+    entityType: toEntityType(row.entityType),
   };
 }
 

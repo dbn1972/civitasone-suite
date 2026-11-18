@@ -40,7 +40,31 @@ export type FinanceSettings = {
   /** An approved switch of the accounting basis, applied automatically at the FY rollover on `pendingBasisEffectiveFrom` (a 1 April). */
   pendingAccountingBasis: AccountingBasis | null;
   pendingBasisEffectiveFrom: string | null;
+  /** MSME commercial M0 (migration 0173). false = no GST lines anywhere. Maker-checker only. */
+  gstRegistered: boolean;
+  /** 15-char GSTIN; required (and format-checked) when gstRegistered. */
+  gstin: string | null;
+  /** YYYY-MM-DD the tenant became GST-registered; informational in M0. */
+  gstEffectiveFrom: string | null;
+  /** Legal entity type driving the commercial statement set (M8). NULL for government tenants. */
+  entityType: EntityType | null;
 };
+
+export const ENTITY_TYPES = ["company", "llp", "partnership", "proprietorship"] as const;
+export type EntityType = (typeof ENTITY_TYPES)[number];
+/** Same pattern as the migration 0173 CHECK. */
+export const GSTIN_PATTERN = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
+
+export function toEntityType(v: unknown): EntityType | null {
+  return (ENTITY_TYPES as readonly string[]).includes(v as string) ? (v as EntityType) : null;
+}
+
+/** gst_registered => a well-formed GSTIN. Mirrors the DB CHECK so the refusal is a clean DomainError, not a 23514. */
+export function assertGstSettingsValid(s: Pick<FinanceSettings, "gstRegistered" | "gstin">): void {
+  if (s.gstRegistered && !(s.gstin && GSTIN_PATTERN.test(s.gstin))) {
+    throw new DomainError("GSTIN_REQUIRED", "a GST-registered tenant needs a valid 15-character GSTIN");
+  }
+}
 
 export type AccountingBasis = "cash" | "accrual";
 export const ACCOUNTING_BASES = ["cash", "accrual"] as const;
@@ -60,6 +84,10 @@ export const SETTINGS_DEFAULTS: FinanceSettings = {
   profileCode: "govt_dept",
   pendingAccountingBasis: null,
   pendingBasisEffectiveFrom: null,
+  gstRegistered: false,
+  gstin: null,
+  gstEffectiveFrom: null,
+  entityType: null,
 };
 
 const BUDGET_CONTROL_RANK: Record<BudgetControl, number> = { off: 0, advisory: 1, mandatory: 2 };
@@ -116,6 +144,8 @@ export function isRelaxingControl(current: FinanceSettings, changes: Partial<Fin
   if (changes.budgetControl !== undefined && BUDGET_CONTROL_RANK[changes.budgetControl] < BUDGET_CONTROL_RANK[current.budgetControl]) return true;
   // UAT L2-N6 review: switching the accounting basis changes what every later stock movement books -- a second admin.
   if (changes.accountingBasis !== undefined && changes.accountingBasis !== current.accountingBasis) return true;
+  // MSME commercial M0: the GST identity and entity type shape every later commercial posting and return -- a second admin.
+  if ((["gstRegistered", "gstin", "gstEffectiveFrom", "entityType"] as const).some((k) => changes[k] !== undefined && changes[k] !== current[k])) return true;
   return RELAXABLE_SETTINGS.some((k) => current[k] === true && changes[k] === false);
 }
 

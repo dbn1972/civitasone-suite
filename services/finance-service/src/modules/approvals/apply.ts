@@ -18,7 +18,7 @@ import { loadSettingsTx } from "./repo.js";
 import { financeSettings } from "./schema.js";
 import { tenantProfilesEnabled } from "@civitasone/tenant-profile";
 import { todayIST } from "../../shared/ist-date.js";
-import { assertBasisSwitchApprovable } from "./domain.js";
+import { assertBasisSwitchApprovable, assertGstSettingsValid } from "./domain.js";
 import type { FinanceSettings } from "./domain.js";
 
 /** An open tenant transaction (what db.transaction hands its callback). */
@@ -197,6 +197,7 @@ export async function applySettingsChange(
     }
   }
   let after: FinanceSettings = { ...before, ...p.changes };
+  assertGstSettingsValid(after);
   // Owner decision 3 (amended): a basis switch is approved ahead and applied at the FY rollover on the next 1 April, so
   // here it is only stored as pending. Switching back to the current basis cancels a pending switch. Flag-gated.
   if (tenantProfilesEnabled() && p.changes.accountingBasis !== undefined) {

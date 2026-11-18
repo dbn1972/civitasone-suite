@@ -26,6 +26,11 @@ export const financeSettings = glSchema.table("finance_settings", {
   fundAccounting:                      boolean("fund_accounting").default(false),
   // Section 8 NF-3 (migration 0172): AS-12 capital-grant policy, deferred_income (default) | capital_fund. Read by loadPostingSettingsTx.
   capitalGrantPolicy:                  text("capital_grant_policy").notNull().default("deferred_income"),
+  // MSME commercial M0 (migration 0173): GST identity + legal entity type. Changed only via the maker-checker route.
+  gstRegistered:                       boolean("gst_registered").notNull().default(false),
+  gstin:                               varchar("gstin", { length: 15 }),
+  gstEffectiveFrom:                    date("gst_effective_from"),
+  entityType:                          text("entity_type"),
   updatedBy:                           uuid("updated_by").notNull(),
   updatedAt:                           timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   version:                             integer("version").notNull().default(1),
