@@ -13,6 +13,7 @@ import { financeBills, financePayments } from "../src/modules/payments/schema.js
 import { financeHeads } from "../src/modules/budget/schema.js";
 import { financeDdo, financeVendors } from "../src/modules/masters/schema.js";
 import { financeBudgetAllocation } from "../src/modules/budget/allocation-schema.js";
+import { seedGlHeadsTx } from "../src/modules/gl/standard-heads.js";
 import { registerPaymentsConsumers } from "../src/modules/payments/consumer.js";
 import { fyFromDate } from "../src/modules/hoa/voucher.js";
 import { COMMANDS } from "../src/topics.js";
@@ -43,6 +44,9 @@ async function seed(t: Fx, withGovtMasters: boolean): Promise<void> {
     { id: randomUUID(), tenantId: t.tenantId, code: "2050", name: "Accounts Payable control", level: 1, createdBy: ACTOR, updatedBy: ACTOR },
     { id: randomUUID(), tenantId: t.tenantId, code: "1100", name: "Bank", level: 1, createdBy: ACTOR, updatedBy: ACTOR },
   ]).onConflictDoNothing());
+  // MSME M1: a commercial tenant is fail-closed on its required commercial heads, so give it the full seeded chart (the 5400
+  // above is kept: the seed is ON CONFLICT DO NOTHING).
+  if (t.template === "commercial") await scoped(t.tenantId, (tx) => seedGlHeadsTx(tx, t.tenantId, "commercial"));
   if (withGovtMasters) {
     await scoped(t.tenantId, (tx) => tx.insert(financeDdo).values({ tenantId: t.tenantId, ddoCode: "DDO123456", name: "DDO", createdBy: ACTOR, updatedBy: ACTOR }).onConflictDoNothing());
   }

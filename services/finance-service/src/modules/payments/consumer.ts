@@ -20,7 +20,8 @@ import { assertValidDdoCode, PfmsValidationError } from "../../shared/pfms.js";
 import { assertBillHeadValid } from "./bill-head.js";
 import { resolveCoaTemplateTx } from "../gl/coa-template.js";
 import { tenantProfilesEnabled } from "@civitasone/tenant-profile";
-import { templateDefaultBillHead } from "../gl/system-heads.js";
+import { billHeadCodeFor } from "../gl/system-heads.js";
+import { assertCommercialChartReadyTx } from "../gl/commercial-chart.js";
 import { vendorExists } from "../masters/repo.js";
 import * as pfmsRepo from "../pfms/repo.js";
 import { getPeriodStatusTx } from "../period-close/repo.js";
@@ -175,7 +176,7 @@ export function registerPaymentsConsumers(queue: Queue): void {
       if (!(await markProcessed(tx, msg.messageId))) return;
       // UAT b10 F94: producers name the head by CODE, resolved in the bill tenant's own chart. A literal head id from
       // one tenant (the old FINANCE_DEFAULT_HEAD_ID) never resolves for another tenant.
-      const headCodeToUse = p.headCode ?? (p.headId ? undefined : (process.env.WORKS_FINANCE_BILL_HEAD_CODE?.trim() || templateDefaultBillHead(coaTemplate)));
+      const headCodeToUse = p.headCode ?? (p.headId ? undefined : billHeadCodeFor(coaTemplate, process.env.WORKS_FINANCE_BILL_HEAD_CODE));
       const head = headCodeToUse
         ? await budgetRepo.findHeadByCodeTx(tx, p.tenantId, headCodeToUse)
         : await budgetRepo.findHeadByIdTx(tx, p.headId as string);
@@ -188,6 +189,10 @@ export function registerPaymentsConsumers(queue: Queue): void {
           : new NonRetryableError(`UNKNOWN_HEAD: ${p.headId} not found in budget head master for tenant`);
       }
       const headId = head.id;
+      // MSME M1 (fail-closed by classification): a commercial tenant whose required commercial heads are absent is refused.
+      if (coaTemplate === "commercial") {
+        await assertCommercialChartReadyTx(tx, p.tenantId);
+      }
       // B3: template-keyed head validation. govt = HoA-with-master, DDO, PAO (as before, same order); other templates = leaf expense head.
       await assertBillHeadValid({ coaTemplate, tenantId: p.tenantId, head, ddoCode: resolvedDdoCode, paoCode: p.paoCode, reader: reader as unknown as Parameters<typeof assertBillHeadValid>[0]["reader"] });
       // BUG FIX: vendorId previously only got a UUID-format check (Zod) —

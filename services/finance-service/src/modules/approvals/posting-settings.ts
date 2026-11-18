@@ -25,6 +25,8 @@ export type PostingSettings = {
   generalFundId: string | null;
   /** Section 8 NF-3: the AS-12 capital-grant policy stored for the tenant; an absent row or unknown value reads as deferred_income. */
   capitalGrantPolicy: CapitalGrantPolicy;
+  /** MSME M1: the stored chart template (gl.finance_settings.coa_template); an absent row reads as govt. */
+  coaTemplate: string;
 };
 
 export type CapitalGrantPolicy = "deferred_income" | "capital_fund";
@@ -34,17 +36,18 @@ export async function loadPostingSettingsTx(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   tx: any, tenantId: string,
 ): Promise<PostingSettings> {
-  const rows: Array<{ m?: string; f?: boolean | null; g?: string | null; p?: string | null }> = await tx
+  const rows: Array<{ m?: string; f?: boolean | null; g?: string | null; p?: string | null; c?: string | null }> = await tx
     .select({
       m: financeSettings.budgetControl,
       f: financeSettings.fundAccounting,
       p: financeSettings.capitalGrantPolicy,
+      c: financeSettings.coaTemplate,
       g: sql<string | null>`(SELECT gf.id::text FROM gl.funds gf WHERE gf.tenant_id = ${tenantId}::uuid AND gf.code = 'GENERAL' LIMIT 1)`,
     })
     .from(financeSettings)
     .where(eq(financeSettings.tenantId, tenantId)).limit(1);
   const r = rows[0];
-  return { budgetControl: toBudgetControl(r?.m), fundAccounting: r?.f === true, generalFundId: r?.g ?? null, capitalGrantPolicy: toCapitalGrantPolicy(r?.p) };
+  return { budgetControl: toBudgetControl(r?.m), fundAccounting: r?.f === true, generalFundId: r?.g ?? null, capitalGrantPolicy: toCapitalGrantPolicy(r?.p), coaTemplate: r?.c ?? "govt" };
 }
 
 /**

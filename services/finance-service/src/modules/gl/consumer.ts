@@ -32,6 +32,7 @@ import { needsBudgetProvision, noBudgetProvisionError, provisionAction, loadBudg
 import { recordDepreciationMemoTx, depreciationMemoReason } from "./depreciation-memo.js";
 import { fundContext } from "./fund-context.js";
 import { loadPostingSettingsTx } from "../approvals/posting-settings.js";
+import { assertCommercialChartReadyTx } from "./commercial-chart.js";
 import { prepareFundPostingTx, assertFundsBalanced } from "./funds.js";
 
 const AUDIT_TOPIC = "audit.event.record";
@@ -304,6 +305,9 @@ async function postJournal(
   // Section 8 NF-1 (S4): ONE read of gl.finance_settings per posting -- budget_control and fund_accounting (+ the GENERAL fund id)
   // together -- handed to both the budget check below and the fund seam further down.
   const postingSettings = await loadPostingSettingsTx(tx, journal.tenantId);
+  // MSME M1 fail-closed (design contract 5): a commercial tenant missing its required commercial heads is refused (checked by
+  // classification). Keyed on the STORED coa_template; govt tenants skip this entirely (no extra query).
+  if (postingSettings.coaTemplate === "commercial") await assertCommercialChartReadyTx(tx, journal.tenantId);
   const budgetControl = await loadBudgetControlTx(tx, journal.tenantId, postingSettings);
   if (budgetControl !== "off") {
     const fy = fyFromDate(journal.postingDate);

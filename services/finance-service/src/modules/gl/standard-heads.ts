@@ -122,7 +122,7 @@ function coreHeadsPost(): StandardGlHead[] {
  * HoA (chk_finance_heads_hoa_code allows NULL). The two env vars still win when set.
  */
 function defaultBillHeads(template: SeedTemplate): StandardGlHead[] {
-  const code = (name: string) => envTrim(name, templateDefaultBillHead(template));
+  const code = (name: string) => (template === "commercial" ? templateDefaultBillHead(template) : envTrim(name, templateDefaultBillHead(template)));
   if (template === "govt") {
     return [
       { code: code("FINANCE_GRN_BILL_HEAD_CODE"), name: "General Education", classification: "expense", hoaCode: BILL_HEAD_HOA },
