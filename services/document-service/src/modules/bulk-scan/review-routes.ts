@@ -39,6 +39,12 @@ function topCandidates(raw: unknown, docTypes: readonly { id: string; label: str
   }).sort((x, y) => y.score - x.score).slice(0, 2);
 }
 
+/** S3 GetObject on an absent key rejects with name NoSuchKey / NotFound / HTTP 404 (packages/storage isNotFound uses the same signals). */
+function isObjectMissing(e: unknown): boolean {
+  const err = e as { name?: string; Code?: string; $metadata?: { httpStatusCode?: number } } | null;
+  return err?.name === "NoSuchKey" || err?.name === "NotFound" || err?.Code === "NoSuchKey" || err?.$metadata?.httpStatusCode === 404;
+}
+
 async function loadReviewable(tenantId: string, batchId: string, fileId: string, states: readonly string[]): Promise<BatchFileRow> {
   const f = await repo.getFile(tenantId, fileId);
   if (!f || f.batchId !== batchId) throw new HttpError(404, "NOT_FOUND", "file not found");
@@ -74,7 +80,13 @@ export async function reviewRoutes(app: FastifyInstance): Promise<void> {
     await auditRead(ctx, { purpose: "review_view", documentId: documentIdFor(f.id), route: "GET /v1/documents/bulk-scan/batches/:batchId/files/:fileId/review" });
 
     const store = getPorts().store;
-    const structured = JSON.parse((await store.get(f.structuredJsonKey)).toString("utf8")) as unknown;
+    let structuredRaw: Buffer;
+    try { structuredRaw = await store.get(f.structuredJsonKey); } catch (e) {
+      // The DB row can outlive the object (e.g. bucket reset). Only an explicit object-absent signal is a 404; real store failures stay 5xx.
+      if (isObjectMissing(e)) throw new HttpError(404, "ARTIFACT_MISSING", "the extracted output for this file is no longer available");
+      throw e;
+    }
+    const structured = JSON.parse(structuredRaw.toString("utf8")) as unknown;
     const imageUrls = new Map<number, string>();
     for (let n = 1; n <= f.pageImageCount; n++) imageUrls.set(n, await store.presignGet({ key: keys.pageImage(f.tenantId, f.batchId, f.id, n), expiresIn: IMAGE_TTL_S }));
 
