@@ -145,6 +145,23 @@ describe("review detail + audit-on-read", () => {
     expect(getSpy).not.toHaveBeenCalled();
   });
 
+  it("a missing structured-JSON object is a 404 ARTIFACT_MISSING; any other store failure stays a 5xx", async () => {
+    const t = newTenant();
+    const s = await seedFile(store, t);
+    const url = `${P}/batches/${s.batchId}/files/${s.fileId}/review`;
+    const real = store.get.bind(store);
+    vi.spyOn(store, "get").mockImplementation(async (k: string) => {
+      if (k.endsWith("structured.json")) throw Object.assign(new Error("The specified key does not exist."), { name: "NoSuchKey", $metadata: { httpStatusCode: 404 } });
+      return real(k);
+    });
+    const missing = await call("GET", url, admin(t));
+    expect(missing.status).toBe(404);
+    expect(JSON.stringify(missing.body)).toContain("ARTIFACT_MISSING");
+    vi.restoreAllMocks();
+    vi.spyOn(store, "get").mockRejectedValue(Object.assign(new Error("connect ECONNREFUSED"), { name: "Error", code: "ECONNREFUSED" }));
+    expect((await call("GET", url, admin(t))).status).toBeGreaterThanOrEqual(500);
+  });
+
   it("404 for a wrong batch / unknown file / other tenant, 409 for a file not in review; none of them audited", async () => {
     const t = newTenant(), other = newTenant();
     const s = await seedFile(store, t), f = await seedFile(store, t, "ready_to_file", { state: "filed" });
