@@ -203,6 +203,41 @@ async function readTailLines(file: string): Promise<string[]> {
   }
 }
 
+/**
+ * Expected business/validation rejections. A worker that throws one of these is a CONTROL WORKING (maker-checker,
+ * master-data or budget validation correctly refusing a bad request), not a system fault, so these lines must not
+ * appear in the operator "Recent errors" feed. Only deterministic 4xx-style domain codes belong here; never add
+ * infrastructure/5xx failures (ECONNREFUSED, timeout, unhandledRejection, OOM, 500 ...).
+ * Sources: finance-service payments/consumer.ts (UNKNOWN_VENDOR), budget/provision.ts + budget/commands.ts
+ * (NO_BUDGET_PROVISION, BUDGET_EXCEEDED), gl/refusal.ts (UNKNOWN_ACCOUNT_CODE, FY_*, ASSET_NOT_CAPITALISED, PERIOD_*),
+ * inventory-service movements/consumer.ts (UNKNOWN_ITEM_CODE, AMBIGUOUS_ITEM_CODE, UNKNOWN_STORE, GRN_NO_RECEIVING_STORE),
+ * document-service bulk-scan/consumer.ts (UNKNOWN_DOC_TYPE), contract-service contracts/consumer.ts (DUPLICATE_CONTRACT_NO).
+ */
+export const EXPECTED_BUSINESS_REJECTION_CODES: readonly string[] = [
+  "UNKNOWN_VENDOR",
+  "NO_BUDGET_PROVISION",
+  "BUDGET_EXCEEDED",
+  "UNKNOWN_ACCOUNT_CODE",
+  "FY_NOT_ACTIVE",
+  "FY_CLOSED",
+  "ASSET_NOT_CAPITALISED",
+  "UNKNOWN_ITEM_CODE",
+  "AMBIGUOUS_ITEM_CODE",
+  "UNKNOWN_STORE",
+  "GRN_NO_RECEIVING_STORE",
+  "UNKNOWN_DOC_TYPE",
+  "DUPLICATE_CONTRACT_NO",
+];
+// A code only counts when it is directly followed by ":" or "]" ("UNKNOWN_VENDOR: ..." / "[NO_BUDGET_PROVISION] ..."),
+// so an unrelated line that merely mentions a code is still kept.
+const BUSINESS_REJECTION_RE = new RegExp(
+  "(?<![A-Z_])(?:" + EXPECTED_BUSINESS_REJECTION_CODES.join("|") + "|PERIOD_[A-Z_]+)(?=\\]|:)",
+);
+
+export function isExpectedBusinessRejection(line: string): boolean {
+  return BUSINESS_REJECTION_RE.test(line);
+}
+
 async function recentLogErrors(processes: OperationProcess[]): Promise<Array<{ source: string; line: string }>> {
   const sources = [...new Set(["gateway", "web", "queue", ...processes.filter((p) => p.kind === "worker").map((p) => p.name)])]
     .filter((source) => /^[a-z0-9-]+$/i.test(source))
@@ -218,7 +253,7 @@ async function recentLogErrors(processes: OperationProcess[]): Promise<Array<{ s
         continue;
       }
       for (const line of lines) {
-        if (/error|failed|exception|fatal|down/i.test(line)) {
+        if (/error|failed|exception|fatal|down/i.test(line) && !isExpectedBusinessRejection(line)) {
           errors.push({ source, line: redactLogLine(line).slice(0, 500) });
         }
       }
