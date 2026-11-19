@@ -24,7 +24,8 @@ function mockFetch(overrides?: { submit?: Response }) {
   return vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
     const url = typeof input === "string" ? input : (input as Request).url;
     if (url.includes("/estab/files/by-ref")) {
-      return new Response(null, { status: 404 });
+      // API contract: "no eOffice file yet" is 200 {data:null}, not 404.
+      return new Response(JSON.stringify({ data: null }), { status: 200 });
     }
     if (url.includes("/hrms/employees")) {
       return new Response(JSON.stringify({ data: EMPLOYEES }), { status: 200 });
