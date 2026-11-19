@@ -268,3 +268,17 @@ describe("getEmployeeDetail — statutory identifiers (UAN / ESIC IP / PRAN)", (
     expect(detail?.uanNumber).toBe("100123456789"); // full value -- not in PII_FIELDS
   });
 });
+
+describe("listEmployees — ids= with no matches", () => {
+  it("returns an empty list with a valid (pageSize >= 1) pagination object, not pageSize 0", async () => {
+    listByIdsMock.mockResolvedValue([]);
+    dbFixtures.departmentRows = [];
+    dbFixtures.designationRows = [];
+
+    const result = await listEmployees(TENANT, 200, 0, undefined, undefined, undefined, ["nonexistent-1", "nonexistent-2"]);
+
+    expect(result.data).toEqual([]);
+    expect(result.pagination.pageSize).toBeGreaterThanOrEqual(1);
+    expect(result.pagination.hasMore).toBe(false);
+  });
+});
