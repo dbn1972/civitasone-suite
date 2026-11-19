@@ -121,7 +121,9 @@ export async function linkageRoutes(app: FastifyInstance): Promise<void> {
     `);
 
     if (rows.length === 0) {
-      throw new HttpError(404, "NOT_FOUND", "no file found for this reference");
+      // "No eOffice file raised yet" is an expected state for the source-module
+      // screens, not an error: answer 200 {data:null} so the browser logs no failed request.
+      return reply.send({ data: null });
     }
     return reply.send({ data: rows[0] });
   });

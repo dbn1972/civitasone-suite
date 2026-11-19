@@ -22,7 +22,7 @@ function mockLinkedFile(file: { id: string; file_no: string; status: string } | 
   vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
     const url = typeof input === "string" ? input : (input as Request).url;
     if (url.includes("/estab/files/by-ref")) {
-      return file ? new Response(JSON.stringify({ data: file }), { status: 200 }) : new Response(null, { status: 404 });
+      return file ? new Response(JSON.stringify({ data: file }), { status: 200 }) : new Response(JSON.stringify({ data: null }), { status: 200 });
     }
     return new Response(null, { status: 404 });
   });

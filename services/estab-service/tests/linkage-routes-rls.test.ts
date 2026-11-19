@@ -108,10 +108,11 @@ describe("GET /v1/estab/files/by-ref", () => {
     });
     await app.close();
 
-    expect(res.statusCode).toBe(404);
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ data: null });
   });
 
-  it("returns 404 when no file matches the reference", async () => {
+  it("returns 200 with data:null when no file matches the reference (expected "no file yet" state)", async () => {
     const app = await buildApp();
     const res = await app.inject({
       method: "GET",
@@ -120,7 +121,8 @@ describe("GET /v1/estab/files/by-ref", () => {
     });
     await app.close();
 
-    expect(res.statusCode).toBe(404);
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ data: null });
   });
 
   it("returns 400 for an invalid refType", async () => {
