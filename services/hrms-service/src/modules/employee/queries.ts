@@ -295,7 +295,8 @@ export async function listEmployees(tenantId: string, limit: number, offset: num
           ...listContractFields(r),
         };
       }),
-      pagination: { hasMore: false, pageSize: rows.length },
+      // Empty match is a normal empty page, not an error: the pagination schema rejects pageSize 0.
+      pagination: { hasMore: false, pageSize: Math.max(rows.length, 1) },
     };
   }
 
