@@ -160,7 +160,7 @@ function buildNextResponse(req: NextRequest): NextResponse {
     "style-src-attr 'unsafe-inline'",
     // Map base-map tiles (MAP_TILE_URL, default OpenStreetMap) -- the map iframe is a
     // srcdoc document and inherits this policy.
-    `img-src 'self' data: blob: ${tileImgSource()}`,
+    `img-src 'self' data: blob: ${tileImgSource()}${STORAGE_ORIGIN ? ` ${STORAGE_ORIGIN}` : ''}`,
     `connect-src 'self'${KEYCLOAK_ORIGIN ? ` ${KEYCLOAK_ORIGIN}` : ''}${STORAGE_ORIGIN ? ` ${STORAGE_ORIGIN}` : ''}`,
     "font-src 'self'",
     "frame-ancestors 'none'",

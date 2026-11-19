@@ -9,6 +9,15 @@ import { NextRequest } from "next/server";
 
 const ENV_KEYS = ["NEXT_PUBLIC_STORAGE_ORIGIN", "AWS_ENDPOINT_URL", "AWS_S3_BUCKET", "AWS_DEFAULT_REGION", "NEXT_PUBLIC_KEYCLOAK_ISSUER_URL"];
 
+async function directive(name: string, env: Record<string, string>): Promise<string> {
+  for (const k of ENV_KEYS) vi.stubEnv(k, "");
+  for (const [k, v] of Object.entries(env)) vi.stubEnv(k, v);
+  vi.resetModules();
+  const { middleware } = await import("./middleware");
+  const csp = (await middleware(new NextRequest(new URL("https://demo.test/auth/login")))).headers.get("Content-Security-Policy") ?? "";
+  return csp.split("; ").find((d) => d.startsWith(name)) ?? "";
+}
+
 async function connectSrc(env: Record<string, string>): Promise<string> {
   for (const k of ENV_KEYS) vi.stubEnv(k, "");
   for (const [k, v] of Object.entries(env)) vi.stubEnv(k, v);
@@ -46,5 +55,23 @@ describe("middleware CSP connect-src storage origin (V4-A-02)", () => {
     expect(await connectSrc({})).toBe("connect-src 'self'");
     expect(await connectSrc({ NEXT_PUBLIC_STORAGE_ORIGIN: "javascript:alert(1)" })).toBe("connect-src 'self'");
     expect(await connectSrc({ NEXT_PUBLIC_STORAGE_ORIGIN: "not a url; script-src *" })).toBe("connect-src 'self'");
+  });
+});
+
+describe("middleware CSP img-src storage origin (bulk-scan page previews)", () => {
+  beforeEach(() => vi.unstubAllEnvs());
+  afterEach(() => vi.unstubAllEnvs());
+
+  it("allows the storage origin for presigned preview images and keeps existing sources", async () => {
+    const d = await directive("img-src", { NEXT_PUBLIC_STORAGE_ORIGIN: "http://localhost:4566/civitas" });
+    expect(d).toContain("data: blob:");
+    expect(d).toContain("tile.openstreetmap.org");
+    expect(d.endsWith(" http://localhost:4566")).toBe(true);
+    expect(d).not.toContain("*.s3");
+  });
+
+  it("adds nothing when no storage origin is configured", async () => {
+    const d = await directive("img-src", {});
+    expect(d).not.toMatch(/localhost|amazonaws/);
   });
 });

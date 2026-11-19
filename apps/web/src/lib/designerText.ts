@@ -1,7 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import en from "../../messages/en.json";
+import en from "../messages/en.json";
 
 type Vars = Record<string, string | number>;
 export type DesignerT = (key: string, vars?: Vars) => string;
@@ -23,7 +23,7 @@ function interpolate(template: string, vars?: Vars): string {
   return template.replace(/\{(\w+)\}/g, (m, name: string) => (name in vars ? String(vars[name]) : m));
 }
 
-/** English text straight from messages/en.json, for callers with no provider mounted. */
+/** English text straight from src/messages/en.json, for callers with no provider mounted. */
 export function designerTextEn(key: string, vars?: Vars): string {
   return interpolate(lookup((en as Record<string, unknown>).designer, key) ?? key, vars);
 }
