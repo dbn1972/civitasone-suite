@@ -177,6 +177,7 @@ export default async function ServiceRequestDetailPage(props: { params: Promise<
             assignedTo={r.assignedTo ?? null}
             assignedToName={r.assignedToName ?? null}
             canAssign={canAssign}
+            canClose={canAssign}
           />
         }
       />

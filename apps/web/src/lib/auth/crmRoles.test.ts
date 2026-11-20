@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { CRM_PII_READ_ROLES, CRM_MERGE_ROLES } from "./crmRoles";
+import { CRM_PII_READ_ROLES, CRM_MERGE_ROLES, CRM_ADMIN_WRITE_ROLES, CRM_PRICE_BOOK_ADMIN_ROLES } from "./crmRoles";
 import * as roleGuard from "./roleGuard";
 
 /**
@@ -163,3 +163,32 @@ describe("CRM role lists are pinned to the crm-service route that enforces them"
     expect(sorted(roleGuard.CRM_CONTACT_READ_ROLES)).toEqual(sorted(serverList("modules/contacts/routes.ts", "CRM_ROLES")));
   });
 });
+
+describe("CRM_ADMIN_WRITE_ROLES / CRM_PRICE_BOOK_ADMIN_ROLES (import, owner change, price books)", () => {
+  const serverRoles = (mod: string) => {
+    const src = readFileSync(resolve(__dirname, "../../../../../services/crm-service/src/modules", mod), "utf8");
+    const body = /const ADMIN_ROLES = \[([^\]]*)\]/.exec(src)?.[1] ?? "";
+    return [...body.matchAll(/"([a-z_]+)"/g)].map((m) => m[1]!);
+  };
+
+  it("are ONE list each: roleGuard re-exports the client-safe module", () => {
+    expect(roleGuard.CRM_ADMIN_WRITE_ROLES).toBe(CRM_ADMIN_WRITE_ROLES);
+    expect(roleGuard.CRM_PRICE_BOOK_ADMIN_ROLES).toBe(CRM_PRICE_BOOK_ADMIN_ROLES);
+  });
+
+  it("CRM_ADMIN_WRITE_ROLES matches contacts/routes.ts ADMIN_ROLES exactly (bulk import + account owner PATCH)", () => {
+    expect(serverRoles("contacts/routes.ts").length).toBeGreaterThan(0);
+    expect([...CRM_ADMIN_WRITE_ROLES].sort()).toEqual([...serverRoles("contacts/routes.ts")].sort());
+  });
+
+  it("CRM_PRICE_BOOK_ADMIN_ROLES matches price-books/routes.ts ADMIN_ROLES exactly", () => {
+    expect(serverRoles("price-books/routes.ts").length).toBeGreaterThan(0);
+    expect([...CRM_PRICE_BOOK_ADMIN_ROLES].sort()).toEqual([...serverRoles("price-books/routes.ts")].sort());
+  });
+
+  it("never offers the admin controls to a plain crm_user", () => {
+    expect(CRM_ADMIN_WRITE_ROLES).not.toContain("crm_user");
+    expect(CRM_PRICE_BOOK_ADMIN_ROLES).not.toContain("crm_user");
+  });
+});
+

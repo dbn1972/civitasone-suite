@@ -1,7 +1,7 @@
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { PageHeader, StatCard, StatGrid, Card } from "../../../_components/ds";
 import { getCRMDashboard } from "../../../_data/loaders";
-import { formatMoney } from "@/lib/formatters";
+import { formatRupees } from "@/lib/formatters";
 import { getTranslations } from "next-intl/server";
 import Link from "next/link";
 
@@ -25,7 +25,10 @@ export default async function Page() {
   // engagements". Show "—" (the same convention Contacts/Accounts/Activities
   // use) instead of a fabricated 0 / ₹0.00 beside the "couldn't load" badge.
   const stat = (n: number) => (source === "error" ? "—" : n.toLocaleString("en-IN"));
-  const money = source === "error" ? "—" : formatMoney(dash.pipelineValue);
+  // crm-service /v1/crm/dashboard returns pipelineValue in RUPEES (dashboard/queries.ts converts the
+  // exact paise sum), whereas formatMoney() takes PAISE -- passing it here rendered 100x too small
+  // (Rs 8,190 vs the Engagements list Rs 8,19,000). formatRupees() is the rupee-denominated formatter.
+  const money = source === "error" ? "—" : formatRupees(dash.pipelineValue);
 
   return (
     <>

@@ -28,6 +28,8 @@ import { useEffect, useId, useState } from "react";
 import { useTranslations } from "next-intl";
 import { DataSourceBadge } from "../DataSourceBadge";
 import { ConfirmDialog, EmptyState, Button } from "../ds";
+import { useSessionIdentity } from "@/lib/auth/useSessionIdentity";
+import { CRM_PRICE_BOOK_ADMIN_ROLES } from "@/lib/auth/crmRoles";
 import { rupeesToMinorString } from "@/lib/money";
 import { formatMoneyIn, formatIndianDate, formatDateTimeIST } from "@/lib/formatters";
 import {
@@ -107,6 +109,10 @@ function blankBook(): PriceBook {
 
 export function PriceBookEditor() {
   const t = useTranslations("crmPriceBookEditor");
+  // Display gate only: crm-service answers 403 to price-book writes and history for any role outside
+  // ADMIN_ROLES (crm_admin, super_admin, tenant_admin), so those controls are not offered to anyone else.
+  const identity = useSessionIdentity();
+  const canManage = identity.roles.some((r) => CRM_PRICE_BOOK_ADMIN_ROLES.includes(r));
   const [books, setBooks] = useState<PriceBook[]>([]);
   const [source, setSource] = useState<QpSource | "loading">("loading");
   const [products, setProducts] = useState<Product[]>([]);
@@ -400,7 +406,7 @@ export function PriceBookEditor() {
                   ) : null}
                 </span>
                 <span style={{ display: "flex", gap: 6 }}>
-                  {b.id ? (
+                  {canManage && b.id ? (
                     <Button
                       type="button"
                       variant="ghost"
@@ -412,12 +418,16 @@ export function PriceBookEditor() {
                       {t("history")}
                     </Button>
                   ) : null}
+                  {canManage ? (
+                    <>
                   <Button type="button" variant="ghost" size="sm" onClick={() => requestEdit(b)}>
                     Edit
                   </Button>
                   <Button type="button" variant="ghost" size="sm" onClick={() => setConfirmBook(b)} aria-label={`Delete price book ${b.name}`}>
                     Delete
                   </Button>
+                    </>
+                  ) : null}
                 </span>
               </li>
             ))}
@@ -497,9 +507,9 @@ export function PriceBookEditor() {
 
         <div style={{ padding: 12 }}>
           {!draft ? (
-            <Button type="button" variant="ghost" onClick={startNew}>
+            canManage ? <Button type="button" variant="ghost" onClick={startNew}>
               + New price book
-            </Button>
+            </Button> : null
           ) : (
             <fieldset style={{ border: "1px solid var(--line)", borderRadius: 10, padding: 12 }}>
               <legend style={{ fontSize: 13, fontWeight: 600 }}>{draft.id ? "Edit price book" : "New price book"}</legend>

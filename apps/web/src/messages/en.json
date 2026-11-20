@@ -15620,6 +15620,7 @@
     "viewContacts": "View contacts",
     "downloadPreImportRejects": "Download pre-import rejects (CSV)",
     "chooseFile": "Or choose a CSV file (max 2 MB)",
+    "rowCapHint": "Up to {max} rows per import.",
     "tooManyRowsAlert": "Too many rows ({count}). Import at most {max} at a time; split the file and import in parts.",
     "previewHeading": "Preview",
     "previewShowing": " — showing first 50 of {count}",

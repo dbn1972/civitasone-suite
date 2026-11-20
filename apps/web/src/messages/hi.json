@@ -15382,6 +15382,7 @@
     "viewContacts": "संपर्क देखें",
     "downloadPreImportRejects": "आयात-पूर्व अस्वीकृत पंक्तियाँ डाउनलोड करें (CSV)",
     "chooseFile": "या CSV फ़ाइल चुनें (अधिकतम 2 MB)",
+    "rowCapHint": "प्रति आयात अधिकतम {max} पंक्तियाँ।",
     "tooManyRowsAlert": "बहुत अधिक पंक्तियाँ ({count})। एक बार में अधिकतम {max} आयात करें; फ़ाइल को बाँटकर भागों में आयात करें।",
     "previewHeading": "पूर्वावलोकन",
     "previewShowing": " — {count} में से पहली 50 दिखाई जा रही हैं",

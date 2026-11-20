@@ -16,6 +16,11 @@ function render(ui: ReactElement) {
 }
 
 
+const identity = vi.hoisted(() => ({ roles: ["crm_admin"] as string[] }));
+vi.mock("@/lib/auth/useSessionIdentity", () => ({
+  useSessionIdentity: () => ({ loaded: true, userId: "u1", roles: identity.roles }),
+}));
+
 vi.mock("@/lib/crm/quotation", async (orig) => {
   const actual = await orig<typeof import("@/lib/crm/quotation")>();
   return {
@@ -42,6 +47,7 @@ const book: qp.PriceBook = {
 };
 
 beforeEach(() => {
+  identity.roles = ["crm_admin"];
   vi.mocked(qp.getPriceBooks).mockReset().mockResolvedValue({ data: [], source: "api" });
   vi.mocked(qp.getProducts).mockReset().mockResolvedValue({ data: [], source: "api" });
   vi.mocked(qp.createPriceBook).mockReset();
@@ -428,3 +434,27 @@ describe("PriceBookEditor (QP-002)", () => {
     expect(screen.getByText(/entry 1 needs a price/i)).toBeInTheDocument();
   });
 });
+
+describe("PriceBookEditor role gating", () => {
+  it("hides Edit / Delete / History / New for a plain crm_user (the server 403s all four)", async () => {
+    identity.roles = ["crm_user"];
+    vi.mocked(qp.getPriceBooks).mockResolvedValue({ data: [book], source: "api" });
+    render(<PriceBookEditor />);
+    await screen.findByText("Government");
+    expect(screen.queryByRole("button", { name: "Edit" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Delete price book/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /History/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /New price book/ })).not.toBeInTheDocument();
+  });
+
+  it.each(["crm_admin", "super_admin", "tenant_admin"])("offers Edit / Delete / New to %s", async (role) => {
+    identity.roles = [role];
+    vi.mocked(qp.getPriceBooks).mockResolvedValue({ data: [book], source: "api" });
+    render(<PriceBookEditor />);
+    await screen.findByText("Government");
+    expect(screen.getByRole("button", { name: "Edit" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Delete price book/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /New price book/ })).toBeInTheDocument();
+  });
+});
+

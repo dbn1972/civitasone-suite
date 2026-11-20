@@ -2,7 +2,7 @@ import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 import { PageHeader, EmptyState, DataTable, RefreshErrorState } from "../../../../_components/ds";
 import { getCrmAccount, getCrmAccountAncestors, getCrmAccountChildren } from "../../../../_data/loaders";
-import { getSessionRoles, hasAnyRole, CRM_VERIFY_ROLES } from "@/lib/auth/roleGuard";
+import { getSessionRoles, hasAnyRole, CRM_VERIFY_ROLES, CRM_ADMIN_WRITE_ROLES } from "@/lib/auth/roleGuard";
 import { toHumanError } from "@/lib/messages";
 import { hierarchyState } from "./hierarchyState";
 import { safeExternalUrl } from "@/lib/url";
@@ -60,6 +60,8 @@ export default async function Page(props: { params: Promise<{ id: string }> }) {
   // Document verify/reject is an approval control restricted to CRM admins; the
   // server stays the authority (GAP-CRM-ACCOUNTS-DETAIL-02).
   const canVerify = hasAnyRole(getSessionRoles(), CRM_VERIFY_ROLES);
+  // PATCH /v1/crm/accounts/:id (owner change) is crm_admin/super_admin only server-side.
+  const canChangeOwner = hasAnyRole(getSessionRoles(), CRM_ADMIN_WRITE_ROLES);
 
   // GAP-CRM-ACCOUNTS-DETAIL-05: never put a stored website straight into href.
   // A "javascript:"/"data:" value would execute on click and a bare domain
@@ -120,16 +122,18 @@ export default async function Page(props: { params: Promise<{ id: string }> }) {
             </div>
           </div>
 
-          <div className="card">
-            <div className="card-h"><h3>{tOwner("cardTitle")}</h3></div>
-            {/* F5-01: change the owning agent. The picker resolves the current
-                owner id to a name itself; the server audits the change. */}
-            <AccountOwnerForm
-              accountId={account.id}
-              currentOwnerId={account.ownerId ?? null}
-              currentOwnerName={null}
-            />
-          </div>
+          {canChangeOwner ? (
+            <div className="card">
+              <div className="card-h"><h3>{tOwner("cardTitle")}</h3></div>
+              {/* F5-01: change the owning agent. The picker resolves the current
+                  owner id to a name itself; the server audits the change. */}
+              <AccountOwnerForm
+                accountId={account.id}
+                currentOwnerId={account.ownerId ?? null}
+                currentOwnerName={null}
+              />
+            </div>
+          ) : null}
 
           <div className="card">
             <div className="card-h"><h3>Child Accounts</h3></div>
