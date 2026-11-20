@@ -182,7 +182,7 @@ export default async function SchemeDetailPage(props: { params: Promise<{ id: st
 
       <Card title="Management Actions" padding>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          {canMaintain && (scheme.status === "draft" || scheme.status === "open") && (
+          {canMaintain && (scheme.status === "draft" || scheme.status === "open" || scheme.status === "active") && (
             <CloseSchemeButton schemeId={params.id} schemeName={scheme.name} />
           )}
           <Link href="/grants/applications" className="btn">

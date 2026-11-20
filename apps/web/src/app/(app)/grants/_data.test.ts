@@ -34,7 +34,7 @@ describe("mapGrantSchemeSummaries (GAP-GRANTS-SCHEMES-04/05)", () => {
 
   it("does NOT relabel an unknown status as 'draft'", async () => {
     const rows = await mapPayload([
-      { id: "a", code: "C1", name: "Scheme One", status: "suspended" },
+      { id: "a", code: "C1", name: "Scheme One", status: "archived" },
     ]);
     expect(rows?.[0]?.status).toBe("unknown");
   });

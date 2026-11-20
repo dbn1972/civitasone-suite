@@ -17,8 +17,8 @@ export default async function GrantSchemesPage() {
   // GAP-GRANTS-SCHEMES-03: "Total Budget" is the sanctioned envelope — only
   // schemes that are actually agreed (open/closed/completed), excluding draft,
   // cancelled and unknown. Decision recorded: sum SANCTIONED statuses, not all.
-  const SANCTIONED = new Set(["open", "closed", "completed"]);
-  const open = schemes.filter((s) => s.status === "open").length;
+  const SANCTIONED = new Set(["open", "active", "closed", "completed"]);
+  const open = schemes.filter((s) => s.status === "open" || s.status === "active").length;
   const totalBudget = schemes
     .filter((s) => SANCTIONED.has(s.status))
     .reduce((sum, s) => sum + s.budgetMinor, 0);
