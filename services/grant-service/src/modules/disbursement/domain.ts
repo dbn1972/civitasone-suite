@@ -39,3 +39,13 @@ export function effectiveGrantStatus(applicationStatus: string, schemeStatus: st
   if (applicationStatus === "suspended" || !isSchemeReleasable(schemeStatus)) return "suspended";
   return "active";
 }
+
+/**
+ * Human-readable release number (REL-<year>-<first 8 hex of the disbursement id>). Derived, so it is stable and
+ * unique per disbursement with no schema change; the PFMS transaction id stays separate as the bank reference.
+ */
+export function formatReleaseNo(id: string, when: Date | string | null | undefined): string {
+  const d = when ? new Date(when as string) : new Date();
+  const year = Number.isNaN(d.getTime()) ? new Date().getUTCFullYear() : d.getUTCFullYear();
+  return `REL-${year}-${id.replace(/-/g, "").slice(0, 8).toUpperCase()}`;
+}

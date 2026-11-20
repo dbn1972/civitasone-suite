@@ -175,4 +175,25 @@ describe("ApplicationDetailPage", () => {
       expect(screen.queryByText(new RegExp(REV))).not.toBeInTheDocument();
     });
   });
+
+  it("resolves Submitted By / Approved By to directory names, never a raw uuid", async () => {
+    const SUB = "11111111-1111-4111-8111-111111111111";
+    const APR = "22222222-2222-4222-8222-222222222222";
+    resolveUsersMock.mockResolvedValue(new Map([[SUB, "Asha Verma"], [APR, "Rohit Sen"]]));
+    getApplicationByIdMock.mockResolvedValue({
+      data: { ...APP, submittedBy: SUB, approvedBy: APR, status: "approved", approvedAt: "2026-08-05" },
+      source: "api",
+    });
+    render(await ApplicationDetailPage({ params: Promise.resolve({ id: "app-1" }) }));
+    expect(screen.getByText("Asha Verma")).toBeInTheDocument();
+    expect(screen.getByText("Rohit Sen")).toBeInTheDocument();
+    expect(screen.queryByText(SUB)).not.toBeInTheDocument();
+  });
+
+  it("shows a dash for an unresolvable actor uuid", async () => {
+    const SUB = "33333333-3333-4333-8333-333333333333";
+    getApplicationByIdMock.mockResolvedValue({ data: { ...APP, submittedBy: SUB }, source: "api" });
+    render(await ApplicationDetailPage({ params: Promise.resolve({ id: "app-1" }) }));
+    expect(screen.queryByText(SUB)).not.toBeInTheDocument();
+  });
 });

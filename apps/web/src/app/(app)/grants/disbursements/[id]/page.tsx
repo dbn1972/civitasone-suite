@@ -84,7 +84,7 @@ export default async function GrantDisbursementDetailPage(props: { params: Promi
         <RaiseEOfficeNote
           refType="grant_disbursement"
           refId={params.id}
-          subject={`Disbursement ${params.id}`}
+          subject={`Disbursement ${disbursement.releaseNo}`}
           dept="Grants"
           amountMinor={amountMinor}
           defaultApprovalChain="file_noting"

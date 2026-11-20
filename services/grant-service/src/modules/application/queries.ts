@@ -1,6 +1,7 @@
 import { cache } from "../../shared/infra.js";
 import { db } from "../../shared/db.js";
 import * as repo from "./repo.js";
+import * as schemeRepo from "../scheme/repo.js";
 import * as beneficiaryRepo from "../beneficiary/repo.js";
 import { isNaturalPerson, maskPersonName } from "../beneficiary/domain.js";
 import * as disbursementRepo from "../disbursement/repo.js";
@@ -171,5 +172,13 @@ export async function getGrantDetail(id: string, tenantId: string) {
     status: uc.validationStatus,
   }));
 
-  return { ...(await mapApplicationRow(row)), installments, ucs };
+  // Same DPDP masking as the list (natural-person names hidden at source; makers use the audited reveal),
+  // plus the grantor (the sanctioning scheme), which the detail read never carried.
+  const scheme = await schemeRepo.findSchemeById(row.schemeId, tenantId);
+  return {
+    ...(await mapApplicationRow(row, { maskNaturalPersons: true })),
+    ...(scheme ? { grantor: scheme.name } : {}),
+    installments,
+    ucs,
+  };
 }
