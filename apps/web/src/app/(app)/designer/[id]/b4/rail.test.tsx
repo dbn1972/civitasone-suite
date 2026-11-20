@@ -30,11 +30,15 @@ vi.mock("@/app/_components/ds/designer", () => ({
   ),
 }));
 
+vi.mock("../../_data/sandboxTestApi", () => ({
+  fetchLatestSandboxTest: vi.fn().mockResolvedValue({ status: "none" }),
+}));
+vi.mock("../../_data/designerReviewApi", () => ({ submitForApproval: vi.fn() }));
 import { computeWizardBlocks } from "../../_data/designerRail";
 import { hiddenBlocksForPattern } from "../../_data/designerConstants";
 
 describe("block rail is consistent across pages", () => {
-  it("B4 and B6 render the same rail as the shared calc for one draft", async () => {
+  it("B4, B6 and B8 render the same rail as the shared calc for one draft", async () => {
     const expected = computeWizardBlocks(def as never, hiddenBlocksForPattern("certificate"))
       .map((b) => `${b.id}:${b.status}`);
     // B5 has fee model + HoA but NO saved fee schedule: rail must not claim "complete".
@@ -42,7 +46,7 @@ describe("block rail is consistent across pages", () => {
     expect(expected).toContain("b3:complete");
 
     const rails: string[][] = [];
-    for (const mod of [await import("./page"), await import("../b6/page")]) {
+    for (const mod of [await import("./page"), await import("../b6/page"), await import("../b8/page")]) {
       const Page = mod.default as () => JSX.Element;
       const { unmount } = render(<Page />);
       await waitFor(() => expect(screen.queryByTestId("rail")?.textContent).toContain("b3:complete"));
@@ -51,5 +55,6 @@ describe("block rail is consistent across pages", () => {
     }
     expect(rails[0]).toEqual(expected);
     expect(rails[1]).toEqual(expected);
+    expect(rails[2]).toEqual(expected);
   });
 });
