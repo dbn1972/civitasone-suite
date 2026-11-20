@@ -126,8 +126,13 @@ export function registerF3_learning_Consumers(queue: Queue): void {
             // `id` is now the enrollment's own real id; the parent course id
             // comes from the URL param.
             const courseId = (params.id as string) || "";
+            // A fresh enrolment has completed nothing, so the resume point is the
+            // first lesson (null for an empty course). Without it my-learning shows
+            // no "Continue" action until a lesson is first completed.
+            const courseLessons = await repo.listLessonsByCourseTx(tx, p.tenantId, courseId);
             await repo.insertEnrollment(tx, {
                   id, tenantId: p.tenantId, courseId, employeeId: body.employeeId, status: "enrolled", progressPct: 0,
+                  resumeLessonId: nextResumeLesson(courseLessons.map((l) => l.id), []),
                 });
             // GAP-LEARNING-COURSES-DETAIL-02: HR enrolling someone else is
             // audited in the SAME transaction as the enrolment write.

@@ -7,15 +7,16 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { PageHeader, EmptyState, StatGrid, StatCard, RefreshErrorState } from "@/app/_components/ds";
 import { toHumanError } from "@/lib/messages";
-import { getCourseDetail } from "../../../../_data";
+import { getCourseDetail, getMyLearning } from "../../../../_data";
 import { getMyProfile } from "@/app/_data/loaders";
 import { MarkCompleteButton } from "./MarkCompleteButton";
 
 export default async function Page(props: { params: Promise<{ id: string; lessonId: string }> }) {
   const params = await props.params;
-  const [{ data: course, source, status }, { data: profile }] = await Promise.all([
+  const [{ data: course, source, status }, { data: profile }, { data: myEnrollments }] = await Promise.all([
     getCourseDetail(params.id),
     getMyProfile(),
+    getMyLearning(),
   ]);
 
   // SF-02: only a real 404 is "not found"; other failures are load errors.
@@ -36,6 +37,9 @@ export default async function Page(props: { params: Promise<{ id: string; lesson
 
   const moduleTitle = course.modules.find((m) => m.id === lesson.moduleId)?.title ?? "—";
   const employeeId = profile?.id ?? "";
+  // Real per-lesson completion for the current learner (not hard-coded false).
+  const alreadyComplete = (myEnrollments ?? [])
+    .find((e) => e.courseId === params.id)?.completedLessonIds?.includes(lesson.id) ?? false;
 
   // A safe external link for the contentUri — never embedded in an iframe.
   const contentLink = lesson.contentUri ? sanitiseUrl(lesson.contentUri) : null;
@@ -51,7 +55,7 @@ export default async function Page(props: { params: Promise<{ id: string; lesson
             <MarkCompleteButton
               lessonId={lesson.id}
               employeeId={employeeId}
-              alreadyComplete={false}
+              alreadyComplete={alreadyComplete}
             />
           ) : null
         }

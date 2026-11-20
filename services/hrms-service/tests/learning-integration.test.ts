@@ -15,6 +15,7 @@ import { courses, modules, lessons, enrollments, lessonProgress } from "../src/m
 import { COMMANDS } from "../src/topics.js";
 import { eq, and } from "drizzle-orm";
 import { queue } from "../src/shared/infra.js";
+import * as repo from "../src/modules/learning/repo.js";
 import { registerF3_learning_Consumers } from "../src/modules/learning/f3-consumer.js";
 
 // These routes answer 200/201 as soon as the write is QUEUED; the real database write
@@ -422,5 +423,35 @@ describe("F3 write consumer — learning", () => {
       .where(and(eq(lessonProgress.tenantId, TENANT), eq(lessonProgress.lessonId, lesson3))));
     expect(prog[0]!.status).toBe("completed");
     expect(prog[0]!.completedAt).not.toBeNull();
+  });
+});
+
+describe("enrolment resume point + my-learning completion", () => {
+  it("learning_routes__5 sets resumeLessonId to the first lesson; my-learning exposes completedLessonIds", async () => {
+    tenantStorage.enterWith({ tenantId: TENANT });
+    const course = randomUUID(), mod = randomUUID(), l1 = randomUUID(), l2 = randomUUID(), emp = randomUUID();
+    await db.transaction(async (tx) => {
+      await tx.insert(courses).values({ id: course, tenantId: TENANT, code: `RS-${uniq}`, title: "Resume", category: "general", creditHours: "1", status: "published", createdBy: HR });
+      await tx.insert(modules).values({ id: mod, tenantId: TENANT, courseId: course, title: "M", sequence: 1 });
+      await tx.insert(lessons).values([
+        { id: l2, tenantId: TENANT, moduleId: mod, courseId: course, title: "L2", sequence: 2, contentType: "pdf" },
+        { id: l1, tenantId: TENANT, moduleId: mod, courseId: course, title: "L1", sequence: 1, contentType: "video" },
+      ]);
+    });
+    const enrollId = randomUUID();
+    await queue.publish(COMMANDS.f3RouteWrite, {
+      messageId: randomUUID(), type: COMMANDS.f3RouteWrite, tenantId: TENANT, actorId: HR,
+      correlationId: randomUUID(), schemaVersion: "1.0",
+      payload: { op: "learning_routes__5", id: enrollId, tenantId: TENANT, body: { employeeId: emp }, params: { id: course }, query: {} },
+    });
+    await drainF3();
+    const enr = await db.transaction((tx) => tx.select().from(enrollments)
+      .where(and(eq(enrollments.tenantId, TENANT), eq(enrollments.id, enrollId))));
+    expect(enr[0]!.resumeLessonId).toBe(l1);
+
+    await db.transaction((tx) => tx.insert(lessonProgress).values({ tenantId: TENANT, enrollmentId: enrollId, lessonId: l1, status: "completed", completedAt: new Date() }));
+    const mine = await repo.listMyEnrollments(TENANT, emp);
+    expect(mine).toHaveLength(1);
+    expect(mine[0]!.completedLessonIds).toEqual([l1]);
   });
 });

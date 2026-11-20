@@ -73,6 +73,7 @@ export function getCourseDetail(id: string): Promise<LoaderResult<CourseDetail |
 export type MyEnrollment = {
   id: string; courseId: string; courseTitle: string; courseCode: string;
   status: string; progressPct: number; resumeLessonId?: string | null;
+  completedLessonIds?: string[];
   updatedAt?: string | null;
 };
 export function getMyLearning(employeeId?: string): Promise<LoaderResult<MyEnrollment[]>> {

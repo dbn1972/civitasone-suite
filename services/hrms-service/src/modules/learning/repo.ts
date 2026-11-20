@@ -167,7 +167,19 @@ export async function updateEnrollmentProgress(
     .returning();
   return rows[0] ?? null;
 }
-export async function listMyEnrollments(tenantId: string, employeeId: string): Promise<Array<EnrollmentRow & { courseTitle: string; courseCode: string }>> {
+export async function listMyEnrollments(tenantId: string, employeeId: string): Promise<Array<EnrollmentRow & { courseTitle: string; courseCode: string; completedLessonIds: string[] }>> {
+  const rows = await listMyEnrollmentsBase(tenantId, employeeId);
+  if (rows.length === 0) return [];
+  // Per-lesson completion for the lesson player ("Completed" vs "Mark complete").
+  const done = await scopedRead((t) => t
+    .select({ e: lessonProgress.enrollmentId, l: lessonProgress.lessonId })
+    .from(lessonProgress)
+    .where(and(eq(lessonProgress.tenantId, tenantId), inArray(lessonProgress.enrollmentId, rows.map((r) => r.id)), eq(lessonProgress.status, "completed"))));
+  const byEnrollment = new Map<string, string[]>();
+  for (const d of done) byEnrollment.set(d.e, [...(byEnrollment.get(d.e) ?? []), d.l]);
+  return rows.map((r) => ({ ...r, completedLessonIds: byEnrollment.get(r.id) ?? [] }));
+}
+async function listMyEnrollmentsBase(tenantId: string, employeeId: string): Promise<Array<EnrollmentRow & { courseTitle: string; courseCode: string }>> {
   return scopedRead((t) => t
     .select({
       id: enrollments.id, tenantId: enrollments.tenantId, courseId: enrollments.courseId,
