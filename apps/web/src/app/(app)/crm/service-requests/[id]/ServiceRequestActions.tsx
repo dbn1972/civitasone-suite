@@ -41,6 +41,7 @@ export function ServiceRequestActions({
   assignedTo = null,
   assignedToName = null,
   canAssign = false,
+  canClose = false,
 }: {
   id: string;
   status: string;
@@ -50,6 +51,8 @@ export function ServiceRequestActions({
   assignedToName?: string | null;
   /** Whether the viewer may assign (managers only; the server enforces the same rule). */
   canAssign?: boolean;
+  /** Close + Cancel are crm_admin/super_admin/tenant_admin on the server (routes.ts ADMIN_ROLES); others get a 403. */
+  canClose?: boolean;
 }) {
   const t = useTranslations("crmServiceRequestActions");
   const router = useRouter();
@@ -170,7 +173,7 @@ export function ServiceRequestActions({
           cancelled if withdrawn — a never-worked request should not be "closed".
           A mandatory, ≥10-char closing remark is required to avoid one-character
           sign-offs. */}
-      {status !== "open" && (
+      {canClose && status !== "open" && (
         <ActionButton
           label={t("close")}
           danger
@@ -186,7 +189,7 @@ export function ServiceRequestActions({
           state (service STATUS enum + closed_at handling), but nothing set it.
           Offer Cancel as a danger action with a mandatory reason; it is distinct
           from Close (request withdrawn/not actionable rather than fulfilled). */}
-      <ActionButton
+      {canClose ? <ActionButton
         label={t("cancelRequest")}
         danger
         confirmTitle={t("cancelTitle")}
@@ -195,7 +198,7 @@ export function ServiceRequestActions({
         reasonLabel={t("cancelReason")}
         minReasonLength={10}
         onConfirm={(reason) => setStatus("cancelled", reason)}
-      />
+      /> : null}
     </div>
     {noticeEl}
     </div>

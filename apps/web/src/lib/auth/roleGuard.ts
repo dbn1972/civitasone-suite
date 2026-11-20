@@ -335,7 +335,7 @@ export const CRM_VIGILANCE_ROLES = ["crm_admin", "admin", "super_admin", "platfo
 
 // CRM_PII_READ_ROLES lives in ./crmRoles (client-safe) and is re-exported here so
 // existing server-side imports keep working with a single source of truth.
-export { CRM_PII_READ_ROLES, CRM_MERGE_ROLES } from "./crmRoles";
+export { CRM_PII_READ_ROLES, CRM_MERGE_ROLES, CRM_ADMIN_WRITE_ROLES, CRM_PRICE_BOOK_ADMIN_ROLES } from "./crmRoles";
 
 /**
  * Roles permitted to bulk-export contacts (name/phone/email egress)

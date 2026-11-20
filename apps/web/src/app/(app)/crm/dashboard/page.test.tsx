@@ -30,6 +30,15 @@ describe("CRM Dashboard page (GoI redesign)", () => {
     expect(screen.getByText("Active Engagement Value")).toBeInTheDocument();
   });
 
+  // crm-service returns pipelineValue in RUPEES; the Engagements list sums PAISE strings. Both must read
+  // the same: 8,19,000 rupees is "₹8,19,000.00" here, not the 100x-too-small "₹8,190.00".
+  it("formats the rupee pipelineValue as rupees (not 100x too small)", async () => {
+    mocked.mockResolvedValue({ data: { ...mockDash, pipelineValue: 819000 }, source: "api" });
+    render(await Page());
+    expect(screen.getByText("₹8,19,000.00")).toBeInTheDocument();
+    expect(screen.queryByText("₹8,190.00")).not.toBeInTheDocument();
+  });
+
   it("renders quick links for Contacts, Engagements, and Activities", async () => {
     mocked.mockResolvedValue({ data: mockDash, source: "api" });
     render(await Page());

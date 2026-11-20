@@ -17,13 +17,13 @@ export type WindowState =
   | { accepting: false; reason: "not-open" | "before-open" | "after-close"; at?: string | null };
 
 /**
- * Whether the scheme is currently accepting applications: it must be "open"
+ * Whether the scheme is currently accepting applications: it must be "open" or "active" (grant-service creates schemes as "active")
  * AND (if a window is set) `now` must be within [openAt, closeAt]. Window edges
  * are compared as instants; a bare date is treated as midnight UTC which is the
  * same ordering the backend uses.
  */
 export function schemeWindowState(scheme: SchemeWindow, now: Date = new Date()): WindowState {
-  if (scheme.status !== "open") return { accepting: false, reason: "not-open" };
+  if (scheme.status !== "open" && scheme.status !== "active") return { accepting: false, reason: "not-open" };
   const nowMs = now.getTime();
   if (scheme.openAt) {
     const openMs = new Date(scheme.openAt).getTime();

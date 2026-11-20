@@ -28,7 +28,7 @@ describe("ServiceRequestActions", () => {
   });
 
   it("renders a terminal message and no action buttons once closed", () => {
-    render(<ServiceRequestActions id={SR_ID} status="closed" />);
+    render(<ServiceRequestActions id={SR_ID} canClose status="closed" />);
     expect(screen.getByText(/This request is closed — no further action available/)).toBeInTheDocument();
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
   });
@@ -42,7 +42,7 @@ describe("ServiceRequestActions", () => {
       new Response(JSON.stringify({ data: { id: SR_ID } }), { status: 200 }),
     );
 
-    render(<ServiceRequestActions id={SR_ID} status="open" />);
+    render(<ServiceRequestActions id={SR_ID} canClose status="open" />);
     fireEvent.click(screen.getByRole("button", { name: "Start work" }));
     await waitFor(() => expect(screen.getByText("Move to in progress?")).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: "Confirm" }));
@@ -60,7 +60,7 @@ describe("ServiceRequestActions", () => {
       new Response(JSON.stringify({ data: { id: SR_ID } }), { status: 200 }),
     );
 
-    render(<ServiceRequestActions id={SR_ID} status="in_progress" />);
+    render(<ServiceRequestActions id={SR_ID} canClose status="in_progress" />);
     fireEvent.click(screen.getByRole("button", { name: "Resolve" }));
     await waitFor(() => expect(screen.getByText("Resolve this request?")).toBeInTheDocument());
     fireEvent.change(screen.getByLabelText("Resolution"), { target: { value: "Certificate issued" } });
@@ -81,7 +81,7 @@ describe("ServiceRequestActions", () => {
       new Response(JSON.stringify({ data: { id: SR_ID } }), { status: 200 }),
     );
 
-    render(<ServiceRequestActions id={SR_ID} status="in_progress" />);
+    render(<ServiceRequestActions id={SR_ID} canClose status="in_progress" />);
     fireEvent.click(screen.getByRole("button", { name: "Mark pending" }));
     await waitFor(() => expect(screen.getByText("Mark this request pending?")).toBeInTheDocument());
     fireEvent.change(screen.getByLabelText("What is it waiting on?"), { target: { value: "Awaiting citizen documents" } });
@@ -101,7 +101,7 @@ describe("ServiceRequestActions", () => {
       new Response(JSON.stringify({ data: { id: SR_ID } }), { status: 200 }),
     );
 
-    render(<ServiceRequestActions id={SR_ID} status="in_progress" />);
+    render(<ServiceRequestActions id={SR_ID} canClose status="in_progress" />);
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
     await waitFor(() => expect(screen.getByText("Close this request?")).toBeInTheDocument());
     fireEvent.change(screen.getByLabelText("Closing remarks"), { target: { value: "Duplicate request" } });
@@ -125,7 +125,7 @@ describe("ServiceRequestActions", () => {
       new Response(JSON.stringify({ message: "request already closed" }), { status: 409 }),
     );
 
-    render(<ServiceRequestActions id={SR_ID} status="open" />);
+    render(<ServiceRequestActions id={SR_ID} canClose status="open" />);
     fireEvent.click(screen.getByRole("button", { name: "Start work" }));
     await waitFor(() => expect(screen.getByText("Move to in progress?")).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: "Confirm" }));
@@ -142,7 +142,7 @@ describe("ServiceRequestActions", () => {
       new Response(JSON.stringify({ data: { id: SR_ID } }), { status: 200 }),
     );
 
-    render(<ServiceRequestActions id={SR_ID} status="open" version={7} />);
+    render(<ServiceRequestActions id={SR_ID} canClose status="open" version={7} />);
     fireEvent.click(screen.getByRole("button", { name: "Start work" }));
     await waitFor(() => expect(screen.getByText("Move to in progress?")).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: "Confirm" }));
@@ -162,7 +162,7 @@ describe("ServiceRequestActions", () => {
       new Response(JSON.stringify({ error: { code: "VERSION_CONFLICT" } }), { status: 409 }),
     );
 
-    render(<ServiceRequestActions id={SR_ID} status="open" version={2} />);
+    render(<ServiceRequestActions id={SR_ID} canClose status="open" version={2} />);
     fireEvent.click(screen.getByRole("button", { name: "Start work" }));
     await waitFor(() => expect(screen.getByText("Move to in progress?")).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: "Confirm" }));
@@ -177,7 +177,7 @@ describe("ServiceRequestActions", () => {
       new Response(JSON.stringify({ data: { id: SR_ID } }), { status: 200 }),
     );
 
-    render(<ServiceRequestActions id={SR_ID} status="open" version={1} />);
+    render(<ServiceRequestActions id={SR_ID} canClose status="open" version={1} />);
     fireEvent.click(screen.getByRole("button", { name: "Cancel request" }));
     await waitFor(() => expect(screen.getByText("Cancel this request?")).toBeInTheDocument());
     fireEvent.change(screen.getByLabelText("Reason for cancellation"), { target: { value: "Filed in error" } });
@@ -194,7 +194,7 @@ describe("ServiceRequestActions", () => {
 
   // GAP-CRM-SERVICE-REQUESTS-DETAIL-05: a cancelled request is terminal.
   it("renders a terminal message once cancelled", () => {
-    render(<ServiceRequestActions id={SR_ID} status="cancelled" />);
+    render(<ServiceRequestActions id={SR_ID} canClose status="cancelled" />);
     expect(screen.getByText(/This request is cancelled — no further action available/)).toBeInTheDocument();
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
   });
@@ -203,7 +203,7 @@ describe("ServiceRequestActions", () => {
   // is still 'open' (never worked) — it must be started/resolved first, or
   // cancelled if withdrawn.
   it("does not offer Close while the request is still open", () => {
-    render(<ServiceRequestActions id={SR_ID} status="open" />);
+    render(<ServiceRequestActions id={SR_ID} canClose status="open" />);
     expect(screen.queryByRole("button", { name: "Close" })).not.toBeInTheDocument();
     // Start work and Cancel request remain available.
     expect(screen.getByRole("button", { name: "Start work" })).toBeInTheDocument();
@@ -213,7 +213,7 @@ describe("ServiceRequestActions", () => {
   // GAP-CRM-SERVICE-REQUESTS-DETAIL-06: a reason-bearing transition now needs a
   // meaningful note — Confirm stays disabled at a 2-char "ok" and enables at 10+.
   it("requires a ≥10-char closing remark before Close can be confirmed", async () => {
-    render(<ServiceRequestActions id={SR_ID} status="in_progress" />);
+    render(<ServiceRequestActions id={SR_ID} canClose status="in_progress" />);
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
     await waitFor(() => expect(screen.getByText("Close this request?")).toBeInTheDocument());
     const confirm = screen.getByRole("button", { name: "Confirm" });
@@ -236,7 +236,7 @@ describe("ServiceRequestActions - citizen notice outcome (DETAIL-04)", () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(JSON.stringify({ data: { id: SR_ID, ...(notification ? { notification } : {}) } }), { status: 200 }),
     );
-    render(<ServiceRequestActions id={SR_ID} status={status} version={3} />);
+    render(<ServiceRequestActions id={SR_ID} canClose status={status} version={3} />);
     fireEvent.click(screen.getByRole("button", { name: action }));
     await screen.findByLabelText(label);
     fireEvent.change(screen.getByLabelText(label), { target: { value: "Certificate issued today" } });
@@ -297,26 +297,26 @@ describe("ServiceRequestActions - assign officer (DETAIL-05)", () => {
   });
 
   it("is not offered to a viewer who may not assign", () => {
-    render(<ServiceRequestActions id={SR_ID} status="open" version={1} />);
+    render(<ServiceRequestActions id={SR_ID} canClose status="open" version={1} />);
     expect(screen.queryByRole("button", { name: /^(Re)?assign$/i })).not.toBeInTheDocument();
   });
 
   it("offers Assign when nobody owns the request, and Reassign when somebody does", () => {
-    const { unmount } = render(<ServiceRequestActions id={SR_ID} status="open" version={1} canAssign />);
+    const { unmount } = render(<ServiceRequestActions id={SR_ID} canClose status="open" version={1} canAssign />);
     expect(screen.getByRole("button", { name: "Assign" })).toBeInTheDocument();
     unmount();
-    render(<ServiceRequestActions id={SR_ID} status="open" version={1} canAssign assignedTo="u-1" assignedToName="Kavita Rao" />);
+    render(<ServiceRequestActions id={SR_ID} canClose status="open" version={1} canAssign assignedTo="u-1" assignedToName="Kavita Rao" />);
     expect(screen.getByRole("button", { name: "Reassign" })).toBeInTheDocument();
   });
 
   it("is not offered once the request is closed or cancelled", () => {
-    render(<ServiceRequestActions id={SR_ID} status="closed" version={1} canAssign />);
+    render(<ServiceRequestActions id={SR_ID} canClose status="closed" version={1} canAssign />);
     expect(screen.queryByRole("button", { name: /assign/i })).not.toBeInTheDocument();
   });
 
   it("assigns the chosen officer with the version the page read, then refreshes", async () => {
     const spy = mockApi();
-    render(<ServiceRequestActions id={SR_ID} status="open" version={4} canAssign />);
+    render(<ServiceRequestActions id={SR_ID} canClose status="open" version={4} canAssign />);
     fireEvent.click(screen.getByRole("button", { name: "Assign" }));
     const dialog = await screen.findByRole("dialog");
     // The directory is loaded and listed BY NAME.
@@ -337,7 +337,7 @@ describe("ServiceRequestActions - assign officer (DETAIL-05)", () => {
 
   it("on reassign names the current officer and does not offer them again", async () => {
     mockApi();
-    render(<ServiceRequestActions id={SR_ID} status="open" version={1} canAssign assignedTo="u-1" assignedToName="Kavita Rao" />);
+    render(<ServiceRequestActions id={SR_ID} canClose status="open" version={1} canAssign assignedTo="u-1" assignedToName="Kavita Rao" />);
     fireEvent.click(screen.getByRole("button", { name: "Reassign" }));
     const dialog = await screen.findByRole("dialog");
     expect(within(dialog).getByText(/Currently assigned to Kavita Rao/)).toBeInTheDocument();
@@ -358,7 +358,7 @@ describe("ServiceRequestActions - assign officer (DETAIL-05)", () => {
       }
       return new Response(JSON.stringify({ data: { id: SR_ID } }), { status: 200 });
     });
-    render(<ServiceRequestActions id={SR_ID} status="open" version={3} canAssign />);
+    render(<ServiceRequestActions id={SR_ID} canClose status="open" version={3} canAssign />);
     fireEvent.click(screen.getByRole("button", { name: "Assign" }));
     const dialog = await screen.findByRole("dialog");
     expect(await within(dialog).findByText("Showing the first 2 people. Search by name to find anyone else.")).toBeInTheDocument();
@@ -376,7 +376,7 @@ describe("ServiceRequestActions - assign officer (DETAIL-05)", () => {
 
   it("offers no search when the officer list is complete", async () => {
     mockApi();
-    render(<ServiceRequestActions id={SR_ID} status="open" version={1} canAssign />);
+    render(<ServiceRequestActions id={SR_ID} canClose status="open" version={1} canAssign />);
     fireEvent.click(screen.getByRole("button", { name: "Assign" }));
     const dialog = await screen.findByRole("dialog");
     await within(dialog).findByLabelText("Officer");
@@ -385,7 +385,7 @@ describe("ServiceRequestActions - assign officer (DETAIL-05)", () => {
 
   it("on a version conflict reloads the page and says someone else changed the request", async () => {
     mockApi(new Response(JSON.stringify({ code: "VERSION_CONFLICT" }), { status: 409 }));
-    render(<ServiceRequestActions id={SR_ID} status="open" version={2} canAssign />);
+    render(<ServiceRequestActions id={SR_ID} canClose status="open" version={2} canAssign />);
     fireEvent.click(screen.getByRole("button", { name: "Assign" }));
     const dialog = await screen.findByRole("dialog");
     fireEvent.change(await within(dialog).findByLabelText("Officer"), { target: { value: "u-1" } });
@@ -396,7 +396,7 @@ describe("ServiceRequestActions - assign officer (DETAIL-05)", () => {
 
   it("explains an officer the server rejects as not an active user", async () => {
     mockApi(new Response(JSON.stringify({ code: "INVALID_ASSIGNEE" }), { status: 422 }));
-    render(<ServiceRequestActions id={SR_ID} status="open" version={2} canAssign />);
+    render(<ServiceRequestActions id={SR_ID} canClose status="open" version={2} canAssign />);
     fireEvent.click(screen.getByRole("button", { name: "Assign" }));
     const dialog = await screen.findByRole("dialog");
     fireEvent.change(await within(dialog).findByLabelText("Officer"), { target: { value: "u-1" } });
@@ -407,7 +407,7 @@ describe("ServiceRequestActions - assign officer (DETAIL-05)", () => {
 
   it("shows a clerk-safe message, not the server text, for any other failure", async () => {
     mockApi(new Response(JSON.stringify({ message: "stack trace here" }), { status: 500 }));
-    render(<ServiceRequestActions id={SR_ID} status="open" version={2} canAssign />);
+    render(<ServiceRequestActions id={SR_ID} canClose status="open" version={2} canAssign />);
     fireEvent.click(screen.getByRole("button", { name: "Assign" }));
     const dialog = await screen.findByRole("dialog");
     fireEvent.change(await within(dialog).findByLabelText("Officer"), { target: { value: "u-1" } });
@@ -418,11 +418,28 @@ describe("ServiceRequestActions - assign officer (DETAIL-05)", () => {
 
   it("says the officer list is unavailable (no empty picker) when the directory cannot be loaded", async () => {
     mockApi(undefined, new Response("{}", { status: 503 }));
-    render(<ServiceRequestActions id={SR_ID} status="open" version={2} canAssign />);
+    render(<ServiceRequestActions id={SR_ID} canClose status="open" version={2} canAssign />);
     fireEvent.click(screen.getByRole("button", { name: "Assign" }));
     const dialog = await screen.findByRole("dialog");
     expect(await within(dialog).findByText(/officer list is unavailable right now/i)).toBeInTheDocument();
     expect(within(dialog).queryByLabelText("Officer")).not.toBeInTheDocument();
     expect(within(dialog).getByRole("button", { name: "Assign" })).toBeDisabled();
+  });
+});
+
+// Close + Cancel are crm_admin/super_admin/tenant_admin on the server (routes.ts ADMIN_ROLES); a plain
+// crm_user used to be shown both and then 403d. They are only offered when the page passes canClose.
+describe("ServiceRequestActions role gating (Close / Cancel)", () => {
+  it("hides Close and Cancel request from a viewer who is not an admin, keeping the other transitions", () => {
+    render(<ServiceRequestActions id={SR_ID} status="in_progress" />);
+    expect(screen.queryByRole("button", { name: "Close" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Cancel request" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Resolve" })).toBeInTheDocument();
+  });
+
+  it("offers Close and Cancel request when canClose", () => {
+    render(<ServiceRequestActions id={SR_ID} status="in_progress" canClose />);
+    expect(screen.getByRole("button", { name: "Close" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Cancel request" })).toBeInTheDocument();
   });
 });

@@ -132,6 +132,16 @@ describe("Account detail document verify gating (GAP-CRM-ACCOUNTS-DETAIL-02)", (
     mChildren.mockResolvedValue({ data: [], source: "api" });
   });
 
+  // PATCH /v1/crm/accounts/:id is crm_admin/super_admin only; others must not be offered Change owner.
+  it.each([["crm_user", false], ["tenant_admin", false], ["crm_admin", true], ["super_admin", true]] as const)(
+    "%s: account-owner card shown=%s",
+    async (role, shown) => {
+      mockRoles.mockReturnValue([role]);
+      render(await Page({ params: Promise.resolve({ id: "acc-99" }) }));
+      expect(screen.queryByText("Account Owner") !== null).toBe(shown);
+    },
+  );
+
   it("passes canVerify=false for a plain crm_user", async () => {
     mockRoles.mockReturnValue(["crm_user"]);
     render(await Page({ params: Promise.resolve({ id: "acc-99" }) }));
