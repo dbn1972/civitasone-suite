@@ -67,7 +67,7 @@ async function assertAllocationAcceptable(tenantId: string, body: { headId: stri
 }
 
 const reapprBody = z.object({
-  fy: z.string().regex(/^\d{4}-\d{2}$/),
+  fy: zFyLabel,
   fromHeadId: z.string().uuid(),
   toHeadId: z.string().uuid(),
   amountMinor: moneyMinorField,
