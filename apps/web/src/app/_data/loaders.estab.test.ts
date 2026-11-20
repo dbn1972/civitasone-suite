@@ -98,7 +98,7 @@ describe("getEstabFileById — the real file-detail payload passes the schema an
     stubFetch(dto({ status: "draft", movementHistory: [], dispatchHistory: [], attachments: [], dakNo: null, dueBy: null, noteSheets: [] }));
     const res = await getEstabFileById(FILE_ID);
     expect(res.source).toBe("api");
-    expect(res.data?.status).toBe("active"); // a draft file is still in work
+    expect(res.data?.status).toBe("draft"); // a draft file stays a draft (still open, never labelled Active)
     expect(res.data?.movementHistory).toEqual([]);
     expect(res.data?.dakNo).toBeUndefined();
   });
@@ -112,7 +112,7 @@ describe("getEstabFileById — the real file-detail payload passes the schema an
 });
 
 describe("getEstabFiles — the register keeps a closed file closed", () => {
-  it("maps closed to closed, archived to archived, and a draft or active file to active", async () => {
+  it("maps closed to closed, archived to archived, a draft to draft, and active to active", async () => {
     stubFetch({ data: [
       { id: "a", fileNo: "F/A", subject: "S", status: "closed" },
       { id: "b", fileNo: "F/B", subject: "S", status: "archived" },
@@ -120,7 +120,7 @@ describe("getEstabFiles — the register keeps a closed file closed", () => {
       { id: "d", fileNo: "F/D", subject: "S", status: "active" },
     ] });
     const byNo = new Map((await getEstabFiles()).data.map((f) => [f.fileNo, f.status]));
-    expect(Object.fromEntries(byNo)).toEqual({ "F/A": "closed", "F/B": "archived", "F/C": "active", "F/D": "active" });
+    expect(Object.fromEntries(byNo)).toEqual({ "F/A": "closed", "F/B": "archived", "F/C": "draft", "F/D": "active" });
   });
 });
 
