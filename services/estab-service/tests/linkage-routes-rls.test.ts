@@ -112,7 +112,7 @@ describe("GET /v1/estab/files/by-ref", () => {
     expect(res.json()).toEqual({ data: null });
   });
 
-  it("returns 200 with data:null when no file matches the reference (expected "no file yet" state)", async () => {
+  it("returns 200 with data:null when no file matches the reference (expected \"no file yet\" state)", async () => {
     const app = await buildApp();
     const res = await app.inject({
       method: "GET",
