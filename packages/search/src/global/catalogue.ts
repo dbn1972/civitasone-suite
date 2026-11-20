@@ -35,7 +35,7 @@ export const GLOBAL_ENTITY_TYPES = {
   "finance.bill": {
     module: "finance",
     label: "Bills",
-    readRoles: ["finance_officer", "finance_admin", "super_admin", "audit_officer", "procurement_officer"],
+    readRoles: ["finance_officer", "finance_admin", "super_admin", "audit_officer", "procurement_officer", "accounts_officer"],
     href: (id) => `/finance/expenditure/bills/${id}`,
   },
   // services/finance-service/src/modules/masters/routes.ts:17 READER_ROLES (GET /v1/finance/vendors/:id)
