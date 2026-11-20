@@ -47,6 +47,26 @@ describe("CurrentLoansCard", () => {
     });
   });
 
+  it("resolves a borrower stored as a login id (not an employee id) instead of a dash", async () => {
+    const ACTOR = "82310d88-2222-4222-8222-222222222222";
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = typeof input === "string" ? input : (input as Request).url;
+      if (url.includes("status=issued")) {
+        return new Response(JSON.stringify([{
+          id: "i2", bookId: BOOK_ID, bookTitle: "Manual", borrowerRef: ACTOR,
+          issuedAt: "2026-09-01T00:00:00Z", dueAt: "2026-09-15T00:00:00Z", status: "issued",
+        }]), { status: 200 });
+      }
+      if (url.includes("status=overdue")) return new Response(JSON.stringify([]), { status: 200 });
+      if (url.includes("/estab/officers/resolve")) {
+        return new Response(JSON.stringify({ data: [{ id: ACTOR, displayName: "S. Krishnan" }] }), { status: 200 });
+      }
+      return new Response(JSON.stringify({ data: [] }), { status: 200 });
+    });
+    render(<CurrentLoansCard bookId={BOOK_ID} />);
+    await waitFor(() => expect(screen.getByText("S. Krishnan")).toBeInTheDocument());
+  });
+
   it("shows empty state when no copies are out", async () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(async () =>
       new Response(JSON.stringify([]), { status: 200 }),

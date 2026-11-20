@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Card, DataTable, EmptyState, ErrorState } from "@/app/_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
 import { resolveEmployees } from "@/lib/entityAdapters/employee";
+import { getResolvedOfficerName, requestOfficerNames } from "../../files/[id]/OfficerName";
 import { formatIndianDate } from "@/lib/formatters";
 import { toHumanError } from "@/lib/messages";
 import type { LibraryIssueSummary } from "@civitasone/types";
@@ -44,6 +45,15 @@ export function CurrentLoansCard({ bookId }: { bookId: string }) {
       if (ids.length > 0) {
         const opts = await resolveEmployees(ids);
         nameMap = new Map(opts.map((o) => [o.id, o.label]));
+        // The stored borrower can be a login (actor) id, not an employee id: resolve the rest by officer id.
+        const missing = ids.filter((id) => !nameMap.has(id));
+        if (missing.length > 0) {
+          await requestOfficerNames(missing);
+          for (const id of missing) {
+            const n = getResolvedOfficerName(id);
+            if (n) nameMap.set(id, n);
+          }
+        }
       }
       setRows(out.map((i) => ({
         id: i.id,

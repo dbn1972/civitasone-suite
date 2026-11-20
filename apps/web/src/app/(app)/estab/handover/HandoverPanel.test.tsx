@@ -83,6 +83,33 @@ describe("HandoverPanel — charge handover safety & truthful states", () => {
   });
 });
 
+describe("HandoverPanel — history names", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    __resetOfficerMapsCacheForTest();
+  });
+
+  it("resolves a history From id the roster does not hold (a login id) instead of Unknown employee", async () => {
+    const FROM = "82310d88-1111-4111-8111-111111111111";
+    vi.spyOn(globalThis, "fetch").mockImplementation((input: RequestInfo | URL) => {
+      const url = typeof input === "string" ? input : input.toString();
+      if (url.includes("/estab/operators")) return Promise.resolve(jsonResponse({ data: OPS }));
+      if (url.includes("/estab/officers/resolve")) {
+        return Promise.resolve(jsonResponse({ data: [{ id: FROM, displayName: "S. Krishnan" }] }));
+      }
+      if (url.includes("/estab/handovers")) {
+        return Promise.resolve(jsonResponse({ data: [{
+          id: "h1", fromOfficerId: FROM, toOfficerId: OPS[0].employeeId, reason: "transfer",
+          remarks: null, fileCount: 2, status: "completed", createdAt: "2026-10-01T00:00:00Z",
+        }] }));
+      }
+      return Promise.resolve(jsonResponse({ data: [] }));
+    });
+    render(<HandoverPanel />);
+    await waitFor(() => expect(screen.getAllByText(/S\. Krishnan/).length).toBeGreaterThan(0));
+  });
+});
+
 describe("HandoverPanel — HANDOVER-04/05/06", () => {
   beforeEach(() => {
     vi.restoreAllMocks();

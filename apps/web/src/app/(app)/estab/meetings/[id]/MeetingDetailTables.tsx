@@ -2,6 +2,9 @@
 
 import { DataTable, StatusPill } from "../../../../_components/ds";
 import { formatIndianDate } from "@/lib/formatters";
+import { OfficerName } from "../../files/[id]/OfficerName";
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 type ActionPointRow = {
   id: string;
@@ -22,7 +25,12 @@ export function ActionPointsTable({ rows }: { rows: ActionPointRow[] }) {
     <DataTable<ActionPointRow>
       columns={[
         { key: "description", label: "Action" },
-        { key: "assignedTo", label: "Owner" },
+        {
+          key: "assignedTo",
+          label: "Owner",
+          // The stored owner is an officer id; resolve it to a name, never print the raw id.
+          render: (r) => (UUID_RE.test(r.assignedTo) ? <OfficerName id={r.assignedTo} /> : <>{r.assignedTo || "—"}</>),
+        },
         { key: "dueDate", label: "Due", render: (r) => <>{r.dueDate ? formatIndianDate(r.dueDate) : "—"}</> },
         {
           key: "status",

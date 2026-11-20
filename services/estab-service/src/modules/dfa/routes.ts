@@ -14,7 +14,8 @@ import { isAccessAllowed } from "../operators/eligibility.js";
 
 const DRAFTER_ROLES = ["estab_officer", "estab_admin", "super_admin"];
 const APPROVER_ROLES = ["estab_admin", "super_admin", "estab_deputy_secretary"];
-const READER_ROLES = [...DRAFTER_ROLES, "audit_officer"];
+// Everyone who can act on a DFA must be able to load the list that holds it.
+const READER_ROLES = [...new Set([...DRAFTER_ROLES, ...APPROVER_ROLES, "audit_officer"])];
 
 // UAT W8-A: a malformed :id reached the uuid column and 500ed (22P02); it is a 400 now.
 const idParam = z.object({ id: z.string().uuid() });

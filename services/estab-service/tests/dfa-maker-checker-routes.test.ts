@@ -114,4 +114,15 @@ describe("DFA approve/sign maker-checker at the route (GAP-ESTAB-DFA-02)", () =>
     expect(res.statusCode).toBe(200);
     expect(res.json().data[0].createdBy).toBe(DRAFTER);
   });
+
+  it("lets a deputy secretary (an approver) load the DFA list they act on", async () => {
+    await seed("pending_approval");
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "GET", url: "/v1/estab/dfa",
+      headers: auth(OTHER_APPROVER, ["estab_deputy_secretary"]),
+    });
+    await app.close();
+    expect(res.statusCode).toBe(200);
+  });
 });

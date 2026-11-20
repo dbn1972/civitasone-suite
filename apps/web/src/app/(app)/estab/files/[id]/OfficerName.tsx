@@ -112,6 +112,11 @@ export function requestOfficerNames(ids: readonly string[]): Promise<void> {
   });
 }
 
+/** A name already resolved by the batched officer lookup, if any. */
+export function getResolvedOfficerName(id: string): string | undefined {
+  return resolvedNames.get(id);
+}
+
 /**
  * Test-only: reset the module-level officer-maps cache so a test can control
  * exactly which HRMS/operator payload resolveLabel sees. Not used in app code.

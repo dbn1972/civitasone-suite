@@ -67,8 +67,8 @@ describe("mapEstabFileSummaries — register status", () => {
     expect(statusOf("pending")).toBe("pending");
   });
 
-  it("presents draft and active (and anything unknown) as active — a file in work", () => {
-    expect(statusOf("draft")).toBe("active");
+  it("keeps a draft as draft, and presents active (and anything unknown) as active", () => {
+    expect(statusOf("draft")).toBe("draft");
     expect(statusOf("active")).toBe("active");
     expect(statusOf("something-new")).toBe("active");
   });
