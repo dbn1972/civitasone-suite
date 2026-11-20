@@ -28,7 +28,7 @@ export type GrantSchemeSummary = {
    * being silently rewritten to "draft" — a malformed scheme must not be
    * mislabelled as a real draft.
    */
-  status: "draft" | "open" | "closed" | "completed" | "cancelled" | "unknown";
+  status: "draft" | "open" | "active" | "closed" | "suspended" | "completed" | "cancelled" | "unknown";
   /** ISO timestamps, may be absent */
   openAt?: string | null;
   closeAt?: string | null;
@@ -128,7 +128,7 @@ function toNumberOrNull(v: unknown): number | null {
 // Mappers
 // ──────────────────────────────────────────────────────────────────────────────
 
-const SCHEME_STATUSES = ["draft", "open", "closed", "completed", "cancelled"] as const;
+const SCHEME_STATUSES = ["draft", "open", "active", "closed", "suspended", "completed", "cancelled"] as const;
 
 /**
  * Parse the raw schemes payload into typed rows, counting how many rows had to
