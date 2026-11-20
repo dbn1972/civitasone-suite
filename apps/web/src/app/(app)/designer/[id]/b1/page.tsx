@@ -8,9 +8,10 @@ import { WizardShell, type DesignerBlock } from "@/app/_components/ds/designer";
 import { CatalogueB1Form, type CatalogueB1Values } from "../../_components/CatalogueB1Form";
 import { ApplicantTypesForm, type ApplicantTypesValues } from "../../_components/ApplicantTypesForm";
 import { GovernanceLinkageBuilder } from "../../_components/GovernanceLinkageBuilder";
-import { fetchServiceDefinition } from "../../_data/designerApi";
+import { fetchServiceDefinition, type ServiceDefinitionDto } from "../../_data/designerApi";
+import { computeWizardBlocks } from "../../_data/designerRail";
 import { usePhase3Config } from "../../_data/usePhase3Config";
-import { DEFAULT_BLOCKS, hiddenBlocksForPattern, SERVICE_PATTERN_OPTIONS } from "../../_data/designerConstants";
+import { hiddenBlocksForPattern, SERVICE_PATTERN_OPTIONS } from "../../_data/designerConstants";
 
 export default function DesignerB1Page() {
   const params = useParams<{ id: string }>();
@@ -30,12 +31,15 @@ export default function DesignerB1Page() {
   const [applicantInitial, setApplicantInitial] = useState<ApplicantTypesValues | null>(null);
   const [meta, setMeta] = useState({ name: queryName || "Untitled service", pattern: queryPattern, version: 1, status: "draft" });
 
+  const [railDef, setRailDef] = useState<ServiceDefinitionDto | null>(null);
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
         const def = await fetchServiceDefinition(params.id);
         if (cancelled) return;
+        setRailDef(def);
         const pattern = def.servicePattern ?? queryPattern;
         setMeta({
           name: def.name,
@@ -71,17 +75,7 @@ export default function DesignerB1Page() {
   const patternMeta = SERVICE_PATTERN_OPTIONS.find((p) => p.id === meta.pattern);
   const hidden = hiddenBlocksForPattern(meta.pattern);
 
-  const blocks: DesignerBlock[] = useMemo(
-    () =>
-      DEFAULT_BLOCKS.map((b) => ({
-        id: b.id,
-        shortLabel: b.shortLabel,
-        label: b.label,
-        hidden: hidden.has(b.id),
-        status: b.id === "b1" ? "in-progress" : "empty",
-      })),
-    [hidden],
-  );
+  const blocks: DesignerBlock[] = useMemo(() => computeWizardBlocks(railDef, hidden), [railDef, hidden]);
 
   if (loading) {
     return <p style={{ color: "var(--mut)" }}>Loading draft…</p>;

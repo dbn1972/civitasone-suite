@@ -7,8 +7,9 @@ import { HelpTip } from "@/app/_components/ds";
 import { WizardShell, type DesignerBlock } from "@/app/_components/ds/designer";
 import type { EngineBindingUi } from "@/app/_components/ds/designer/engineBindingTypes";
 import { EngineBindingBuilder } from "../../_components/EngineBindingBuilder";
-import { fetchServiceDefinition } from "../../_data/designerApi";
-import { DEFAULT_BLOCKS, hiddenBlocksForPattern, SERVICE_PATTERN_OPTIONS } from "../../_data/designerConstants";
+import { fetchServiceDefinition, type ServiceDefinitionDto } from "../../_data/designerApi";
+import { computeWizardBlocks } from "../../_data/designerRail";
+import { hiddenBlocksForPattern, SERVICE_PATTERN_OPTIONS } from "../../_data/designerConstants";
 import { normalizeBindingsFromApi } from "../../_data/engineBindingApi";
 import { adjacentBlocks } from "../../_data/designerNavigation";
 
@@ -32,12 +33,15 @@ export default function DesignerEnginesPage() {
     status: "draft",
   });
 
+  const [railDef, setRailDef] = useState<ServiceDefinitionDto | null>(null);
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
         const def = await fetchServiceDefinition(params.id);
         if (cancelled) return;
+        setRailDef(def);
         setMeta({
           name: def.name,
           pattern: def.servicePattern ?? "certificate",
@@ -60,20 +64,7 @@ export default function DesignerEnginesPage() {
   const { prev, next } = adjacentBlocks(meta.pattern, "b5");
   const defaultBlock = meta.pattern === "collection" ? "fee" as const : "fee" as const;
 
-  const blocks: DesignerBlock[] = useMemo(
-    () =>
-      DEFAULT_BLOCKS.map((b) => ({
-        id: b.id,
-        shortLabel: b.shortLabel,
-        label: b.label,
-        hidden: hidden.has(b.id),
-        status:
-          b.id === "b5" ? "in-progress"
-            : b.id === "b1" ? "complete"
-              : "empty",
-      })),
-    [hidden],
-  );
+  const blocks: DesignerBlock[] = useMemo(() => computeWizardBlocks(railDef, hidden), [railDef, hidden]);
 
   if (loading) {
     return <p style={{ color: "var(--mut)" }}>Loading engine bindings…</p>;

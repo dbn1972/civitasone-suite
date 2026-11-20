@@ -8,7 +8,8 @@ import { WizardShell, type DesignerBlock } from "@/app/_components/ds/designer";
 import type { FormFieldDefinition } from "@/app/_components/ds/designer/formTypes";
 import type { IssuanceDesignState } from "@/app/_components/ds/designer/issuanceTypes";
 import { OutputIssuanceBuilder } from "../../_components/OutputIssuanceBuilder";
-import { fetchServiceDefinition, updateServiceDefinition } from "../../_data/designerApi";
+import { fetchServiceDefinition, updateServiceDefinition, type ServiceDefinitionDto } from "../../_data/designerApi";
+import { computeWizardBlocks } from "../../_data/designerRail";
 import { useDesignerT } from "@/lib/designerText";
 import { isSignatoryBlocking } from "../../_data/issuanceBuilderModel";
 import { adjacentBlocks } from "../../_data/designerNavigation";
@@ -20,7 +21,7 @@ import {
   renewalPolicyFromDesign,
   withStoredRenewalPolicy,
 } from "../../_data/issuanceBuilderApi";
-import { DEFAULT_BLOCKS, hiddenBlocksForPattern, SERVICE_PATTERN_OPTIONS } from "../../_data/designerConstants";
+import { hiddenBlocksForPattern, SERVICE_PATTERN_OPTIONS } from "../../_data/designerConstants";
 
 export default function DesignerB7Page() {
   const params = useParams<{ id: string }>();
@@ -45,12 +46,15 @@ export default function DesignerB7Page() {
     serviceKey: "",
   });
 
+  const [railDef, setRailDef] = useState<ServiceDefinitionDto | null>(null);
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
         const def = await fetchServiceDefinition(params.id);
         if (cancelled) return;
+        setRailDef(def);
         const pattern = def.servicePattern ?? "certificate";
         outputsRef.current = def.outputs ?? [];
         setOfficeCount(def.offeringOfficeIds?.length ?? 0);
@@ -93,20 +97,7 @@ export default function DesignerB7Page() {
   // D4c #7: a signatory is statute-related, so it stops Next (a receipt needs none).
   const signatoryBlocked = isSignatoryBlocking(liveDesign);
 
-  const blocks: DesignerBlock[] = useMemo(
-    () =>
-      DEFAULT_BLOCKS.map((b) => ({
-        id: b.id,
-        shortLabel: b.shortLabel,
-        label: b.label,
-        hidden: hidden.has(b.id),
-        status:
-          b.id === "b7" ? "in-progress"
-            : b.id === "b1" || b.id === "b2" ? "complete"
-              : "empty",
-      })),
-    [hidden],
-  );
+  const blocks: DesignerBlock[] = useMemo(() => computeWizardBlocks(railDef, hidden), [railDef, hidden]);
 
   const onDesignPersisted = async (design: IssuanceDesignState) => {
     // One PATCH carries the output design and the runtime policy derived from it.

@@ -6,9 +6,10 @@ import { useEffect, useMemo, useState } from "react";
 import { HelpTip } from "@/app/_components/ds";
 import { WizardShell, type DesignerBlock, type FormDesignState } from "@/app/_components/ds/designer";
 import { FormBuilder } from "../../_components/FormBuilder";
-import { fetchServiceDefinition, updateServiceDefinition } from "../../_data/designerApi";
+import { fetchServiceDefinition, updateServiceDefinition, type ServiceDefinitionDto } from "../../_data/designerApi";
+import { computeWizardBlocks } from "../../_data/designerRail";
 import { emptyFormDesign, loadFormDesign } from "../../_data/formBuilderApi";
-import { DEFAULT_BLOCKS, hiddenBlocksForPattern, SERVICE_PATTERN_OPTIONS } from "../../_data/designerConstants";
+import { hiddenBlocksForPattern, SERVICE_PATTERN_OPTIONS } from "../../_data/designerConstants";
 
 export default function DesignerB2Page() {
   const params = useParams<{ id: string }>();
@@ -20,12 +21,15 @@ export default function DesignerB2Page() {
   const [initialDesign, setInitialDesign] = useState<FormDesignState | null>(null);
   const [meta, setMeta] = useState({ name: "Untitled service", pattern: "certificate", version: 1, status: "draft", serviceKey: "" });
 
+  const [railDef, setRailDef] = useState<ServiceDefinitionDto | null>(null);
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
         const def = await fetchServiceDefinition(params.id);
         if (cancelled) return;
+        setRailDef(def);
         setMeta({
           name: def.name,
           pattern: def.servicePattern ?? "certificate",
@@ -53,17 +57,7 @@ export default function DesignerB2Page() {
   const patternMeta = SERVICE_PATTERN_OPTIONS.find((p) => p.id === meta.pattern);
   const hidden = hiddenBlocksForPattern(meta.pattern);
 
-  const blocks: DesignerBlock[] = useMemo(
-    () =>
-      DEFAULT_BLOCKS.map((b) => ({
-        id: b.id,
-        shortLabel: b.shortLabel,
-        label: b.label,
-        hidden: hidden.has(b.id),
-        status: b.id === "b2" ? "in-progress" : b.id === "b1" ? "complete" : "empty",
-      })),
-    [hidden],
-  );
+  const blocks: DesignerBlock[] = useMemo(() => computeWizardBlocks(railDef, hidden), [railDef, hidden]);
 
   const onDesignPersisted = async (design: FormDesignState) => {
     if (!design.layoutId) return;

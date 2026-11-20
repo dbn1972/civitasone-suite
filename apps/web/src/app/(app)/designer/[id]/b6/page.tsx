@@ -7,12 +7,13 @@ import { HelpTip } from "@/app/_components/ds";
 import { WizardShell, type DesignerBlock } from "@/app/_components/ds/designer";
 import type { DocumentsDesignState } from "@/app/_components/ds/designer/documentTypes";
 import { DocumentsBuilder, documentsUiToApi } from "../../_components/DocumentsBuilder";
-import { fetchServiceDefinition, updateServiceDefinition } from "../../_data/designerApi";
+import { fetchServiceDefinition, updateServiceDefinition, type ServiceDefinitionDto } from "../../_data/designerApi";
+import { computeWizardBlocks } from "../../_data/designerRail";
 import { adjacentBlocks } from "../../_data/designerNavigation";
 import { useDesignerT } from "@/lib/designerText";
 import { loadDocumentsDesign } from "../../_data/documentBuilderApi";
 import { documentsLocaleCompleteness, resolveDocumentLocales } from "../../_data/documentBuilderModel";
-import { DEFAULT_BLOCKS, hiddenBlocksForPattern, SERVICE_PATTERN_OPTIONS } from "../../_data/designerConstants";
+import { hiddenBlocksForPattern, SERVICE_PATTERN_OPTIONS } from "../../_data/designerConstants";
 import { emptyWorkflowDesign, loadWorkflowDesign } from "../../_data/workflowBuilderApi";
 
 export default function DesignerB6Page() {
@@ -34,12 +35,15 @@ export default function DesignerB6Page() {
     status: "draft",
   });
 
+  const [railDef, setRailDef] = useState<ServiceDefinitionDto | null>(null);
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
         const def = await fetchServiceDefinition(params.id);
         if (cancelled) return;
+        setRailDef(def);
         setMeta({
           name: def.name,
           pattern: def.servicePattern ?? "certificate",
@@ -70,20 +74,7 @@ export default function DesignerB6Page() {
     [liveDesign.documents, locales],
   );
 
-  const blocks: DesignerBlock[] = useMemo(
-    () =>
-      DEFAULT_BLOCKS.map((b) => ({
-        id: b.id,
-        shortLabel: b.shortLabel,
-        label: b.label,
-        hidden: hidden.has(b.id),
-        status:
-          b.id === "b6" ? "in-progress"
-            : b.id === "b1" || b.id === "b2" ? "complete"
-              : "empty",
-      })),
-    [hidden],
-  );
+  const blocks: DesignerBlock[] = useMemo(() => computeWizardBlocks(railDef, hidden), [railDef, hidden]);
 
   const onDesignPersisted = async (design: DocumentsDesignState) => {
     try {

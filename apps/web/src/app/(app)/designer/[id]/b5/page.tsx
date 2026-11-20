@@ -8,9 +8,10 @@ import { Button, HelpTip } from "@/app/_components/ds";
 import { WizardShell, type DesignerBlock } from "@/app/_components/ds/designer";
 import type { FormFieldDefinition } from "@/app/_components/ds/designer/formTypes";
 import { OfficeOverridesBuilder } from "../../_components/OfficeOverridesBuilder";
-import { fetchServiceDefinition, updateServiceDefinition } from "../../_data/designerApi";
+import { fetchServiceDefinition, updateServiceDefinition, type ServiceDefinitionDto } from "../../_data/designerApi";
+import { computeWizardBlocks } from "../../_data/designerRail";
 import { usePhase3Config } from "../../_data/usePhase3Config";
-import { DEFAULT_BLOCKS, hiddenBlocksForPattern, SERVICE_PATTERN_OPTIONS } from "../../_data/designerConstants";
+import { hiddenBlocksForPattern, SERVICE_PATTERN_OPTIONS } from "../../_data/designerConstants";
 import { loadFormDesign } from "../../_data/formBuilderApi";
 import { adjacentBlocks } from "../../_data/designerNavigation";
 import { emptyFeeDesign, loadFeeDesign } from "../../_data/feeBuilderApi";
@@ -53,12 +54,15 @@ export default function DesignerB5Page() {
   // becomes selectable and links to /designer/[id]/engines.
   const [engineAvailable, setEngineAvailable] = useState(false);
 
+  const [railDef, setRailDef] = useState<ServiceDefinitionDto | null>(null);
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
         const def = await fetchServiceDefinition(params.id);
         if (cancelled) return;
+        setRailDef(def);
         const sid = def.serviceId ?? def.id;
         setMeta({
           name: def.name,
@@ -105,23 +109,7 @@ export default function DesignerB5Page() {
   const hoaBlocked = isHoaBlocking(liveDesign) || feeBlocked;
   const hoaGate = hoaBlockMessage(liveDesign) ?? (feeBlocked ? t("feeBlockMessage") : null);
 
-  const blocks: DesignerBlock[] = useMemo(
-    () =>
-      DEFAULT_BLOCKS.map((b) => ({
-        id: b.id,
-        shortLabel: b.shortLabel,
-        label: b.label,
-        hidden: hidden.has(b.id),
-        status:
-          b.id === "b5"
-            ? (liveDesign.feeModel && liveDesign.hoaCode ? "complete" : liveDesign.feeModel ? "in-progress" : "empty")
-            : b.id === "b1" || b.id === "b2" ? "complete"
-              : b.id === "b3" && !hidden.has("b3") ? "complete"
-                : b.id === "b4" && !hidden.has("b4") ? "complete"
-                  : "empty",
-      })),
-    [hidden, liveDesign.feeModel, liveDesign.hoaCode],
-  );
+  const blocks: DesignerBlock[] = useMemo(() => computeWizardBlocks(railDef, hidden), [railDef, hidden]);
 
   const onDesignPersisted = async (design: FeeDesignState) => {
     try {

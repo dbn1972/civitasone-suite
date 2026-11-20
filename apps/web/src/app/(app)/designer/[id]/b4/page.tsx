@@ -6,8 +6,9 @@ import { useEffect, useMemo, useState } from "react";
 import { HelpTip } from "@/app/_components/ds";
 import { WizardShell, type DesignerBlock } from "@/app/_components/ds/designer";
 import { ApprovalChainBuilder } from "../../_components/ApprovalChainBuilder";
-import { fetchServiceDefinition, updateServiceDefinition } from "../../_data/designerApi";
-import { DEFAULT_BLOCKS, hiddenBlocksForPattern, SERVICE_PATTERN_OPTIONS } from "../../_data/designerConstants";
+import { fetchServiceDefinition, updateServiceDefinition, type ServiceDefinitionDto } from "../../_data/designerApi";
+import { computeWizardBlocks } from "../../_data/designerRail";
+import { hiddenBlocksForPattern, SERVICE_PATTERN_OPTIONS } from "../../_data/designerConstants";
 import { emptyWorkflowDesign, loadWorkflowDesign } from "../../_data/workflowBuilderApi";
 import { lanesToBindings, type WorkflowDesignState } from "../../_data/workflowConstants";
 
@@ -27,12 +28,15 @@ export default function DesignerB4Page() {
     workflowDefinitionId: null as string | null,
   });
 
+  const [railDef, setRailDef] = useState<ServiceDefinitionDto | null>(null);
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
         const def = await fetchServiceDefinition(params.id);
         if (cancelled) return;
+        setRailDef(def);
         setMeta({
           name: def.name,
           pattern: def.servicePattern ?? "certificate",
@@ -56,21 +60,7 @@ export default function DesignerB4Page() {
   const hidden = hiddenBlocksForPattern(meta.pattern);
   const prevBlock = hidden.has("b3") ? "b2" : "b3";
 
-  const blocks: DesignerBlock[] = useMemo(
-    () =>
-      DEFAULT_BLOCKS.map((b) => ({
-        id: b.id,
-        shortLabel: b.shortLabel,
-        label: b.label,
-        hidden: hidden.has(b.id),
-        status:
-          b.id === "b4" ? "in-progress"
-            : b.id === "b1" || b.id === "b2" ? "complete"
-              : b.id === "b3" && !hidden.has("b3") ? "complete"
-                : "empty",
-      })),
-    [hidden],
-  );
+  const blocks: DesignerBlock[] = useMemo(() => computeWizardBlocks(railDef, hidden), [railDef, hidden]);
 
   const onDesignPersisted = async (design: WorkflowDesignState) => {
     try {

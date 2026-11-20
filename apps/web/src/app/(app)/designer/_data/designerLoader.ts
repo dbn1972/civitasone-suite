@@ -28,6 +28,8 @@ export interface DesignerServiceRow {
    * Used to flag stale/failed drafts in "Needs Attention".
    */
   latestTestStatus?: "pass" | "fail" | "pending" | null;
+  /** Set when a draft was submitted and is awaiting a second approver (maker-checker). */
+  submittedBy?: string | null;
 }
 
 export interface DomainPackRow {
@@ -54,6 +56,7 @@ export async function getDesignerServices(): Promise<LoaderResult<DesignerServic
         version: typeof r.version === "number" ? r.version : 1,
         status: str(r.status) || "draft",
         updatedAt: str(r.updatedAt),
+        submittedBy: typeof r.submittedBy === "string" && r.submittedBy ? r.submittedBy : null,
         latestTestStatus: typeof r.latestTestStatus === "string" && ["pass", "fail", "pending"].includes(r.latestTestStatus)
           ? (r.latestTestStatus as "pass" | "fail" | "pending")
           : null,
