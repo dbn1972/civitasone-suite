@@ -220,7 +220,31 @@ export async function quotationRoutes(app: FastifyInstance): Promise<void> {
         FROM crm.quotations
         WHERE tenant_id = ${ctx.tenantId} ${dealFilter} ${statusFilter}
       `) as unknown as Array<{ total: number }>;
-      return { rows: data, total: counted[0]?.total ?? 0 };
+      // QP display: resolve the linked opportunity (deal) id to its name so the list
+      // shows a human label, never a raw uuid (GAP-CRM display). Unresolved links are
+      // left without a name and the UI falls back to a dash rather than the id.
+      const dealIds = [
+        ...new Set(
+          data
+            .map((r) => r["dealId"])
+            .filter((x): x is string => typeof x === "string" && x.length > 0),
+        ),
+      ];
+      const dealNameById = new Map<string, string>();
+      if (dealIds.length > 0) {
+        const nameRows = (await tx.execute(sql`
+          SELECT id, name FROM crm.deals
+          WHERE tenant_id = ${ctx.tenantId}
+            AND id IN (${sql.join(dealIds.map((d) => sql`${d}`), sql`, `)})
+        `)) as unknown as Array<{ id: string; name: string }>;
+        for (const n of nameRows) if (n.name) dealNameById.set(n.id, n.name);
+      }
+      const enriched = data.map((r) => {
+        const d = r["dealId"];
+        const name = typeof d === "string" ? dealNameById.get(d) : undefined;
+        return name ? { ...r, dealName: name } : r;
+      });
+      return { rows: enriched, total: counted[0]?.total ?? 0 };
     });
 
     return reply.send(listEnvelope(rows, w, total));

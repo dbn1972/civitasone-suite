@@ -12,6 +12,7 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import { db } from "../../shared/db.js";
 import { enqueue } from "../../shared/outbox.js";
 import * as dedupRepo from "./dedup-repo.js";
+import { resolveUserNames } from "../../shared/user-directory.js";
 import { rankDuplicates } from "./dedup-domain.js";
 import { toReviewPair } from "./dedup-candidates-domain.js";
 
@@ -97,7 +98,11 @@ export async function dedupRoutes(app: FastifyInstance): Promise<void> {
     // GAP-CRM-DEDUP-RULES-02: surface the list version as an ETag (for If-Match)
     // and in the body meta, plus who/when last changed it for the editor.
     void reply.header("ETag", meta.version);
-    return reply.send({ data: rules, version: meta.version, meta });
+    // GAP-CRM display: resolve the "last changed by" actor id to a display name so the
+    // editor shows a person, never a raw uuid (an unresolved id simply has no name).
+    const names = await resolveUserNames(ctx.tenantId, [meta.updatedBy]);
+    const updatedByName = meta.updatedBy ? names.get(meta.updatedBy) : undefined;
+    return reply.send({ data: rules, version: meta.version, meta: { ...meta, ...(updatedByName ? { updatedByName } : {}) } });
   });
 
   app.put("/v1/crm/dedup-rules", async (req, reply) => {

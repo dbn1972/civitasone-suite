@@ -243,8 +243,32 @@ export async function searchDirectoryUsers(tenantId: string, q: string): Promise
 // ── 3. Picker roles (fail-closed, active only) ────────────────────────────────
 
 /**
+ * Internal verification / UAT-provisioning roles that must never appear in an admin's
+ * recipient or role picker. policy-service's `roles` table carries no system/assignable
+ * flag (each row is only name + status), and genuine catalogue roles follow the
+ * municipal / keycloak naming, so these artefacts are excluded by the conventions they
+ * are created under rather than by their exact ids:
+ *   - a `UATTEST-` provisioning prefix,
+ *   - a standalone `test` token in the role name (e.g. `*_test_role`),
+ *   - a "temp role" / "deep verify" marker in the description.
+ * The proper long-term fix is an explicit assignable/system attribute on the role model;
+ * until then this keeps test roles out of every picker and the recipient validator that
+ * share `listDirectoryRoles`.
+ */
+const INTERNAL_ROLE_NAME_RE = /^uattest[-_]|(^|[-_])test([-_]|$)/i;
+const INTERNAL_ROLE_DESC_RE = /\b(temp role|deep[ _-]?verify|test role)\b/i;
+export function isInternalRoleName(name: unknown, description?: unknown): boolean {
+  const n = typeof name === "string" ? name.trim() : "";
+  if (n && INTERNAL_ROLE_NAME_RE.test(n)) return true;
+  const d = typeof description === "string" ? description : "";
+  if (d && INTERNAL_ROLE_DESC_RE.test(d)) return true;
+  return false;
+}
+
+/**
  * The tenant's active roles, from policy-service (the source of truth for role
  * definitions), sorted by label. `undefined` when policy-service cannot be read.
+ * Internal test / UAT-provisioning roles (see `isInternalRoleName`) are excluded.
  */
 export async function listDirectoryRoles(tenantId: string, opts: ReadOptions = {}): Promise<DirectoryRole[] | undefined> {
   const hit = roleCache.get(tenantId);
@@ -261,6 +285,7 @@ export async function listDirectoryRoles(tenantId: string, opts: ReadOptions = {
     for (const r of rows) {
       if (typeof r["name"] !== "string" || !r["name"].trim()) continue;
       if (typeof r["status"] === "string" && r["status"] !== "active") continue;
+      if (isInternalRoleName(r["name"], r["description"])) continue;
       roles.push({ key: r["name"].trim(), label: r["name"].trim() });
     }
     roles.sort((a, b) => a.label.localeCompare(b.label, "en"));

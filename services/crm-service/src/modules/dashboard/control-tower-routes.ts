@@ -32,7 +32,7 @@ export async function controlTowerRoutes(app: FastifyInstance): Promise<void> {
 
     const { regions, overdue, dormant, aged } = await scopedRead(async (tx) => {
       const regions = (await tx.execute(sql`
-        SELECT min(btrim(COALESCE(c.region, c.city, 'unknown'))) AS region,
+        SELECT min(btrim(COALESCE(c.region, c.city, 'Unspecified'))) AS region,
                count(d.id)::int AS "dealCount",
                COALESCE(sum(d.value_minor), 0)::text AS "pipelineMinor"
         FROM crm.deals d
@@ -42,7 +42,7 @@ export async function controlTowerRoutes(app: FastifyInstance): Promise<void> {
         -- GAP-CRM-CONTROL-TOWER-02: region is free text, so group on a
         -- trimmed, case-folded key to stop "South" / " south " splitting into
         -- two rows; display the first spelling via min() of the trimmed value.
-        GROUP BY lower(btrim(COALESCE(c.region, c.city, 'unknown')))
+        GROUP BY lower(btrim(COALESCE(c.region, c.city, 'Unspecified')))
         ORDER BY sum(d.value_minor) DESC NULLS LAST
         LIMIT 50
       `)) as unknown as ControlTowerRegion[];

@@ -494,6 +494,8 @@ export interface Quotation {
   id?: string;
   accountId?: string;
   opportunityId?: string;
+  /** Display name of the linked opportunity (deal), resolved by the service (never a bare id). */
+  opportunityName?: string;
   /**
    * Business reference shared by every version of the same quotation
    * (`quote_ref` server-side). Versions are grouped by it, so it must survive a
@@ -552,6 +554,7 @@ export function normaliseQuotation(raw: unknown): Quotation | null {
     id,
     accountId: str(r.accountId) || undefined,
     opportunityId: str(r.opportunityId ?? r.dealId) || undefined,
+    opportunityName: str(r.dealName ?? r.opportunityName) || undefined,
     quoteRef: str(r.quoteRef) || undefined,
     // The API field names are templateRef / versionNumber. Reading `template`
     // and `version` meant the template always rendered empty and every version

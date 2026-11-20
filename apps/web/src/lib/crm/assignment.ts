@@ -82,6 +82,8 @@ export interface AssignmentRule {
   ordinal: number;
   enabled: boolean;
   fallbackOwnerId: string;
+  /** Display name of the fallback owner, resolved by the service (never a bare id). */
+  fallbackOwnerName?: string;
   /**
    * Who last changed the rule and when (AS-001). Optional — only present when
    * the backend returns it; never fabricated client-side (GAP-CRM-ASSIGNMENT-RULES-05).
@@ -107,6 +109,7 @@ export function normaliseRule(raw: unknown): AssignmentRule | null {
     ordinal: num(r.ordinal),
     enabled: bool(r.enabled, true),
     fallbackOwnerId: str(r.fallbackOwnerId),
+    ...(str(r.fallbackOwnerName).trim() ? { fallbackOwnerName: str(r.fallbackOwnerName).trim() } : {}),
     ...(updatedByLabel(r) ? { updatedBy: updatedByLabel(r) } : {}),
     ...(typeof r.updatedAt === "string" && r.updatedAt ? { updatedAt: r.updatedAt } : {}),
   };
@@ -125,6 +128,20 @@ function updatedByLabel(r: Record<string, unknown>): string {
   if (name) return name;
   const by = str(r.updatedBy).trim();
   return by && !UUID_RE.test(by) ? by : "";
+}
+
+/**
+ * Display label for an actor on the assignment log/ageing view: the service-resolved
+ * name when present, else "Unknown user" for an unresolved opaque id, else the id when
+ * it is already a human handle (not a UUID). Returns null when there is no actor at all,
+ * so the caller renders "unassigned". A raw UUID is never shown (GAP-CRM display).
+ */
+export function resolvedActorName(name: string | undefined, id: string | undefined): string | null {
+  const n = (name ?? "").trim();
+  if (n) return n;
+  const i = (id ?? "").trim();
+  if (!i) return null;
+  return UUID_RE.test(i) ? "Unknown user" : i;
 }
 
 export function normaliseRules(raw: unknown): AssignmentRule[] {
@@ -194,6 +211,9 @@ export interface AssignmentLogEntry {
   method: AssignMethod;
   assignedAt: string;
   assignedBy: string;
+  /** Display names resolved by the service (GAP-CRM display); absent when unresolved. */
+  ownerName?: string;
+  assignedByName?: string;
   /** Present once the assignee accepts (AS-004); absent while pending. */
   acceptedAt?: string;
 }
@@ -212,6 +232,8 @@ export function normaliseLog(raw: unknown): AssignmentLogEntry[] {
       method: (ASSIGN_METHODS as string[]).includes(m) ? (m as AssignMethod) : "manual",
       assignedAt: str(r.assignedAt),
       assignedBy: str(r.assignedBy),
+      ...(str(r.ownerName).trim() ? { ownerName: str(r.ownerName).trim() } : {}),
+      ...(str(r.assignedByName).trim() ? { assignedByName: str(r.assignedByName).trim() } : {}),
       ...(typeof r.acceptedAt === "string" && r.acceptedAt ? { acceptedAt: r.acceptedAt } : {}),
     });
   }

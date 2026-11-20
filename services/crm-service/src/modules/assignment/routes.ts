@@ -159,10 +159,18 @@ export async function assignmentRoutes(app: FastifyInstance): Promise<void> {
     // GAP-CRM-ASSIGNMENT-RULES-05: show WHO last changed the chain. The rule row keeps
     // only the user id, so resolve a display name from identity-service (best effort:
     // an unresolved id simply has no name; the raw id is never shown as a label).
-    const names = await resolveUserNames(ctx.tenantId, rules.map((r) => r.updatedBy));
+    const names = await resolveUserNames(
+      ctx.tenantId,
+      rules.flatMap((r) => [r.updatedBy, r.fallbackOwnerId]),
+    );
     const data = rules.map((r) => {
       const updatedByName = r.updatedBy ? names.get(r.updatedBy) : undefined;
-      return updatedByName ? { ...r, updatedByName } : r;
+      const fallbackOwnerName = r.fallbackOwnerId ? names.get(r.fallbackOwnerId) : undefined;
+      return {
+        ...r,
+        ...(updatedByName ? { updatedByName } : {}),
+        ...(fallbackOwnerName ? { fallbackOwnerName } : {}),
+      };
     });
     return reply.send({ data, meta: { page: 1, pageSize: data.length, total: data.length } });
   });
@@ -213,7 +221,23 @@ export async function assignmentRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, CRM_ROLES);
     const { id } = v.idParam.parse(req.params);
     const rows = await repo.listAssignmentLog(ctx.tenantId, id);
-    return reply.send({ data: rows });
+    // GAP-CRM-ASSIGNMENT-LOG display: resolve the owner/actor ids to display names
+    // (same best-effort resolver as the rules view; an unresolved id has no name and the
+    // raw uuid is never shown as a label -- the UI falls back to "Unknown user").
+    const names = await resolveUserNames(
+      ctx.tenantId,
+      rows.flatMap((r) => [r["ownerId"] as string | null, r["assignedBy"] as string | null]),
+    );
+    const data = rows.map((r) => {
+      const ownerId = (r["ownerId"] ?? null) as string | null;
+      const assignedBy = (r["assignedBy"] ?? null) as string | null;
+      return {
+        ...r,
+        ownerName: ownerId ? names.get(ownerId) ?? null : null,
+        assignedByName: assignedBy ? names.get(assignedBy) ?? null : null,
+      };
+    });
+    return reply.send({ data });
   });
 
   // ── Assignment targets (AS-002) ────────────────────────────────────────────

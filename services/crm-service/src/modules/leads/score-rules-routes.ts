@@ -10,6 +10,7 @@ import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import * as repo from "./score-rules-repo.js";
+import { resolveUserNames } from "../../shared/user-directory.js";
 import {
   putScoreRulesBody,
   previewScoreRulesBody,
@@ -58,10 +59,13 @@ export async function leadScoreRuleRoutes(app: FastifyInstance): Promise<void> {
     void reply.header("ETag", meta.version);
     // GAP-CRM-LEAD-SCORING-03: advertise the lead fields a rule can score on, so the
     // editor offers exactly these (the PUT validator rejects anything else).
+    // GAP-CRM display: resolve the "last changed by" actor id to a display name.
+    const names = await resolveUserNames(ctx.tenantId, [meta.updatedBy]);
+    const updatedByName = meta.updatedBy ? names.get(meta.updatedBy) : undefined;
     return reply.send({
       data: rules,
       version: meta.version,
-      meta: { ...meta, total: rules.length, scoreableAttributes: SCOREABLE_LEAD_ATTRIBUTES },
+      meta: { ...meta, total: rules.length, scoreableAttributes: SCOREABLE_LEAD_ATTRIBUTES, ...(updatedByName ? { updatedByName } : {}) },
     });
   });
 
