@@ -439,6 +439,9 @@ export default function ImportContactsPage() {
             placeholder={TEMPLATE}
             style={{ width: "100%", fontFamily: "monospace", fontSize: 12, padding: 12, borderRadius: 8, border: "1px solid var(--line)" }}
           />
+          <p style={{ fontSize: 13, color: "var(--muted)", margin: "8px 0 0" }}>
+            {t("rowCapHint", { max: MAX_ROWS.toLocaleString("en-IN") })}
+          </p>
           <p
             role="status"
             aria-live="polite"

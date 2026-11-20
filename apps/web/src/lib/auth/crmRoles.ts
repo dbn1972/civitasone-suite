@@ -29,3 +29,18 @@ export const CRM_PII_READ_ROLES = ["crm_admin", "admin", "super_admin", "platfor
  * Duplicate Candidates page is a client component; roleGuard re-exports it for server pages.
  */
 export const CRM_MERGE_ROLES = ["crm_admin", "super_admin"];
+
+/**
+ * Roles crm-service admits on POST /v1/crm/contacts/bulk/import and PATCH /v1/crm/accounts/:id
+ * (contacts/routes.ts ADMIN_ROLES). Exactly the server set: tenant_admin is NOT admitted. The server
+ * stays the authority; this only decides whether the control is offered. crmRoles.test.ts reads the
+ * server constant.
+ */
+export const CRM_ADMIN_WRITE_ROLES = ["crm_admin", "super_admin"];
+
+/**
+ * Roles crm-service admits on the price-book writes and the history drawer (price-books/routes.ts
+ * ADMIN_ROLES). Unlike CRM_ADMIN_WRITE_ROLES this DOES include tenant_admin. Everyone else (crm_user)
+ * may only read/resolve, so Edit / Delete / New / History are not offered to them.
+ */
+export const CRM_PRICE_BOOK_ADMIN_ROLES = ["crm_admin", "super_admin", "tenant_admin"];
