@@ -44,17 +44,24 @@ export function DesignerHomeClient({
   const servicesError = servicesSource === "error";
   const domainPacksError = domainPacksSource === "error";
 
-  const stats = useMemo(() => ({
-    drafts: services.filter((s) => s.status === "draft").length,
-    inReview: services.filter((s) => s.status === "submitted" || s.status === "in_review").length,
-    published: services.filter((s) => s.status === "published").length,
-    // GAP-DESIGNER-HOME-04: include rejected and stale drafts. The definition
-    // of "needs attention" is a product decision — safest restrictive default:
-    // rejected, or draft whose most recent sandbox test failed.
-    attention: services.filter(
-      (s) => s.status === "rejected" || (s.status === "draft" && s.latestTestStatus === "fail"),
-    ).length,
-  }), [services]);
+  // The catalogue only has two lifecycle statuses: draft | published. "Submit"
+  // sets submittedBy on a draft (awaiting a second approver) and "reject"
+  // clears it again, so there is no stored "in review"/"rejected" status.
+  // "In Review" is therefore derived: a draft with submittedBy set. A draft is
+  // counted in exactly one of Drafts / In Review.
+  const stats = useMemo(() => {
+    const awaitingApproval = (s: DesignerServiceRow) =>
+      s.status === "draft" && Boolean(s.submittedBy);
+    return {
+      drafts: services.filter((s) => s.status === "draft" && !s.submittedBy).length,
+      inReview: services.filter(awaitingApproval).length,
+      published: services.filter((s) => s.status === "published").length,
+      // Needs attention = a draft whose most recent sandbox test failed (a
+      // rejected submission returns to draft, so it is covered by this rule
+      // only when its test failed; there is no separate "rejected" status).
+      attention: services.filter((s) => s.status === "draft" && s.latestTestStatus === "fail").length,
+    };
+  }, [services]);
 
   // GAP-DESIGNER-HOME-01: never fabricate 0 counts when the loader failed.
   const stat = (n: number) => (servicesError ? "—" : String(n));

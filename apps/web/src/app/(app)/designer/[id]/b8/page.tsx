@@ -2,9 +2,9 @@
 
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { HelpTip } from "@/app/_components/ds";
-import { WizardShell, type DesignerBlock } from "@/app/_components/ds/designer";
+import { WizardShell } from "@/app/_components/ds/designer";
 import type { FormFieldDefinition } from "@/app/_components/ds/designer/formTypes";
 import type { NotificationsDesignState } from "@/app/_components/ds/designer/notificationTypes";
 import { NotificationsBuilder } from "../../_components/NotificationsBuilder";
@@ -18,7 +18,7 @@ import {
   notificationsConfigToUi,
   notificationsUiToConfig,
 } from "../../_data/notificationBuilderApi";
-import { DEFAULT_BLOCKS, hiddenBlocksForPattern, SERVICE_PATTERN_OPTIONS } from "../../_data/designerConstants";
+import { SERVICE_PATTERN_OPTIONS } from "../../_data/designerConstants";
 import { useDesignerWizard } from "../../_data/useDesignerWizard";
 
 export default function DesignerB8Page() {
@@ -82,7 +82,6 @@ export default function DesignerB8Page() {
   }, [params.id]);
 
   const patternMeta = SERVICE_PATTERN_OPTIONS.find((p) => p.id === wizard.meta.pattern);
-  const hidden = hiddenBlocksForPattern(wizard.meta.pattern);
   const { prev, next } = adjacentBlocks(wizard.meta.pattern, "b8");
 
   // GAP-DESIGNER-DETAIL-B8-05: webhook edits save through usePhase3Config, which
@@ -94,18 +93,6 @@ export default function DesignerB8Page() {
       : saveState === "offline" || phase3.saveState === "offline"
         ? "offline"
         : "saved";
-
-  const blocks: DesignerBlock[] = useMemo(
-    () =>
-      DEFAULT_BLOCKS.map((b) => ({
-        id: b.id,
-        shortLabel: b.shortLabel,
-        label: b.label,
-        hidden: hidden.has(b.id),
-        status: b.id === "b8" ? "in-progress" : b.id === "b1" || b.id === "b2" ? "complete" : "empty",
-      })),
-    [hidden],
-  );
 
   const onDesignPersisted = async (design: NotificationsDesignState) => {
     try {
@@ -137,7 +124,7 @@ export default function DesignerB8Page() {
       version={meta.version}
       status={meta.status}
       saveState={combinedSaveState}
-      blocks={wizard.blocks.length ? wizard.blocks : blocks}
+      blocks={wizard.blocks}
       activeBlockId="b8"
       onBlockSelect={(blockId) => router.push(`/designer/${params.id}/${blockId}`)}
       onBack={() => router.push(`/designer/${params.id}/${prev}`)}

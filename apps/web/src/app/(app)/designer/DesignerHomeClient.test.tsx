@@ -149,19 +149,16 @@ describe("DesignerHomeClient", () => {
 
   // ── GAP-DESIGNER-HOME-04: attention count expanded ───────────────────
   describe("GAP-DESIGNER-HOME-04: needs-attention stat", () => {
-    it("counts rejected services in attention", () => {
-      render(
-        <DesignerHomeClient
-          services={[draftRow, rejectedRow]}
-          domainPacks={samplePacks}
-          servicesSource="api"
-        />,
-      );
-      // The "Needs Attention" card parent (.stat) should contain "1" for rejected.
-      const label = screen.getByText("Needs Attention");
-      // The stat card structure: div.stat > div.lab + div.val
-      const statCard = label.parentElement;
-      expect(statCard?.textContent).toContain("1");
+    it("does not count a legacy 'rejected' status (no such backend state)", () => {
+      render(<DesignerHomeClient services={[rejectedRow]} domainPacks={samplePacks} servicesSource="api" />);
+      expect(screen.getByText("Needs Attention").parentElement?.textContent).toContain("0");
+    });
+
+    it("derives In Review from a draft with submittedBy and removes it from Drafts", () => {
+      const submitted = { ...draftRow, id: "s9", submittedBy: "user-a" } as DesignerServiceRow;
+      render(<DesignerHomeClient services={[draftRow, submitted]} domainPacks={samplePacks} servicesSource="api" />);
+      expect(screen.getByText("In Review").parentElement?.textContent).toContain("1");
+      expect(screen.getByText("Drafts").parentElement?.textContent).toContain("1");
     });
 
     it("counts draft with latestTestStatus=fail in attention", () => {
