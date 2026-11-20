@@ -5,7 +5,8 @@ import { formatMoney, formatIndianDate } from "@/lib/formatters";
 import { toHumanError } from "@/lib/messages";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { hasAnyRole } from "@/lib/auth/roleGuard";
-import { GRANTS_DISBURSE_ROLES, GRANTS_UC_VALIDATE_ROLES } from "../roles";
+import { GRANTS_DISBURSE_ROLES, GRANTS_MAKER_ROLES, GRANTS_UC_VALIDATE_ROLES } from "../roles";
+import { MaskedReveal } from "@/app/_components/ds/MaskedReveal";
 import { getGrantById } from "../../../_data/loaders";
 import { GrantInstallmentsTable, GrantUCsTable } from "./GrantDetailTables";
 
@@ -36,6 +37,7 @@ export default async function GrantDetailPage(props: { params: Promise<{ id: str
   const roles = getSessionRoles();
   const canRelease = hasAnyRole(roles, GRANTS_DISBURSE_ROLES);
   const canVerify = hasAnyRole(roles, GRANTS_UC_VALIDATE_ROLES);
+  const canRevealGrantee = hasAnyRole(roles, GRANTS_MAKER_ROLES);
 
   return (
     <>
@@ -57,7 +59,22 @@ export default async function GrantDetailPage(props: { params: Promise<{ id: str
           <dl className="fields">
             <div>
               <dt className="lab">Grantee</dt>
-              <dd>{grant.granteeName ?? "—"}</dd>
+              <dd>
+                {/* Same DPDP contract as the list: the server masks a natural person's name; makers may
+                    reveal it with an audited reason, everyone else sees the mask. */}
+                {grant.granteeName && grant.granteeNameMasked === true && canRevealGrantee && grant.granteeId ? (
+                  <MaskedReveal
+                    maskedText={grant.granteeName}
+                    resourceType="grantee"
+                    resourceId={grant.granteeId}
+                    field="name"
+                    label="grantee name"
+                    revealPath="v1/grants/pii/reveal"
+                  />
+                ) : (
+                  (grant.granteeName ?? "—")
+                )}
+              </dd>
             </div>
             <div>
               <dt className="lab">Grantor</dt>

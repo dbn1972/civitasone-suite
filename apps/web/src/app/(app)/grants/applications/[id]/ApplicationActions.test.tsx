@@ -251,4 +251,15 @@ describe("ApplicationActions (COMP-012)", () => {
     expect(await screen.findByText(/exceeds the scheme maximum/i)).toBeInTheDocument();
     expect(api.approveApplication).not.toHaveBeenCalled();
   });
+
+  it("hides Assign Reviewer from a reviewer-only role (server allows makers only)", () => {
+    render(<ApplicationActions applicationId="app-1" actions={["assign-reviewer", "score"]} canApprove={false} canReview />);
+    expect(screen.queryByRole("button", { name: "Assign Reviewer" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Submit Evaluation" })).toBeInTheDocument();
+  });
+
+  it("shows Assign Reviewer to a maker", () => {
+    render(<ApplicationActions applicationId="app-1" actions={["assign-reviewer", "score"]} canApprove canReview />);
+    expect(screen.getByRole("button", { name: "Assign Reviewer" })).toBeInTheDocument();
+  });
 });

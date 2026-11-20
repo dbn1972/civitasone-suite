@@ -88,7 +88,16 @@ export default async function ApplicationDetailPage(props: { params: Promise<{ i
   const t = await getTranslations("grantsB4Review");
   const assignedReviewerId = reviewerIdOf(application.assignedReviewerRef);
   const scoredReviewerId = reviewerIdOf(application.scoredReviewerRef ?? application.reviewerRef);
-  const reviewerNames = await resolveUsers([assignedReviewerId, scoredReviewerId].filter((v): v is string => !!v));
+  const submitterId = reviewerIdOf(application.submittedBy);
+  const approverId = reviewerIdOf(application.approvedBy);
+  const reviewerNames = await resolveUsers(
+    [assignedReviewerId, scoredReviewerId, submitterId, approverId].filter((v): v is string => !!v),
+  );
+  // Submitted By / Approved By: resolved name, else a non-UUID legacy label as-is, else "—" (never a raw id).
+  const actorLabel = (ref: string | null | undefined): string => {
+    const id = reviewerIdOf(ref);
+    return (id && reviewerNames.get(id)) || displayActorRef(id);
+  };
   const reviewerLabel = (id: string | null): string | null => {
     if (!id) return null;
     const name = reviewerNames.get(id);
@@ -175,12 +184,12 @@ export default async function ApplicationDetailPage(props: { params: Promise<{ i
           )}
           <div>
             <dt className="lab">Submitted By</dt>
-            <dd>{displayActorRef(application.submittedBy)}</dd>
+            <dd>{actorLabel(application.submittedBy)}</dd>
           </div>
           {application.approvedBy != null && (
             <div>
               <dt className="lab">Approved By</dt>
-              <dd>{displayActorRef(application.approvedBy)}</dd>
+              <dd>{actorLabel(application.approvedBy)}</dd>
             </div>
           )}
         </dl>

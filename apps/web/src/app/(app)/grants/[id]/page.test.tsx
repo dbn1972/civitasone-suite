@@ -89,4 +89,29 @@ describe("GrantDetailPage", () => {
     getGrantByIdMock.mockResolvedValue({ data: null, source: "api" });
     await expect(GrantDetailPage({ params: Promise.resolve({ id: "grant-1" }) })).rejects.toThrow("NEXT_NOT_FOUND");
   });
+
+  it("shows the server-resolved grantor", async () => {
+    render(await GrantDetailPage({ params: Promise.resolve({ id: "grant-1" }) }));
+    expect(screen.getByText("Ministry of Jal Shakti")).toBeInTheDocument();
+  });
+
+  it("keeps a server-masked natural-person name masked for non-makers (no reveal control)", async () => {
+    rolesMock.mockReturnValue(["grant_viewer"]);
+    getGrantByIdMock.mockResolvedValue({
+      data: { ...GRANT, granteeId: "ben-1", granteeName: "R••••", granteeNameMasked: true },
+      source: "api",
+    });
+    render(await GrantDetailPage({ params: Promise.resolve({ id: "grant-1" }) }));
+    expect(screen.getByText("R••••")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /reveal/i })).not.toBeInTheDocument();
+  });
+
+  it("offers the audited Reveal to makers on a masked name", async () => {
+    getGrantByIdMock.mockResolvedValue({
+      data: { ...GRANT, granteeId: "ben-1", granteeName: "R••••", granteeNameMasked: true },
+      source: "api",
+    });
+    render(await GrantDetailPage({ params: Promise.resolve({ id: "grant-1" }) }));
+    expect(screen.getByRole("button", { name: /reveal/i })).toBeInTheDocument();
+  });
 });

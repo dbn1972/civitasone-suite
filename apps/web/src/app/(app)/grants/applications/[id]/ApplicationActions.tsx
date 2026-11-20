@@ -64,7 +64,7 @@ export function ApplicationActions({
   // A maker action on your OWN application is blocked (server also 403s with
   // SOD_VIOLATION); withdraw stays available to the submitter.
   const makerAllowed = !isOwnApplication;
-  const canAssign = actions.includes("assign-reviewer") && canReview && makerAllowed;
+  const canAssign = actions.includes("assign-reviewer") && canApprove && makerAllowed;
   const canScore = actions.includes("score") && canReview && makerAllowed;
   const canApproveAction = actions.includes("approve") && canApprove && makerAllowed;
   const canReject = actions.includes("reject") && canApprove && makerAllowed;

@@ -4,7 +4,7 @@ import * as applicationRepo from "../application/repo.js";
 import * as beneficiaryRepo from "../beneficiary/repo.js";
 import * as schemeRepo from "../scheme/repo.js";
 import { mapInstallmentStatus } from "../application/queries.js";
-import { effectiveGrantStatus } from "./domain.js";
+import { effectiveGrantStatus, formatReleaseNo } from "./domain.js";
 import type { InstallmentRow } from "./schema.js";
 
 function toDateOnly(value: Date | string | null | undefined): string {
@@ -103,7 +103,7 @@ export async function listGrantReleases(tenantId: string, limit: number) {
     const beneficiary = application ? beneficiaryById.get(application.beneficiaryId) ?? null : null;
     return {
       id: row.id,
-      releaseNo: row.pfmsTxnId ?? row.id.slice(0, 8).toUpperCase(),
+      releaseNo: formatReleaseNo(row.id, row.disbursedAt ?? row.createdAt),
       grantId: installment?.applicationId ?? row.id,
       grantNo: application?.grantNo ?? "—",
       granteeName: beneficiary?.name ?? null,
