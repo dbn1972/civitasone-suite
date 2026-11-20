@@ -141,8 +141,8 @@ export function HearingsTable({
   const tableRows: HearingRow[] = useMemo(
     () =>
       visible.map((r) => {
-        // Prefer nextDate for the countdown (upcoming re-listing), fall back to date.
-        const countdownDate = (r.nextDate as string | null | undefined) ?? r.date;
+        // Countdown and reminder are for THIS hearing's own date, not the next re-listing (nextDate).
+        const countdownDate = r.date;
         return {
           id: r.id,
           caseId: r.caseId,

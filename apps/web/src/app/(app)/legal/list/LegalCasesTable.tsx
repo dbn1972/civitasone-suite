@@ -4,7 +4,7 @@ import { useMemo, useState, type ReactNode } from "react";
 import { DataTable, Segmented, StatusPill } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { useSeededResource } from "@/lib/sync/resource";
-import { humanizeStatus } from "@/lib/formatters";
+import { caseTypeLabel } from "../caseTypeLabel";
 import { isWritOrCriminal, ACTIVE_CASE_STATUSES } from "./caseHelpers";
 
 // Re-exported for existing client/test consumers; server code imports ./caseHelpers directly.
@@ -21,24 +21,6 @@ type LegalCase = {
   advocateName?: string | null;
   status: string;
 } & Record<string, unknown>;
-
-/**
- * GAP-LEGAL-LIST-03: human label for a raw case-type code (the summary payload
- * carries a lowercase enum such as "writ"). Falls back to humanizeStatus for
- * anything without an explicit label.
- */
-const CASE_TYPE_LABELS: Record<string, string> = {
-  writ: "Writ Petition",
-  civil: "Civil",
-  criminal: "Criminal",
-  arbitration: "Arbitration",
-  tribunal: "Tribunal",
-  appeal: "Appeal",
-  other: "Other",
-};
-function caseTypeLabel(type: string): string {
-  return CASE_TYPE_LABELS[type.toLowerCase()] ?? humanizeStatus(type);
-}
 
 const FILTERS = ["All", "High Court", "Writ & criminal"] as const;
 

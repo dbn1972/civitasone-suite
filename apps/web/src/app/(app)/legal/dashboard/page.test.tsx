@@ -39,11 +39,10 @@ describe("Legal dashboard (GAP-LEGAL-DASHBOARD-01/03/04)", () => {
     expect(screen.getByText("—")).toBeInTheDocument();
   });
 
-  it("labels the opinions-due card 'Opinions Due', not 'Adverse Risk'", async () => {
+  it("has no Opinions Due tile (no due-date data exists to compute it)", async () => {
     getLegalDashboard.mockResolvedValue(okDash());
     render(await LegalDashboardPage());
-    expect(screen.getByText("Opinions Due")).toBeInTheDocument();
-    expect(screen.queryByText("Adverse Risk")).not.toBeInTheDocument();
+    expect(screen.queryByText("Opinions Due")).not.toBeInTheDocument();
   });
 
   it("renders a retry error state (not zeros/64%) when the dashboard fetch fails", async () => {
@@ -70,20 +69,4 @@ describe("Legal dashboard upcoming hearings (GAP-LEGAL-DASHBOARD-02)", () => {
     expect(screen.getByText("WP/9/2026")).toBeInTheDocument();
   });
 
-});
-
-describe("Legal dashboard unknown figures", () => {
-  beforeEach(() => {
-    getLegalDashboard.mockReset();
-    getLegalHearings.mockReset();
-    getLegalHearings.mockResolvedValue({ data: [], source: "api" });
-  });
-
-  it("shows a dash (not a fabricated 0) for Opinions Due when the service cannot compute it", async () => {
-    getLegalDashboard.mockResolvedValue(okDash({ opinionsDue: null }));
-    render(await LegalDashboardPage());
-    const stat = screen.getByText("Opinions Due").parentElement as HTMLElement;
-    expect(stat).toHaveTextContent("—");
-    expect(stat).not.toHaveTextContent(/\b0\b/);
-  });
 });

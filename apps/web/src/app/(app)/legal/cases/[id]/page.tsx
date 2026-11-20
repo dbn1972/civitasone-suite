@@ -6,6 +6,7 @@ import { PageHeader, StatusPill, DataTable, EmptyState, RefreshErrorState } from
 import { formatIndianDate } from "@/lib/formatters";
 import { toHumanError } from "@/lib/messages";
 import { getLegalCaseById } from "../../../../_data/loaders";
+import { caseTypeLabel } from "../../caseTypeLabel";
 import { CaseActions } from "./CaseActions";
 import { AffidavitFiles } from "./AffidavitFiles";
 
@@ -179,7 +180,7 @@ export default async function LegalCaseDetailPage(props: { params: Promise<{ id:
                   )}
                 </div>
               </div>
-              <div className="fld"><div className="l">Subject</div><div className="v">{caseData.type}</div></div>
+              <div className="fld"><div className="l">Subject</div><div className="v">{caseTypeLabel(caseData.type)}</div></div>
               {caseData.petitioner && (
                 <div className="fld"><div className="l">Petitioner</div><div className="v">{caseData.petitioner}</div></div>
               )}
@@ -223,7 +224,7 @@ export default async function LegalCaseDetailPage(props: { params: Promise<{ id:
               <EmptyState
                 icon="📅"
                 title="No hearing records"
-                message="Add hearing records via the Hearings section."
+                message="No hearings have been listed for this case yet. Hearings appear here once the court lists them."
               />
             )}
           </div>
