@@ -20,6 +20,17 @@ function paginationMeta(total: number, page: number, pageSize: number) {
   return { page, pageSize, total };
 }
 
+/**
+ * The data-warehouse "lastRefresh" is really the LATEST EVENT time (max
+ * occurred_at), not a refresh time. A future-dated seed/event must never show
+ * as a refresh in the future, so it is clamped to `now`. Exported for tests.
+ */
+export function formatLatestEventTime(last: Date | null, now: Date = new Date()): string {
+  if (!last || Number.isNaN(last.getTime())) return "—";
+  const shown = last.getTime() > now.getTime() ? now : last;
+  return shown.toISOString().slice(0, 16).replace("T", " ");
+}
+
 export async function kpiRoutes(app: FastifyInstance): Promise<void> {
   // ─── KPI Library ────────────────────────────────────────────────────────────
   app.get("/v1/analytics/kpis", async (req, reply) => {
@@ -88,7 +99,7 @@ export async function kpiRoutes(app: FastifyInstance): Promise<void> {
             : null;
           return {
             dataset: r.source ?? "Unknown",
-            lastRefresh: last ? last.toISOString().slice(0, 16).replace("T", " ") : "—",
+            lastRefresh: formatLatestEventTime(last),
             records: String(r.recordCount),
             size: "—",
             qualityScore: "—",

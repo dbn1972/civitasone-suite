@@ -47,7 +47,7 @@ export default async function DataWarehousePage() {
   return (
     <div className="page-main wrap">
       {/* GAP-ANALYTICS-DATA-WAREHOUSE-02: subtitle no longer promises "refresh
-          schedules" — the table shows only Last Refresh, not a schedule or
+          schedules" — the table shows only the latest event time, not a schedule or
           next-run. */}
       <PageHeader title="Data Warehouse" subtitle="Consolidated datasets and data quality metrics." back="/analytics" />
       <StatGrid>

@@ -99,6 +99,7 @@ const ITEM_KEYWORDS: Record<string, readonly string[]> = {
   cdp: ["CDP", "customer data"],
   journeys: ["journey", "यात्रा"],
   recommendations: ["recommendation", "सुझाव"],
+  analytics: ["analytics", "data", "warehouse", "KPI", "विश्लेषण"],
   reports: ["report", "MIS", "रिपोर्ट"],
   knowledge: ["knowledge", "article", "ज्ञान"],
   policies: ["policy", "SOP", "नीति"],

@@ -38,7 +38,7 @@ import { IDENTITY_ADMIN_ROLES } from "@/lib/auth/identityRoles";
 import { ADMIN_TENANT_ROLES, BILLING_GSTN_ROLES, BILLING_MODULE_ROLES } from "@/lib/auth/adminRoles";
 import { MEETING_CONFIG_ADMIN_ROLES, MEETING_CREATE_ROLES } from "@/lib/auth/meetingRoles";
 import {
-  AUDIT_ROLES, CATALOGUE_READER_ROLES, CRM_ROLES, INSPECTION_ROLES, LEGAL_ROLES, LOCATION_VIEW_ROLES,
+  ANALYTICS_READER_ROLES, AUDIT_ROLES, CATALOGUE_READER_ROLES, CRM_ROLES, INSPECTION_ROLES, LEGAL_ROLES, LOCATION_VIEW_ROLES,
   LOYALTY_READ_ROLES, PROJECT_VIEW_ROLES, RECOMMENDATION_READER_ROLES, REPORTS_READER_ROLES,
 } from "@/lib/auth/navRoles";
 import { GRANTS_VIEW_ROLES } from "@/app/(app)/grants/roles";
@@ -256,6 +256,8 @@ export const NAV_GROUPS: NavGroupDef[] = [
     id: "platform",
     label: "PLATFORM",
     items: [
+      // analytics/layout.tsx: requireAnyRole(ANALYTICS_READER_ROLES) + ModuleGate "analytics".
+      { id: "analytics", label: "Data & Analytics", href: "/analytics", moduleKey: "analytics", rolesAllowed: ANALYTICS_READER_ROLES, failClosed: true },
       { id: "reports", label: "Reports", href: "/reports", moduleKey: "reports", rolesAllowed: REPORTS_READER_ROLES, failClosed: true },
       { id: "knowledge", label: "Knowledge", href: "/knowledge", moduleKey: "knowledge" },
       { id: "policies", label: "Policies & SOPs", href: "/knowledge/policies", moduleKey: "knowledge" },

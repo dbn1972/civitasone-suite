@@ -65,3 +65,13 @@ export const LOCATION_VIEW_ROLES = [
   "manager",
   "employee",
 ];
+
+/** analytics/layout.tsx guard; mirrors analytics-service ANALYTICS_READ_ROLES. */
+export const ANALYTICS_READER_ROLES = [
+  "analytics_user",
+  "analytics_viewer",
+  "analytics_admin",
+  "tenant_admin",
+  "super_admin",
+  "platform_admin",
+];
