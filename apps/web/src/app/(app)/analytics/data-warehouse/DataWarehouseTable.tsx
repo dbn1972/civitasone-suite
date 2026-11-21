@@ -7,7 +7,7 @@ import type { AnalyticsDataWarehouseRow } from "@/app/_data/loaders";
 
 const COLUMNS: { key: keyof AnalyticsDataWarehouseRow & string; label: string; align?: "right"; cellType?: "status" }[] = [
   { key: "dataset", label: "Dataset" },
-  { key: "lastRefresh", label: "Last Refresh" },
+  { key: "lastRefresh", label: "Latest Event (UTC)" },
   { key: "records", label: "Records", align: "right" },
   { key: "size", label: "Size", align: "right" },
   { key: "qualityScore", label: "Quality Score" },

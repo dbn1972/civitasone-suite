@@ -1087,14 +1087,8 @@ export const WORKFLOW_DELEGATION_ADMIN_ROLES = ["workflow_admin", "super_admin",
  * fetches instead of PermissionDenied. The service remains the authority; this
  * gate is defence-in-depth + honest UX.
  */
-export const ANALYTICS_READER_ROLES = [
-  "analytics_user",
-  "analytics_viewer",
-  "analytics_admin",
-  "tenant_admin",
-  "super_admin",
-  "platform_admin",
-];
+// Defined in ./navRoles (client-safe: the nav model needs it too); re-exported here.
+export { ANALYTICS_READER_ROLES } from "./navRoles";
 
 /**
  * GAP2-ANALYTICS-MLINSIGHTS-01: roles permitted to reach the ML Insights
