@@ -214,6 +214,31 @@ version_gte() {
   printf '%s\n%s\n' "$2" "$1" | sort -V -C
 }
 
+# ── Compose project isolation (safety) ────────────────────────────────────────
+
+# Every compose call below inherits COMPOSE_PROJECT_NAME, so this installer only
+# ever touches its own project's containers/volumes.
+export COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-civitasone-install}"
+
+# assert_own_postgres — resolve the postgres container of OUR compose project and
+# refuse to proceed unless it exists, is running, and carries our project label.
+# Defense-in-depth: migrations must never reach an unrelated (e.g. live pilot)
+# `civitasone-postgres` container on a shared host.
+assert_own_postgres() {
+  local cid proj
+  cid=$(docker compose -p "$COMPOSE_PROJECT_NAME" -f infra/docker-compose.prod.yml --env-file infra/.env ps -q postgres 2>/dev/null | head -1 || true)
+  if [[ -z "$cid" ]]; then
+    die "Safety check failed: no running postgres container in compose project '${COMPOSE_PROJECT_NAME}'. Refusing to run migrations."
+  fi
+  proj=$(docker inspect -f '{{ index .Config.Labels "com.docker.compose.project" }}' "$cid" 2>/dev/null || true)
+  if [[ "$proj" != "$COMPOSE_PROJECT_NAME" ]]; then
+    die "Safety check failed: postgres container ${cid:0:12} belongs to project '${proj:-<none>}', not '${COMPOSE_PROJECT_NAME}'. Refusing to touch a database this installer does not own."
+  fi
+  local name
+  name=$(docker inspect -f '{{.Name}}' "$cid" 2>/dev/null | tr -d '/')
+  log OK "Migration target verified: ${name} (compose project ${COMPOSE_PROJECT_NAME})"
+}
+
 # ── Container counting (jq if available; handles NDJSON or a JSON array) ───────
 
 # count_services FILTER — FILTER is a jq select() predicate on the ps JSON.
@@ -740,7 +765,15 @@ compose_run_migrations() {
 
   # Run migrations via the migrate-all script
   log INFO "Applying migrations (idempotent — safe to re-run)..."
-  if node scripts/dev/migrate-all.mjs 2>>"$INSTALL_LOG" | tail -5; then
+  assert_own_postgres
+  # Force migrate-all to use OUR compose project's postgres (never the hard-coded
+  # `civitasone-postgres` container, never a host/CI psql from the caller's env).
+  # The compose cluster superuser is POSTGRES_USER (civitas_admin is NOSUPERUSER).
+  local pg_super
+  pg_super=$(grep '^POSTGRES_USER=' infra/.env | cut -d= -f2)
+  if CIVITAS_PSQL_MODE=compose CIVITAS_PSQL_USER="${pg_super:-civitasone}" \
+       COMPOSE_PROJECT_NAME="$COMPOSE_PROJECT_NAME" \
+       node scripts/dev/migrate-all.mjs 2>>"$INSTALL_LOG" | tail -5; then
     check "Database migrations applied" "PASS"
   else
     check "Database migrations" "FAIL" "Check $INSTALL_LOG for details"
