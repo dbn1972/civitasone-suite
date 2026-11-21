@@ -13,6 +13,7 @@ ENV PATH=$PNPM_HOME:$PATH
 RUN corepack enable && corepack prepare pnpm@9.0.0 --activate
 WORKDIR /repo
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json turbo.json tsconfig.base.json ./
+COPY vitest.shared.ts ./
 COPY packages ./packages
 COPY services ./services
 COPY apps ./apps
