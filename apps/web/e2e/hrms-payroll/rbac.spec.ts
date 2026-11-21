@@ -78,7 +78,8 @@ test.describe('RBAC — HR Admin', () => {
     await page.goto('/hr/leave');
     await expect(page.locator('#page-heading:visible')).toBeVisible();
     // HR admin should see approval actions
-    await expect(page.getByRole('link', { name: /approval/i })).toBeVisible();
+    // Scope to <main>: the sidebar also has "Approvals"/"Leave approvals" links.
+    await expect(page.getByRole('main').getByRole('link', { name: /approval/i })).toBeVisible();
   });
 
   test('can access attendance', async ({ page }) => {
@@ -137,7 +138,7 @@ test.describe('RBAC — Manager', () => {
 
   test('can access leave approvals', async ({ page }) => {
     await page.goto('/hr/leave');
-    await expect(page.getByRole('link', { name: /approval/i })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Leave approvals' })).toBeVisible();
   });
 
   test('can view team attendance', async ({ page }) => {

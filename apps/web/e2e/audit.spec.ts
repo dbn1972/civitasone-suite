@@ -10,9 +10,9 @@ test.describe('Audit', () => {
 
   test('audit log shows the Event Log section', async ({ page }) => {
     await page.goto('/audit');
-    // Exact match: "Event Log" (breadcrumb) is also a substring of the
-    // "Audit event log" card heading, which would otherwise resolve to 2 elements.
-    await expect(page.getByText('Event Log', { exact: true })).toBeVisible();
+    // The breadcrumb's "Event Log" crumb is collapsed (hidden) on this route, so
+    // assert the visible section itself: the "Audit event log" card heading.
+    await expect(page.getByRole('heading', { name: 'Audit event log' })).toBeVisible();
   });
 
   test('audit log shows actor and action column headers', async ({ page }) => {
@@ -71,7 +71,10 @@ test.describe('Audit', () => {
 
   test('audit observation detail shows breadcrumb', async ({ page }) => {
     await page.goto('/audit/observations/a0000000-0000-0000-0000-000000000001');
-    await expect(page.getByRole('link', { name: /observation/i })).toBeVisible();
+    // Breadcrumb: "Audit" link -> current crumb "Observations"; the page also has
+    // a Back link to the observations list.
+    await expect(page.getByLabel('Breadcrumb').getByRole('link', { name: 'Audit' })).toBeVisible();
+    await expect(page.getByRole('main').getByRole('link', { name: 'Back' })).toHaveAttribute('href', '/audit/observations');
   });
 
   // ── Other sub-pages ───────────────────────────────────────────────────────

@@ -100,7 +100,9 @@ test.describe('Payroll Runs', () => {
 
     test('shows back navigation to payroll runs', async ({ page }) => {
       await page.goto('/hr/payroll/run-001');
-      const backLink = page.getByRole('link', { name: /payroll runs|back/i });
+      // Scope to <main>: the sidebar "Payroll runs" and footer "Feedback" links
+      // also match the loose pattern.
+      const backLink = page.getByRole('main').getByRole('link', { name: /payroll runs|back/i });
       await expect(backLink).toBeVisible();
     });
 
