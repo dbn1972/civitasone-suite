@@ -1,0 +1,43 @@
+sequenceDiagram
+  autonumber
+  actor SO as Section Officer
+  actor US as Under Secretary
+  actor DS as Deputy Secretary
+  participant GW as gateway-service
+  participant EST as estab-service API
+  participant EW as estab worker
+  participant WF as workflow-service
+  participant DB as civitas_estab
+
+  SO->>GW: POST /api/v1/estab/files/:id/submit-for-approval
+  GW->>EST: proxy (roles estab_officer, estab_admin, estab_deputy_secretary)
+  EST->>EST: assertFileWritable
+  EST-->>SO: 202 accepted
+  EST->>EW: command estab.noting.submit
+  EW->>DB: tx: noting status submitted, file status active
+  EW->>WF: outbox event workflow.instance.create (definition file_noting, refType estab_file, node section_review)
+
+  Note over WF: Linear chain: draft, section_review (estab_section_officer), us_approve (estab_under_secretary), ds_approve (estab_deputy_secretary, terminal)
+  SO->>WF: POST /v1/workflow/tasks/:id/complete decision approve
+  WF->>WF: SoD check under instance lock (initiator or repeat actor blocked)
+  WF->>WF: handleAdvance to us_approve
+  WF->>EW: outbox estab.file.level_approved
+  EW->>DB: tx: findLatestUnsignedNoting, signNotingChain (hash 1 with prevHash genesis)
+
+  US->>WF: complete task decision approve
+  WF->>WF: advance to ds_approve
+  WF->>EW: estab.file.level_approved
+  EW->>DB: sign next green note (hash 2 chains prevHash = hash 1)
+
+  DS->>WF: complete task decision approve
+  WF->>WF: no outgoing edge, terminal, dispatchDomainApprove
+  WF->>EW: estab.file.level_approved then estab.file.approve
+  EW->>DB: tx: capture noting, green e-sign, hash 3, file approved
+  EW->>EW: emit decision callback (approved, fileNo, dscHash) to source module topic
+  Note over EW,DB: computeNotingHash = sha256 over notingId, body, officerId, prevHash, signedAtMs, tamper-evident SO to US to DS chain
+
+  alt rejected at any level
+    WF->>EW: estab.file.reject, file status rejected, callback decision rejected
+  else returned
+    WF->>WF: handleReturn to immediately prior node
+  end

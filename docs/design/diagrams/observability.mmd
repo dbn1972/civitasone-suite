@@ -1,0 +1,11 @@
+flowchart LR
+    SVC["Services /metrics (prom-client, http_request_duration_ms, http_requests_by_tenant_total, dlq, consumer, outbox)"] --> PROM["Prometheus v2.54 (15s scrape, 15d retention)"]
+    EXP["pg / redis / pgbouncer exporters (recommended, not shipped)"] -.-> PROM
+    PROM --> RULES["alert.rules.yml (SLO, DLQ, latency, noisy-neighbor, app-failure)"]
+    RULES --> AM["Alertmanager v0.27"]
+    AM -->|critical| PD["PagerDuty"]
+    AM -->|warning| EM["Email (SMTP)"]
+    PROM --> GF["Grafana 10.3 (civitasone-overview.json)"]
+    LOGS["pino JSON logs (stdout / /var/log/civitasone/*.log)"] --> PT["Promtail 2.9.4"] --> LK["Loki 2.9.4 + ruler (loki-rules.yml)"]
+    LK --> GF
+    LK -. "ship to SIEM / OpenSearch for >= 180 day retention" .-> SIEM["Central log store"]

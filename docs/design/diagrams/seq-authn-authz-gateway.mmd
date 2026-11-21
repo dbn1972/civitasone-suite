@@ -1,0 +1,37 @@
+sequenceDiagram
+  autonumber
+  actor U as User (browser or mobile)
+  participant KC as Keycloak (OIDC, RS256)
+  participant GW as gateway-service :8080
+  participant RL as Rate limit + quota (Redis)
+  participant MG as module guard
+  participant AD as admin-service composition projection
+  participant SV as Downstream service
+  participant AU as authPlugin (@civitasone/auth)
+  participant RD as Redis session denylist
+  participant PG as Postgres (FORCE RLS)
+
+  U->>KC: Authorization Code + PKCE
+  KC-->>U: access token (sub, tid via tenant-id-mapper, roles, sid)
+  U->>GW: HTTPS /api/v1/finance/... Authorization Bearer
+  GW->>GW: canonicalisePath (reject %2e%2e etc), resolveRoute longest prefix
+  GW->>GW: block internal-only paths with 403
+  GW->>GW: api-key preHandler, jwtEdgeVerify (JWKS, mode true / audit / off)
+  GW->>RL: per user and per tenant rate limit, quota check
+  GW->>GW: public prefix check, else Bearer required (401 UNAUTHENTICATED)
+  GW->>MG: checkModuleEnabled(route, tenant)
+  MG->>AD: GET composition modules for tenant (cached, breaker)
+  MG-->>GW: allow, or 403 module not licensed (off / shadow / enforce)
+  GW->>GW: optional ABAC checkPolicy for mutations (POLICY_ENFORCE)
+  GW->>GW: strip x-internal headers, x-service-secret, overwrite x-tenant-id with verified tid and x-actor-id with sub, set x-gateway-request 1
+  GW->>SV: proxy via per-upstream circuit breaker
+  SV->>AU: onRequest: verifyJwt again (claims are not trusted headers)
+  AU->>RD: is sid denylisted?
+  AU-->>SV: req.ctx {tenantId = tid, actorId, roles, sessionId}
+  SV->>SV: requireRole / requirePermissionKey (policy-service evaluate, super_admin shortcut)
+  SV->>PG: tx via createTenantTxHook: set_config('app.tenant_id', tid, true)
+  PG->>PG: policy tenant_isolation USING tenant_id = current_tenant_id()
+  PG-->>SV: only the caller tenant rows
+  SV-->>GW: 200 or 202
+  GW-->>U: response (correlationId header)
+  Note over SV,AU: Service to service uses x-internal 1 + x-tenant-id + x-service-secret = INTERNAL_SERVICE_SECRET (constant time) and is audit-logged

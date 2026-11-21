@@ -1,0 +1,27 @@
+flowchart TB
+  REQ["Incoming request with Bearer JWT"] --> GW["Gateway: verify RS256 JWT,<br/>derive tenant (tid claim)"]
+  GW --> SVC["Service route / consumer<br/>(RequestContext carries tenantId)"]
+  SVC --> REG{"TenantRouter:<br/>isolation tier of tenant?"}
+  RES[("Tenant registry<br/>tenant-service: isolation_tier,<br/>db_dsn_ref, region, kms_key_ref")]
+  RES -. "resolver, cached" .-> REG
+
+  REG -->|"pool (default)"| POOL["Shared per-service client<br/>via PgBouncer"]
+  REG -->|"silo (premium / regulated)"| SILO["Cached LRU client to<br/>dedicated tenant DB"]
+
+  POOL --> TX["withTenantScope: BEGIN;<br/>SET LOCAL app.tenant_id"]
+  TX --> RLS{"RLS policy FORCE:<br/>tenant_id = current_tenant_id()"}
+  RLS -->|match| OK[("civitas_service DB<br/>shared by many tenants")]
+  RLS -->|no match| NO["Rows invisible"]
+
+  SILO --> SDB[("civitas_tenant_id DB<br/>hosts every service schema:<br/>one tenant only")]
+
+  subgraph PROV["Silo provisioning (install-service + privileged runner)"]
+    direction LR
+    E1["tenant.tenant.isolation_changed"] --> E2["install.silo_provisions: requested"]
+    E2 --> E3["runner: create DB, role,<br/>apply all service migrations"]
+    E3 --> E4["status: provisioning, ready or failed"]
+  end
+  REG -. "provisioned by" .-> PROV
+
+  CACHE["Cache key convention:<br/>service:tenant:resource:id"]
+  SVC -.-> CACHE

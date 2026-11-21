@@ -1,0 +1,49 @@
+flowchart TB
+  subgraph Clients
+    WEB["Web Console<br/>Next.js 15.5 App Router :3000"]
+    MOB["Mobile App<br/>Flutter, offline-first"]
+  end
+
+  KC["Keycloak 24<br/>OIDC / JWKS"]
+
+  GW["Gateway Service :8080<br/>JWT verify, module guard,<br/>quota, prefix routing, header strip"]
+
+  subgraph Platform["Platform services"]
+    P1["identity, tenant, policy, audit,<br/>install, admin, billing, plugin, theme,<br/>notification, metadata"]
+  end
+  subgraph Domain["Domain services"]
+    D1["finance, payroll, hrms, procurement,<br/>contract, estab, works, project, asset,<br/>stock, inventory, grant, legal, court,<br/>meeting, citizen, crm, helpdesk,<br/>revenue and ULB municipal services"]
+  end
+  subgraph Support["Workflow and insight"]
+    S1["workflow, analytics, report,<br/>knowledge, ml, ai-agent, document"]
+  end
+
+  W["Async workers<br/>one per service: command consumers<br/>and outbox relay"]
+
+  PGB["PgBouncer :6432<br/>transaction pooling"]
+  PG[("PostgreSQL 16<br/>database per service,<br/>RLS, _outbox, _inbox")]
+  RD[("Redis 7<br/>read-through cache, rate limit")]
+  Q[["Message bus<br/>SQS / RabbitMQ via @civitasone/queue"]]
+  OBJ[("S3 / MinIO")]
+  SR[("Meilisearch / OpenSearch")]
+
+  WEB -->|"/api/proxy"| GW
+  MOB -->|HTTPS| GW
+  WEB -.->|OIDC| KC
+  GW -.->|JWKS| KC
+  GW -->|"HTTP + x-gateway-request + verified tenant and actor headers"| Platform
+  GW -->|"HTTP + x-gateway-request + verified tenant and actor headers"| Domain
+  GW -->|"HTTP + x-gateway-request + verified tenant and actor headers"| Support
+  Platform --> PGB
+  Domain --> PGB
+  Support --> PGB
+  PGB --> PG
+  Platform --> RD
+  Domain --> RD
+  Domain --> OBJ
+  Support --> SR
+  Domain -->|publish command| Q
+  Q --> W
+  W -->|"tx: domain + outbox"| PGB
+  W -->|"relay events"| Q
+  Q -->|"events"| W

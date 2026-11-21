@@ -1,0 +1,48 @@
+sequenceDiagram
+  autonumber
+  actor C as Client
+  participant GW as gateway-service
+  participant API as service route handler
+  participant CA as Redis cache
+  participant Q as SQS command queue
+  participant W as service worker
+  participant DB as Postgres (service DB)
+  participant R as outbox relay (startRelay)
+  participant AN as analytics-service facts consumer
+  participant FE as analytics.fact_events
+
+  C->>GW: POST /api/v1/... (X-Idempotency-Key optional)
+  GW->>API: proxy
+  API->>API: Zod validate, requireRole, synchronous pre-checks
+  API->>Q: publish command envelope (messageId, tenantId, actorId, correlationId, schemaVersion)
+  API->>CA: invalidate affected keys
+  API-->>C: 202 {id, status accepted, correlationId}
+
+  Q->>W: deliver (visibility timeout, maxReceiveCount 5)
+  W->>DB: BEGIN, set_config app.tenant_id via runWithTenant
+  W->>DB: markProcessed(messageId) in _inbox.processed
+  alt already processed
+    W-->>Q: ack, no-op (idempotent)
+  else first delivery
+    W->>DB: INSERT/UPDATE domain rows
+    W->>DB: INSERT _outbox.messages (event + audit.event.record)
+    W->>DB: INSERT inbox.command_results (outcome)
+    DB-->>W: COMMIT
+    W-->>Q: ack
+  end
+  W->>CA: invalidateResource(tenant, resource)
+
+  loop every 500 ms (backoff 5s to 5min per row)
+    R->>DB: SELECT unpublished messages
+    R->>Q: publish event envelope, then set published_at
+  end
+  Q->>AN: deliver domain event
+  AN->>FE: tx: markProcessed, INSERT fact ON CONFLICT (tenant_id, dedupe_key) DO NOTHING
+  C->>GW: GET read model or command status
+  GW->>API: proxy
+  API->>CA: get
+  alt cache miss
+    API->>DB: scoped read, put in cache (TTL 30-300 s)
+  end
+  API-->>C: 200
+  Note over W,Q: NonRetryableError or exhausted retries route to DLQ and record a refused command result

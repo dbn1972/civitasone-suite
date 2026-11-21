@@ -1,0 +1,26 @@
+sequenceDiagram
+    autonumber
+    participant FIN as finance-service
+    participant FDB as civitas_finance outbox
+    participant EO as estab-service eOffice
+    participant WF as workflow-service
+    participant BUS as Queue bus (SQS)
+    participant AU as audit-service
+    participant AN as analytics-service
+    participant NO as notification-service
+
+    FIN->>EO: POST /v1/estab/files/from-module refType finance_sanction refId
+    EO-->>FIN: fileId (stored as fileRef)
+    EO->>WF: workflow.instance.create (approval chain)
+    WF->>WF: Section officer, finance officer, competent authority tasks
+    WF->>BUS: publish estab.file.approve command
+    BUS->>EO: deliver command
+    EO->>EO: tx: markProcessed, freeze noting, dscHash and prevHash, outbox rows
+    EO->>BUS: relay publishes finance.sanction.file_approved
+    BUS->>FIN: deliver to finance queue
+    FIN->>FDB: tx: markProcessed, release budget allocation, enqueue finance events and audit.event.record
+    FDB->>BUS: relay publishes finance events
+    BUS->>AU: audit.event.record (required delivery, retained 30 days in outbox)
+    BUS->>AN: finance.payment.made and other INBOUND topics
+    BUS->>NO: notification.send
+    Note over BUS: Retry with backoff, DLQ after 5 receives. NonRetryableError dead-letters immediately.

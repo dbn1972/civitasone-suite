@@ -1,0 +1,55 @@
+flowchart LR
+    subgraph Z0["Zone 0 - Untrusted"]
+        BR["Browsers"]
+        MOB["Flutter mobile"]
+        EXT["API key and webhook callers"]
+        PROV["Provider callbacks Razorpay Exotel"]
+    end
+    subgraph Z1["Zone 1 - Edge"]
+        WEB["Next.js web BFF with CSP nonce and httpOnly cookies"]
+        GW["gateway-service 8080: JWT edge verify, header strip, rate limits, helmet, module guard, ABAC, circuit breakers"]
+        KC["Keycloak 24 realm civitasone"]
+    end
+    subgraph Z2["Zone 2 - Service mesh loopback or private network"]
+        SVC["Domain services: authPlugin, requireRole, tenant tx hook"]
+        POL["policy-service"]
+        AUD["audit-service hash chain"]
+        IDN["identity-service"]
+        QS["queue-service bus (SQS)"]
+    end
+    subgraph Z3["Zone 3 - Data"]
+        PG[("Postgres per-service DBs, FORCE RLS, non-bypass svc roles")]
+        SILO[("Silo tenant DBs")]
+        RD[("Redis cache and denylist")]
+        OBJ[("S3 compatible object storage")]
+        KMS["KMS or Vault: PII_ENC_KEY, CONFIG_ENC_KEY"]
+    end
+    subgraph Z4["Zone 4 - Third party"]
+        PFMS["PFMS"]
+        PAY["Payment gateway"]
+        ESP["eSign ESP and DSC"]
+        GST["GSTN and NIC e-Invoice"]
+        MSG["SMS email WhatsApp telephony"]
+    end
+    BR -->|"HTTPS"| WEB
+    MOB -->|"HTTPS Bearer"| GW
+    EXT -->|"HTTPS x-api-key"| GW
+    PROV -->|"HTTPS signed webhook"| GW
+    WEB -->|"Bearer"| GW
+    WEB <-->|"OIDC PKCE"| KC
+    GW -->|"JWKS"| KC
+    GW -->|"verified x-tenant-id, x-actor-id"| SVC
+    SVC -->|"x-internal plus x-service-secret"| POL
+    SVC -->|"x-internal plus x-service-secret"| IDN
+    SVC -->|"audit.event.record via outbox"| QS
+    QS --> AUD
+    SVC --> PG
+    SVC --> SILO
+    SVC --> RD
+    SVC --> OBJ
+    SVC -.->|"keys"| KMS
+    SVC -->|"TLS, env-gated adapters"| PFMS
+    SVC --> PAY
+    SVC --> ESP
+    SVC --> GST
+    SVC --> MSG

@@ -1,0 +1,45 @@
+flowchart TB
+    subgraph APP["Application tier"]
+        GW["gateway-service (stateless)"]
+        SVCA["Service A (e.g. hrms-service)"]
+        SVCB["Service B (e.g. payroll-service)"]
+        AN["analytics-service"]
+        AUDS["audit-service"]
+    end
+    subgraph DBA["civitas_hrms (owned by A only)"]
+        DA["Domain schemas: employee, leave, gpf, workforce_core"]
+        OA["_outbox.messages"]
+        IA["_inbox.processed and command_results"]
+    end
+    subgraph DBB["civitas_payroll (owned by B only)"]
+        DB1["Domain schemas: run, payslip, posting_history"]
+        OB["_outbox.messages"]
+        IB["_inbox.processed"]
+    end
+    subgraph DBAN["civitas_analytics"]
+        FE["analytics.fact_events (monthly partitions, dedupe_key)"]
+    end
+    subgraph DBAU["civitas_audit"]
+        AE["audit events with prev_hash and event_hash, retain_until"]
+    end
+    BUS["Queue bus: SQS per-service queues plus DLQ"]
+    RD[("Redis: cache keys service:tenant:resource:id, session denylist")]
+    SILO[("Silo tenant DB: all service schemas for one tenant")]
+    OBJ[("S3 compatible object store")]
+    PGB["PgBouncer (scram, pooled)"]
+    GW --> SVCA
+    GW --> SVCB
+    SVCA --> PGB
+    PGB --> DBA
+    SVCB --> DBB
+    SVCA -. "TenantRouter for silo tenants" .-> SILO
+    SVCA --> RD
+    SVCA --> OBJ
+    OA -->|"relay publishes"| BUS
+    OB -->|"relay publishes"| BUS
+    BUS -->|"hrms.posting.changed etc"| SVCB
+    SVCB -->|"markProcessed then project"| IB
+    BUS -->|"INBOUND finance payment made etc"| AN
+    AN --> FE
+    BUS -->|"audit.event.record"| AUDS
+    AUDS --> AE

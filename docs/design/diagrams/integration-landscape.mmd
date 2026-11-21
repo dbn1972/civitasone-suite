@@ -1,0 +1,91 @@
+flowchart LR
+    subgraph CLI["Clients"]
+        WEB["Next.js web"]
+        MOB["Flutter mobile"]
+        APIC["External API clients (x-api-key or client_credentials)"]
+    end
+    subgraph EDGE["Edge"]
+        GW["gateway-service 8080 (103 route entries)"]
+        KC["Keycloak 24 OIDC"]
+    end
+    subgraph CORE["Platform services"]
+        IDN["identity"]
+        TEN["tenant"]
+        POL["policy"]
+        ADM["admin (webhooks, integration registry, composition)"]
+        NOT["notification"]
+        AUD["audit"]
+        WF["workflow"]
+    end
+    subgraph DOM["Domain services (examples)"]
+        FIN["finance"]
+        HR["hrms"]
+        PAYR["payroll"]
+        PRO["procurement"]
+        GRA["grant"]
+        EST["estab - eOffice decision spine"]
+        BILL["billing"]
+        REV["revenue"]
+        CIT["citizen"]
+        CRM["crm and cdp (Bharat Sampark)"]
+        TEL["telephony"]
+        ST["smarttransfer"]
+    end
+    BUS{{"Event bus: outbox relay to SQS queues, per-service queue plus DLQ"}}
+    subgraph EXT["External systems"]
+        PFMS["PFMS e-Kuber"]
+        BANK["Bank H2H and NACH, signed files"]
+        RZP["Razorpay payment gateway"]
+        BBPS["BBPS"]
+        GSTN["GSTN and NIC e-Invoice IRP"]
+        ESP["Aadhaar eSign ESP"]
+        DSC["DSC token or HSM"]
+        DL["DigiLocker"]
+        CARR["Exotel and Twilio carriers"]
+        MSG["SMTP SMS WhatsApp"]
+        HOOK["Tenant webhook receivers (HMAC)"]
+        INDP["India Post adapters: APT POSB PLI IPPB CPGRAMS DREAM DIGIPIN"]
+        OBJ["S3 compatible storage"]
+    end
+    WEB --> GW
+    MOB --> GW
+    APIC --> GW
+    WEB <--> KC
+    GW -->|"JWKS verify"| KC
+    GW --> IDN
+    GW --> TEN
+    GW --> POL
+    GW --> FIN
+    GW --> HR
+    GW --> EST
+    GW --> BILL
+    GW --> CIT
+    GW --> CRM
+    FIN -->|"raise file via eoffice-sdk"| EST
+    HR -->|"raise file"| EST
+    PRO -->|"raise file"| EST
+    GRA -->|"raise file"| EST
+    EST -->|"workflow.instance.create"| WF
+    WF -->|"estab.file.approve"| EST
+    EST -->|"module.entity.file_approved"| BUS
+    FIN --> BUS
+    HR --> BUS
+    PAYR --> BUS
+    ST --> BUS
+    BUS --> AUD
+    BUS --> NOT
+    BUS --> PAYR
+    BUS --> FIN
+    GRA -->|"gov-adapters"| PFMS
+    PAYR -->|"signed bank file"| BANK
+    BILL -->|"checkout and webhook"| RZP
+    REV --> BBPS
+    BILL --> GSTN
+    CIT --> ESP
+    EST --> DSC
+    CIT --> DL
+    TEL --> CARR
+    NOT --> MSG
+    ADM --> HOOK
+    CRM -.->|"adapter ports"| INDP
+    DOM -.-> OBJ

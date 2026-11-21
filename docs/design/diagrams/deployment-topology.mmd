@@ -1,0 +1,17 @@
+flowchart TB
+    subgraph DEVENV["Dev - infra/docker-compose.yml (one host, hot reload)"]
+        D1["postgres 16, pgbouncer, redis 7, meilisearch, keycloak 24, LocalStack (SQS+S3)"]
+        D2["services started per developer"]
+    end
+    subgraph STG["Staging - Helm values.staging.yaml OR docker-compose.prod.yml (single host)"]
+        S1["replicaCount 1, no HPA, no ingress TLS, real or LocalStack SQS"]
+    end
+    subgraph PROD["Production - Helm values.production.yaml (Kubernetes)"]
+        P1["replicaCount 2, per-service HPA (9 services), ingress TLS, NetworkPolicy"]
+        P2["External/managed Postgres 16 behind pgbouncer, Redis, Keycloak, SQS, S3"]
+    end
+    subgraph LIVE["Current live shared environment (cloudsphere-ec2) - PM2"]
+        L1["ecosystem.config.js: 134 PM2 processes (66 HTTP + 66 workers + queue + web), Dockerised postgres/pgbouncer/redis/keycloak/localstack"]
+    end
+    DEVENV -->|"same root Dockerfile images"| STG --> PROD
+    LIVE -.- PROD

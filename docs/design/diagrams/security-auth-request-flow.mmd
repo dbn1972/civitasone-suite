@@ -1,0 +1,33 @@
+sequenceDiagram
+    autonumber
+    actor U as Officer browser
+    participant W as Next.js web BFF
+    participant KC as Keycloak realm civitasone
+    participant GW as gateway-service 8080
+    participant R as Redis
+    participant POL as policy-service
+    participant S as Domain service
+    participant PG as Postgres civitas_service
+
+    U->>W: Open app (no session cookie)
+    W->>KC: Authorization Code + PKCE S256 (client civitasone-web)
+    KC-->>W: access_token RS256 with sub tid roles sid, refresh_token
+    W-->>U: Set httpOnly SameSite=Strict cookies civitasone_at and civitasone_rt
+    U->>W: API call /api/proxy/v1/finance/...
+    W->>GW: Authorization Bearer access_token
+    GW->>GW: canonicalise path, reject traversal and encoded prefix
+    GW->>GW: strip x-internal, x-internal-secret, x-service-secret, x-gateway-request
+    GW->>KC: Fetch JWKS (cached) and verify signature, iss, aud, exp
+    GW->>GW: OVERWRITE x-tenant-id with verified tid and x-actor-id with sub (delete if absent)
+    GW->>GW: module-guard (tenant entitlement) and optional ABAC policy-check on mutations
+    GW->>POL: POST /v1/policy/evaluate with x-internal and service secret (mutations only, env-gated)
+    POL-->>GW: allow or deny
+    GW->>S: Proxy request with Bearer token plus verified x-tenant-id
+    S->>S: authPlugin re-verifies JWT, builds ctx from tid (header ignored)
+    S->>R: Check session denylist by sid (fail-open on Redis error)
+    S->>S: requireRole(ctx, SERVICE_ROLES) then optional requirePermission via policy-service
+    S->>PG: BEGIN, set_config app.tenant_id = ctx.tenantId, query under FORCE RLS
+    PG-->>S: Rows for this tenant only
+    S-->>GW: 200 data or 202 accepted with commandId
+    GW-->>W: Response with x-correlation-id
+    W-->>U: Render

@@ -1,0 +1,22 @@
+flowchart TD
+    A["Client request with Bearer JWT and optional forged x-tenant-id"] --> B{"Gateway: jwtEdgeVerify"}
+    B -->|"invalid or expired"| X1["401 TOKEN_INVALID"]
+    B -->|"valid"| C{"JWT carries tid claim?"}
+    C -->|"yes"| D["Overwrite x-tenant-id = tid"]
+    C -->|"no"| E["Delete x-tenant-id (no tenant)"]
+    D --> F["proxyHandler re-derives identity headers from req.jwtPayload (covers edge-verify off or audit modes)"]
+    E --> F
+    F --> G["Service authPlugin: verifyJwt again, ctx.tenantId = tid"]
+    G --> H{"resolveRlsTenant"}
+    H -->|"header differs from ctx tenant"| I["Header ignored, warn tenant_header_mismatch, use ctx tenant"]
+    H -->|"header equals ctx tenant"| J["Use ctx tenant"]
+    H -->|"no tenant in ctx"| K["No GUC set"]
+    I --> L["AsyncLocalStorage tenant context"]
+    J --> L
+    L --> M["db.transaction wrapper: set_config app.tenant_id local to tx"]
+    K --> N["FORCE RLS: current_tenant_id is NULL, zero rows, writes rejected"]
+    M --> O{"Tenant tier (tenant registry)"}
+    O -->|"pool"| P["Shared per-service DB civitas_service, WHERE tenant_id plus RLS policy tenant_id = current_tenant_id()"]
+    O -->|"silo"| Q["TenantRouter resolves dedicated tenant DB hosting all service schemas, RLS still applies harmlessly"]
+    P --> R["Cache keys service:tenant:resource:id, outbox and inbox rows carry tenant_id"]
+    Q --> R

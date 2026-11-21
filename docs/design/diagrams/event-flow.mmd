@@ -1,0 +1,41 @@
+sequenceDiagram
+  autonumber
+  actor Maker as Maker (initiator)
+  participant WEB as Web Console
+  participant GW as Gateway
+  participant MOD as Source module (e.g. procurement)
+  participant Q as Message bus
+  participant WK as Module worker
+  participant DB as Module DB (domain + _outbox)
+  participant SDK as eoffice-sdk
+  participant EST as estab-service (eOffice)
+  participant MX as Approval matrix
+  participant WF as workflow-service
+  actor Chk as Checker (SO, US, DS)
+  participant AUD as audit-service
+
+  Maker->>WEB: Submit purchase order for approval
+  WEB->>GW: POST /api/v1/procurement/... (Bearer JWT)
+  GW->>MOD: Proxy (x-gateway-request, verified x-tenant-id and x-actor-id, service re-verifies JWT)
+  MOD->>MOD: Validate (zod)
+  MOD->>Q: Publish command
+  MOD-->>Maker: 202 Accepted (commandId, correlationId)
+  Q->>WK: Deliver command
+  WK->>DB: BEGIN, entity -> pending_approval, INSERT _outbox, COMMIT
+  WK->>SDK: raiseFile(refType, refId, amountMinor)
+  SDK->>EST: POST /v1/estab/files/from-module (202)
+  EST->>MX: Resolve chain by module and amount band
+  EST->>WF: Create file_noting instance
+  loop Each desk level
+    WF->>Chk: Task in workbasket
+    Chk->>WF: Approve (green note, sign)
+    Note over WF: SoD guard rejects initiator as checker (403 SOD_SELF_APPROVAL)
+    WF-->>EST: estab.file.level_approved
+    EST->>EST: Auto-sign green note (hash-chained)
+  end
+  WF-->>EST: estab.file.approve (terminal)
+  EST-->>Q: procurement.po.file_decided (via outbox relay)
+  Q->>WK: Deliver decision event
+  WK->>DB: _inbox markProcessed, execute side effect (issue PO), INSERT _outbox
+  EST->>AUD: audit.event.record (every step)
+  WK->>AUD: audit.event.record

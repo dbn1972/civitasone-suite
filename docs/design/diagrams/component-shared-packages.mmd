@@ -1,0 +1,66 @@
+flowchart TB
+  subgraph SVC["Domain / platform service (Fastify 4 process + worker process)"]
+    direction TB
+    APP["app.ts: routes + authPlugin + tenant hook"]
+    WRK["worker.ts: consumers + outbox relay + schedulers"]
+  end
+
+  subgraph SEC["Identity, tenancy and security"]
+    AUTH["@civitasone/auth: verifyJwt, authPlugin, RBAC helpers, session denylist"]
+    TYPES["@civitasone/types: RequestContext, gateway public routes"]
+    KMS["@civitasone/kms: envelope encryption, DSC certificates"]
+    SECH["@civitasone/security-headers, rate-limit"]
+    TPROF["@civitasone/tenant-profile, module-licence, feature-flags"]
+  end
+
+  subgraph DATA["Data access and consistency"]
+    DB["@civitasone/db: pool, tenant GUC, TenantRouter, quota-check"]
+    OUTBOX["@civitasone/outbox: enqueue, relay, markProcessed, command results"]
+    CACHE["@civitasone/cache: Redis read-through, idempotency, invalidation"]
+    NUM["@civitasone/numbering: gap-free document numbers"]
+    GOV["@civitasone/data-governance: masking, consent, retention"]
+  end
+
+  subgraph MSG["Messaging"]
+    QUEUE["@civitasone/queue: facade over queue-service bus (SQS, memory, RabbitMQ)"]
+    EVENTS["@civitasone/events: envelope, schema registry, topic contracts"]
+    EOSDK["@civitasone/eoffice-sdk: raise file, decision callback contract"]
+    SCANLINK["@civitasone/scan-link: bulk-scan filing wire contract"]
+  end
+
+  subgraph CONTRACT["Contracts and presentation"]
+    SCHEMAS["@civitasone/schemas: Zod validators, sendAccepted, error handler"]
+    OBS["@civitasone/observability: health, ready, metrics, redaction, tracing"]
+    CB["@civitasone/circuit-breaker"]
+    UIKIT["@civitasone/ui-kit, client-core: web and mobile"]
+  end
+
+  subgraph INTEG["Integration and document capabilities"]
+    CONN["connector-framework, integration-config, gov-adapters (PFMS, GSTN, NACH, TRACES)"]
+    STORE["storage (S3 SigV4), scanner (ClamAV), ocr, render (PDF, DSC), search"]
+    PLUG["plugin-sdk"]
+    RECON["reconciliation, gst"]
+  end
+
+  APP --> AUTH
+  APP --> SCHEMAS
+  APP --> DB
+  APP --> CACHE
+  APP --> OBS
+  APP --> SECH
+  APP --> QUEUE
+  WRK --> QUEUE
+  WRK --> OUTBOX
+  WRK --> DB
+  OUTBOX --> DB
+  OUTBOX --> QUEUE
+  QUEUE --> EVENTS
+  AUTH --> TYPES
+  AUTH --> CACHE
+  DB --> TYPES
+  EOSDK --> EVENTS
+  CONN --> CB
+  APP --> TPROF
+  APP --> CONN
+  APP --> STORE
+  APP --> NUM

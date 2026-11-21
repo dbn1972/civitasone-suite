@@ -1,0 +1,42 @@
+sequenceDiagram
+    autonumber
+    participant C as Client
+    participant GW as gateway-service
+    participant RL as Rate limiters (Redis)
+    participant AK as identity-service apikeys verify
+    participant KC as Keycloak JWKS
+    participant MG as Module guard (admin-service composition)
+    participant PC as policy-service evaluate
+    participant CB as Per-upstream circuit breaker
+    participant S as Upstream service
+
+    C->>GW: HTTPS request /api/v1/finance/invoices
+    GW->>GW: content-type allow-list, body limit, helmet headers, CORS
+    GW->>RL: global 1000 per min, then per-tenant ceiling and per-user bucket
+    RL-->>GW: allowed, X-RateLimit headers
+    alt x-api-key present
+        GW->>AK: verify key and scopes
+        AK-->>GW: valid with tenantId and ownerId
+    else Bearer token
+        GW->>KC: verify RS256 signature via cached JWKS
+        KC-->>GW: key material
+    end
+    GW->>GW: canonicalise path, block internal route groups with 403
+    GW->>GW: resolve longest-prefix route from registry to upstream
+    GW->>MG: is module enabled for tenant (off, shadow, enforce)
+    MG-->>GW: allow or 403
+    GW->>PC: ABAC evaluate for POST PUT PATCH DELETE (POLICY_ENFORCE)
+    PC-->>GW: allow or deny
+    GW->>GW: build upstream headers from allow-list, set x-tenant-id and x-actor-id from verified identity, x-forwarded-for single hop
+    GW->>CB: call upstream with 15 s timeout
+    alt breaker open
+        CB-->>C: 503 SERVICE_UNAVAILABLE
+    else timeout
+        CB-->>C: 504 GATEWAY_TIMEOUT
+    else upstream 5xx
+        CB-->>C: same 5xx as UPSTREAM_ERROR, counts toward breaker
+    else success
+        CB->>S: forward /v1/invoices
+        S-->>GW: 200 or 202 or 4xx
+        GW-->>C: Stream response, x-correlation-id
+    end

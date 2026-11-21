@@ -1,0 +1,20 @@
+sequenceDiagram
+  autonumber
+  participant U as User (web or mobile)
+  participant KC as Keycloak 24
+  participant GW as Gateway :8080
+  participant SVC as Domain service
+  participant DB as PostgreSQL (RLS)
+
+  U->>KC: OIDC authorization code + PKCE
+  KC-->>U: RS256 access token (iss, aud, roles, tid)
+  U->>GW: GET /api/v1/... Authorization: Bearer JWT
+  GW->>KC: JWKS (cached)
+  GW->>GW: Verify signature, iss, aud, strip client-supplied internal headers
+  GW->>GW: Module guard (403 if module disabled), quota, public-prefix check
+  GW->>SVC: Forward + x-gateway-request 1 + verified x-tenant-id and x-actor-id (no x-service-secret)
+  SVC->>SVC: Re-verify JWT via authPlugin (Redis sid denylist), tenant from signed tid, requireRole()
+  SVC->>DB: BEGIN, SET LOCAL app.tenant_id, query
+  DB-->>SVC: Rows of this tenant only
+  SVC-->>GW: 200 / 202
+  GW-->>U: Response (x-correlation-id echoed)

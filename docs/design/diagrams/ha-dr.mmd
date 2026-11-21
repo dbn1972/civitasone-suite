@@ -1,0 +1,44 @@
+flowchart TB
+    subgraph PRIMARY["Primary site / region (ap-south-1 or primary DC)"]
+        LBP["Load balancer (multi-AZ)"]
+        subgraph APPTIER["App tier - stateless"]
+            GWR["gateway x2..8 (HPA 65% CPU)"]
+            SVR["services x1..8, Tier 0/1 autoscaled, PDB"]
+        end
+        subgraph DATATIER["Data tier"]
+            PGP[("PostgreSQL primary")]
+            PGS[("Synchronous standby / Multi-AZ")]
+            PGRR[("Read replica(s)")]
+            REDP[("Redis sentinel / cluster")]
+        end
+        WAL["WAL archive (documented target, not configured in shipped config) + nightly pg_dump (script covers 33 of 66 DBs, no keycloak)"]
+        PGP == streaming ==> PGS
+        PGP == streaming ==> PGRR
+        PGP --> WAL
+        LBP --> GWR --> SVR --> PGP
+        SVR --> REDP
+        SVR -. reads .-> PGRR
+    end
+
+    subgraph BACKUP["Backup store (separate failure domain)"]
+        OBJB[("Object storage: base backups + WAL + dumps + dr-drills/")]
+    end
+
+    subgraph DRSITE["DR site (warm standby or rebuild on demand)"]
+        PGD[("Restored / promoted PostgreSQL")]
+        HELMD["helm install from same chart + same image tag"]
+        LBD["Load balancer (cut over last)"]
+    end
+
+    WAL --> OBJB
+    OBJB -->|"base backup + WAL replay to target time (RPO <= 15 min)"| PGD
+    HELMD --> PGD
+    HELMD --> LBD
+
+    DRILL["dr-drill.yml weekly: backup-databases.sh + restore-drill.sh --all-tier01"] -.-> OBJB
+
+    AUDIT["audit hash chain: NEVER restore to earlier state - correct forward with compensating entries"]
+    PGD -.-> AUDIT
+
+    classDef warn fill:#f8d7da,stroke:#842029,color:#000;
+    class AUDIT warn;
