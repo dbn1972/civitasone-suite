@@ -593,22 +593,43 @@ compose_pull_or_build() {
   local image_registry
   image_registry=$(grep '^IMAGE_REGISTRY=' infra/.env 2>/dev/null | cut -d= -f2)
 
-  # Check if images exist locally or need building
-  if docker images "${image_registry}/gateway-service" --format '{{.Repository}}' 2>/dev/null | grep -q gateway; then
-    check "Images available locally" "PASS"
+  local dc=(docker compose -f infra/docker-compose.prod.yml --env-file infra/.env)
+
+  # Every service with a build: section must have its image locally. Derive the
+  # list from the compose file (service<TAB>image) instead of probing a single
+  # service, so one missing image (e.g. web) is rebuilt on --resume.
+  local to_build=() svc img total=0 line
+  while IFS=$'\t' read -r svc img; do
+    [[ -z "$svc" ]] && continue
+    total=$((total + 1))
+    docker image inspect "$img" &>/dev/null || to_build+=("$svc")
+  done < <("${dc[@]}" config --format json 2>/dev/null | \
+           jq -r '.services | to_entries[] | select(.value.build != null) | "\(.key)\t\(.value.image)"' 2>/dev/null || true)
+
+  if [[ $total -eq 0 ]]; then
+    # Could not enumerate build targets: fail open and build everything.
+    log WARN "Could not enumerate build targets from compose; building all"
+  elif [[ ${#to_build[@]} -eq 0 ]]; then
+    check "Images available locally (all ${total} build targets present)" "PASS"
     return
+  else
+    log INFO "${#to_build[@]} of ${total} images missing: ${to_build[*]:0:8}$([[ ${#to_build[@]} -gt 8 ]] && echo ' ...')"
   fi
 
-  log INFO "Building all service images (this takes 5-15 minutes on first run)..."
-  printf "  ${DIM}Building 33 services + gateway + web...${NC}\n"
+  log INFO "Building service images (this takes 5-15 minutes on first run)..."
 
   if [[ "$DRY_RUN" == true ]]; then
     check "Image build (dry-run, skipped)" "SKIP"
     return
   fi
 
-  if docker compose -f infra/docker-compose.prod.yml --env-file infra/.env build 2>>"$INSTALL_LOG"; then
-    check "All images built successfully" "PASS"
+  # Throttle parallel builds: ~65 unthrottled builds pushed host load >150 on a
+  # 16-vCPU box. Override with COMPOSE_PARALLEL_LIMIT=<n>.
+  export COMPOSE_PARALLEL_LIMIT="${COMPOSE_PARALLEL_LIMIT:-6}"
+  log INFO "Build parallelism capped at COMPOSE_PARALLEL_LIMIT=${COMPOSE_PARALLEL_LIMIT}"
+
+  if "${dc[@]}" build ${to_build[@]+"${to_build[@]}"} 2>>"$INSTALL_LOG"; then
+    check "Images built successfully" "PASS"
   else
     check "Image build" "FAIL" "Check $INSTALL_LOG for details"
     die "Image build failed. Ensure Docker has at least 8GB memory allocated."

@@ -110,7 +110,7 @@ services:
     cpus: "2.0"
 
   pgbouncer:
-    image: edoburu/pgbouncer:1.21.0
+    image: edoburu/pgbouncer:v1.23.1-p2
     restart: unless-stopped
     networks: [civitasone]
     depends_on:
