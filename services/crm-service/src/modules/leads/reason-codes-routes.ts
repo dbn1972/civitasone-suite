@@ -7,6 +7,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import * as repo from "./reason-codes-repo.js";
+import { resolveUserNames } from "../../shared/user-directory.js";
 import { putReasonCodesBody } from "./reason-codes-validators.js";
 
 const CRM_ROLES = ["crm_user", "crm_admin", "super_admin", "tenant_admin"];
@@ -28,7 +29,10 @@ export async function leadReasonCodeRoutes(app: FastifyInstance): Promise<void> 
     requireRole(ctx, CRM_ROLES);
     const { codes, meta } = await repo.getCodesList(ctx.tenantId, ctx.actorId);
     void reply.header("ETag", meta.version);
-    return reply.send({ data: codes, version: meta.version, meta: { ...meta, total: codes.length } });
+    // GAP-CRM display: resolve the "last changed by" actor id to a display name.
+    const names = await resolveUserNames(ctx.tenantId, [meta.updatedBy]);
+    const updatedByName = meta.updatedBy ? names.get(meta.updatedBy) : undefined;
+    return reply.send({ data: codes, version: meta.version, meta: { ...meta, total: codes.length, ...(updatedByName ? { updatedByName } : {}) } });
   });
 
   app.put("/v1/crm/lead-reason-codes", async (req, reply) => {

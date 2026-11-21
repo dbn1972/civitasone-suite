@@ -64,6 +64,7 @@ interface RuleSnapshot {
   ordinal: number;
   enabled: boolean;
   fallbackOwnerId: string;
+  fallbackOwnerName: string;
 }
 
 function snapshotOf(row: RuleRow): RuleSnapshot {
@@ -74,6 +75,7 @@ function snapshotOf(row: RuleRow): RuleSnapshot {
     ordinal: row.ordinal,
     enabled: row.enabled,
     fallbackOwnerId: row.fallbackOwner?.id ?? "",
+    fallbackOwnerName: row.fallbackOwner && row.fallbackOwner.name !== row.fallbackOwner.id ? row.fallbackOwner.name : "",
   };
 }
 
@@ -119,7 +121,7 @@ function toRow(r: AssignmentRule): RuleRow {
     key: r.id ?? `new-${SEQ++}`,
     criteriaText,
     origEnabled: r.id ? r.enabled : undefined,
-    fallbackOwner: r.fallbackOwnerId ? { id: r.fallbackOwnerId, name: r.fallbackOwnerId } : null,
+    fallbackOwner: r.fallbackOwnerId ? { id: r.fallbackOwnerId, name: r.fallbackOwnerName ?? r.fallbackOwnerId } : null,
   };
   // Only persisted rows get a baseline snapshot; a new row stays dirty.
   if (r.id) row.saved = snapshotOf(row);
@@ -421,7 +423,7 @@ export function AssignmentRulesEditor() {
               criteriaText: snap.criteriaText,
               ordinal: snap.ordinal,
               enabled: snap.enabled,
-              fallbackOwner: snap.fallbackOwnerId ? { id: snap.fallbackOwnerId, name: snap.fallbackOwnerId } : null,
+              fallbackOwner: snap.fallbackOwnerId ? { id: snap.fallbackOwnerId, name: snap.fallbackOwnerName || snap.fallbackOwnerId } : null,
             }
           : r,
       ),

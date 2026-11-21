@@ -409,7 +409,7 @@ export function QuotationBuilder({ canApprove = false, currentUserId = null }: Q
                   <td>{templateLabel(q.template)}</td>
                   <td className="num">v{q.version}</td>
                   <td>{q.accountId || "—"}</td>
-                  <td>{q.opportunityId || "—"}</td>
+                  <td>{q.opportunityName ?? "—"}</td>
                   <td>{q.createdAt ? formatIndianDate(q.createdAt) : "—"}</td>
                   <td className="num">{q.lines.length}</td>
                   <td className="num">{formatMoney(displayGrandTotalMinor(q))}</td>
@@ -526,7 +526,7 @@ export function QuotationBuilder({ canApprove = false, currentUserId = null }: Q
             <p style={{ fontSize: 12, color: "var(--muted)", padding: "0 12px 8px" }}>
               {selected.quoteRef ? <>{t.rich("refLine", { ref: selected.quoteRef, strong: (chunks) => <strong>{chunks}</strong> })} </> : null}
               {selected.accountId ? <>{t("accountLine", { id: selected.accountId })} </> : null}
-              {selected.opportunityId ? <>{t("opportunityLine", { id: selected.opportunityId })}</> : null}
+              {selected.opportunityName ? <>{t("opportunityLine", { id: selected.opportunityName })}</> : null}
             </p>
           ) : null}
 

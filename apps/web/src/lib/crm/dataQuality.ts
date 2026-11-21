@@ -339,7 +339,11 @@ export async function getDedupRules(): Promise<LoaderResult<DedupRule[]> & { ver
     const version = etag ?? (bodyVersion && bodyVersion.length > 0 ? bodyVersion : undefined);
     // "Last changed by/at" metadata, when the backend provides it.
     const meta = obj.meta && typeof obj.meta === "object" ? (obj.meta as Record<string, unknown>) : {};
-    const updatedBy = typeof meta.updatedBy === "string" && meta.updatedBy.length > 0 ? meta.updatedBy : undefined;
+    // GAP-CRM display: prefer the service-resolved display name; never surface a bare
+    // UUID as "last changed by" -- an unresolved opaque actor id reads "Unknown user".
+    const updatedByName = typeof meta.updatedByName === "string" && meta.updatedByName.trim() ? meta.updatedByName.trim() : undefined;
+    const rawUpdatedBy = typeof meta.updatedBy === "string" && meta.updatedBy.length > 0 ? meta.updatedBy : undefined;
+    const updatedBy = updatedByName ?? (rawUpdatedBy && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rawUpdatedBy) ? "Unknown user" : rawUpdatedBy);
     const updatedAt = typeof meta.updatedAt === "string" && meta.updatedAt.length > 0 ? meta.updatedAt : undefined;
     return {
       data: normaliseRules(body),

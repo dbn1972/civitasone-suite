@@ -15,6 +15,7 @@ import {
   getAssignmentLog,
   ageingFromLog,
   formatAgeing,
+  resolvedActorName,
   type AssignmentLogEntry,
   type AsSource,
 } from "@/lib/crm/assignment";
@@ -56,7 +57,7 @@ export function AssignmentLogView({ leadId }: { leadId: string }) {
         <div>
           <div style={{ fontSize: 12, color: "var(--muted)", fontWeight: 600 }}>Current owner</div>
           <div style={{ fontSize: 20, fontWeight: 700 }}>
-            {isError || !ageing.latest ? "—" : ageing.latest.ownerId || "unassigned"}
+            {isError || !ageing.latest ? "—" : (resolvedActorName(ageing.latest.ownerName, ageing.latest.ownerId) ?? "unassigned")}
           </div>
         </div>
         <div>
@@ -93,11 +94,11 @@ export function AssignmentLogView({ leadId }: { leadId: string }) {
             {log.map((e, idx) => (
               <li key={idx} className={idx === 0 ? "cur" : "done"}>
                 <div className="t">
-                  <strong>{e.ownerId || "unassigned"}</strong>
+                  <strong>{resolvedActorName(e.ownerName, e.ownerId) ?? "unassigned"}</strong>
                   <span className="pill info" style={{ marginLeft: 8 }}>{METHOD_LABELS[e.method]}</span>
                   {e.acceptedAt ? <span className="pill ok" style={{ marginLeft: 6 }}>accepted</span> : null}
                 </div>
-                {e.assignedAt ? <div className="d">Assigned {e.assignedAt}{e.assignedBy ? ` by ${e.assignedBy}` : ""}</div> : null}
+                {e.assignedAt ? <div className="d">Assigned {e.assignedAt}{e.assignedBy ? ` by ${resolvedActorName(e.assignedByName, e.assignedBy) ?? "Unknown user"}` : ""}</div> : null}
                 {e.ruleId ? <div className="d">Rule: {e.ruleId}</div> : null}
               </li>
             ))}

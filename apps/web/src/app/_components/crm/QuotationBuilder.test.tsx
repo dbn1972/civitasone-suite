@@ -219,11 +219,11 @@ describe("QuotationBuilder (QP-003/004/005)", () => {
   // GAP-CRM-QUOTATIONS-02: the list must distinguish two "standard v1" quotes.
   it("lists quote ref, account, opportunity and created date so rows are distinguishable", async () => {
     const a: qp.Quotation = {
-      id: "qa", quoteRef: "QTN/2026/AAA111", accountId: "acc-1", opportunityId: "deal-1",
+      id: "qa", quoteRef: "QTN/2026/AAA111", accountId: "acc-1", opportunityId: "deal-1", opportunityName: "North Deal",
       createdAt: "2026-02-03T10:00:00.000Z", template: "standard", version: 1, status: "draft", lines: [],
     };
     const b: qp.Quotation = {
-      id: "qb", quoteRef: "QTN/2026/BBB222", accountId: "acc-2", opportunityId: "deal-2",
+      id: "qb", quoteRef: "QTN/2026/BBB222", accountId: "acc-2", opportunityId: "deal-2", opportunityName: "South Deal",
       createdAt: "2026-02-04T10:00:00.000Z", template: "standard", version: 1, status: "draft", lines: [],
     };
     vi.mocked(qp.getQuotations).mockResolvedValue({ data: [a, b], source: "api" });
@@ -231,7 +231,10 @@ describe("QuotationBuilder (QP-003/004/005)", () => {
     await waitFor(() => expect(screen.getByText("QTN/2026/AAA111")).toBeInTheDocument());
     expect(screen.getByText("QTN/2026/BBB222")).toBeInTheDocument();
     expect(screen.getByText("acc-1")).toBeInTheDocument();
-    expect(screen.getByText("deal-2")).toBeInTheDocument();
+    // GAP-CRM display: the Opportunity column shows the resolved deal NAME, not the raw id.
+    expect(screen.getByText("North Deal")).toBeInTheDocument();
+    expect(screen.getByText("South Deal")).toBeInTheDocument();
+    expect(screen.queryByText("deal-2")).not.toBeInTheDocument();
   });
 
   it("carries the chosen opportunity (dealId) when a quotation is created from scratch", async () => {

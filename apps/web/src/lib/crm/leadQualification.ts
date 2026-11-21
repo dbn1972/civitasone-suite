@@ -441,7 +441,11 @@ async function readConcurrencyMeta(res: Response, body: unknown): Promise<Concur
   const version = etag ?? bodyVersion;
   const out: ConcurrencyMeta = {};
   if (version) out.version = version;
-  if (typeof meta.updatedBy === "string" && meta.updatedBy.length > 0) out.updatedBy = meta.updatedBy;
+  // GAP-CRM display: prefer the service-resolved name; never surface a bare UUID.
+  const uName = typeof meta.updatedByName === "string" && meta.updatedByName.trim() ? meta.updatedByName.trim() : undefined;
+  const uRaw = typeof meta.updatedBy === "string" && meta.updatedBy.length > 0 ? meta.updatedBy : undefined;
+  const uLabel = uName ?? (uRaw && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(uRaw) ? "Unknown user" : uRaw);
+  if (uLabel) out.updatedBy = uLabel;
   if (typeof meta.updatedAt === "string" && meta.updatedAt.length > 0) out.updatedAt = meta.updatedAt;
   if (Array.isArray(meta.scoreableAttributes)) {
     const attrs = meta.scoreableAttributes.filter((a): a is string => typeof a === "string" && a.length > 0);
