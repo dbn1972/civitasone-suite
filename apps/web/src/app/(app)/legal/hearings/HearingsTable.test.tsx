@@ -82,3 +82,14 @@ describe("HearingsTable filters (GAP-LEGAL-HEARINGS-02)", () => {
     expect(screen.queryByText("FUTURE")).not.toBeInTheDocument();
   });
 });
+
+describe("HearingsTable countdown uses the hearing's own date", () => {
+  beforeEach(() => resourceMock.mockReset());
+  it("ignores nextDate (re-listing) for days-to-hearing", () => {
+    mockRows([row({ id: "n", caseNo: "NEXT", status: "scheduled", date: "2026-10-10", nextDate: "2026-12-01" })]);
+    render(<HearingsTable items={[]} source="api" today={TODAY} />);
+    // 2026-10-10 is 4 days after TODAY; the re-listing (56 days) must not be used.
+    expect(screen.getByText(/\b4\b/)).toBeInTheDocument();
+    expect(screen.queryByText(/\b56\b/)).not.toBeInTheDocument();
+  });
+});

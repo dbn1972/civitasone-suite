@@ -123,6 +123,18 @@ describe("Legal case detail against the real service shape", () => {
     expect(screen.queryByText(/Unable to load case details/i)).not.toBeInTheDocument();
   });
 
+  it("shows the case-type label (not the raw code) as Subject, and honest empty-hearings copy", async () => {
+    const bare = LegalCaseDetailSchema.parse({
+      id: "w", caseNo: "W/1/2026", title: "Writ", court: "High Court", type: "writ",
+      filedDate: "2026-10-22", status: "pending", hearings: [], orders: [],
+    });
+    getLegalCaseById.mockResolvedValue({ data: bare, source: "api", status: 200 });
+    render(await LegalCaseDetailPage({ params: Promise.resolve({ id: "w" }) }));
+    expect(screen.getByText("Writ Petition")).toBeInTheDocument();
+    expect(screen.queryByText("writ")).not.toBeInTheDocument();
+    expect(screen.queryByText(/Add hearing records/i)).not.toBeInTheDocument();
+  });
+
   it("renders a bare real case (nothing but required fields, no hearings/orders)", async () => {
     const bare = LegalCaseDetailSchema.parse({
       id: "b", caseNo: "X/1/2026", title: "Bare", court: "District Court", type: "other",

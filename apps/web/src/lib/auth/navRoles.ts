@@ -53,7 +53,9 @@ export const CRM_ROLES = ["crm_user", "crm_admin", "super_admin", "tenant_admin"
 
 export const AUDIT_ROLES = ["audit_officer", "audit_admin", "platform_admin", "super_admin", "finance_admin", "dept_head"];
 
-export const LEGAL_ROLES = ["legal_officer", "legal_admin", "platform_admin", "super_admin", "audit_officer"];
+// Must equal the union of roles legal-service accepts (drift-guarded by legalRoles.test.ts).
+// platform_admin is NOT accepted by any legal-service route, so it is deliberately absent.
+export const LEGAL_ROLES = ["legal_officer", "legal_admin", "super_admin", "audit_officer"];
 
 export const LOCATION_VIEW_ROLES = [
   "location_user",

@@ -69,9 +69,6 @@ export default async function LegalDashboardPage() {
         <StatCard icon="📁" iconBg="var(--line2)" label="Active Cases" value={data.activeCases} />
         <StatCard icon="🗓️" iconBg="var(--infobg)" label="Hearings (wk)" value={data.hearingsThisWeek} />
         <StatCard icon="📜" iconBg="var(--warnbg)" label="Orders to Comply" value={data.ordersPending} />
-        {/* GAP-LEGAL-DASHBOARD-04: this value is a workload count (opinions
-            due), not a litigation-risk measure — label it honestly. */}
-        <StatCard icon="📝" iconBg="var(--infobg)" label="Opinions Due" value={data.opinionsDue} />
       </div>
       <div className="grid g-main" style={{ marginTop: 18 }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
