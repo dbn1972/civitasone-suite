@@ -98,7 +98,18 @@ beforeAll(async () => {
   await queue.start();
   app = await buildApp();
 });
-afterEach(async () => { await wipe(T); });
+afterEach(async () => {
+  // Quiesce the queue BEFORE wiping. The route -> queue -> consumer hops are async,
+  // so a command still in flight when a test ends is otherwise delivered during the
+  // NEXT test, which reuses the same tenant id T: it inserts a stale request row that
+  // pre-satisfies a `waitFor(requests, r => r.length === 1)` before this test's own
+  // request row has been written, and the decision route then 404s the not-yet-written
+  // request id where a 202 is expected (the intermittent 404-vs-202 ordering race).
+  // Draining lets every in-flight command land, then wipe() clears them, so each test
+  // starts from a genuinely empty, quiescent state.
+  await (queue as unknown as { drain(): Promise<void> }).drain();
+  await wipe(T);
+});
 afterAll(async () => { await wipe(T); await app.close(); await queue.stop(); await sqlClient.end(); });
 
 async function post(path: string, who: { authorization: string }, payload: unknown) {

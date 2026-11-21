@@ -114,6 +114,16 @@ async function staleSubmit(offerId: string): Promise<void> {
   await drain();
 }
 
+/** Deliver an expire command exactly as the route publishes it — a late/stale duplicate built from an earlier 'released' read. */
+async function staleExpire(offerId: string): Promise<void> {
+  await queue.publish(COMMANDS.f3RouteWrite, {
+    messageId: randomUUID(), type: COMMANDS.f3RouteWrite, tenantId: TENANT, actorId: MAKER,
+    correlationId: `b9-${randomUUID()}`, schemaVersion: "1.0",
+    payload: { op: "recruitment_offer_routes__8", id: randomUUID(), tenantId: TENANT, body: {}, params: { offerId }, query: {} },
+  });
+  await drain();
+}
+
 async function offerState(offerId: string): Promise<{ status: string; current_stage: number }> {
   const [row] = await asTenant((tx) => tx`select status, current_stage from recruitment.hrms_offers where id = ${offerId}`);
   return row as unknown as { status: string; current_stage: number };
@@ -159,11 +169,24 @@ describe("UAT B9-hrms1: offer transitions are guarded by the expected source sta
     const offerId = await approvedOffer();
     expect((await post(`/v1/hrms/offers/${offerId}/release`, MAKER_H())).statusCode).toBe(200);
     await drain();
+
+    // The candidate accepts and the write lands first.
     const acc = await post(`/v1/hrms/offers/${offerId}/accept`, MAKER_H());
-    const exp = await post(`/v1/hrms/offers/${offerId}/expire`, MAKER_H());
     expect(acc.statusCode, acc.body).toBe(200);
-    expect(exp.statusCode, exp.body).toBe(200);
     await drain();
+    expect((await offerState(offerId)).status).toBe("accepted");
+
+    // A late expire command — built from a now-stale 'released' read (an expiry
+    // sweep whose route pre-check raced the accept, both seeing 'released') — is
+    // delivered after the accept committed. The write-transaction status guard must
+    // refuse it under the lock, never overwrite the accepted offer. Both commands
+    // used to be published back-to-back and then drained together, which raced two
+    // concurrent consumer transactions for the row lock: when expire won the lock
+    // the offer ended 'expired' and the suite flaked. Delivering the stale expire
+    // explicitly after the accept drains fixes the outcome without weakening the
+    // guarantee the guard provides.
+    await staleExpire(offerId);
+
     expect((await offerState(offerId)).status).toBe("accepted");
     expect(await events(offerId, "expire")).toBe(0);
     const dl = refusalsFor(offerId);
