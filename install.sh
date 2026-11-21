@@ -139,19 +139,27 @@ COMPLETED_STEPS=","   # comma-delimited list of completed step names (for --resu
 step_is_done() { [[ "$COMPLETED_STEPS" == *",$1,"* ]]; }
 mark_step_done() { step_is_done "$1" || COMPLETED_STEPS="${COMPLETED_STEPS}$1,"; }
 
-# run_step NAME FUNC — run FUNC unless --resume and NAME already completed.
-# A step is only recorded complete if it added no FAILs. Dry-run records nothing.
+# run_step NAME FUNC — run FUNC unless --resume and NAME already completed *in
+# this MODE*. Completion is keyed "<mode>:<name>" so a step finished in manual
+# mode is not skipped in compose mode. A step is recorded complete only on a
+# clean pass (no new FAIL and no new WARN), so WARN'd steps are retried on resume.
+# configure_environment is never skipped when infra/.env is missing.
+# Dry-run records nothing.
 run_step() {
-  local name="$1" fn="$2"
-  if [[ "$RESUME" == true ]] && step_is_done "$name"; then
-    STEP=$((STEP + 1))
-    log OK "Step $STEP: $name already completed — skipping (resume)"
-    return 0
+  local name="$1" fn="$2" key="${MODE}:$1"
+  if [[ "$RESUME" == true ]] && step_is_done "$key"; then
+    if [[ "$name" == "configure_environment" && ! -f infra/.env ]]; then
+      log WARN "$name recorded complete but infra/.env is missing — re-running"
+    else
+      STEP=$((STEP + 1))
+      log OK "Step $STEP: $name already completed — skipping (resume)"
+      return 0
+    fi
   fi
-  local fail_before=$FAIL
+  local fail_before=$FAIL warn_before=$WARN
   "$fn"
-  if [[ "$DRY_RUN" != true && $FAIL -eq $fail_before ]]; then
-    mark_step_done "$name"
+  if [[ "$DRY_RUN" != true && $FAIL -eq $fail_before && $WARN -eq $warn_before ]]; then
+    mark_step_done "$key"
     save_state
   fi
 }
@@ -204,6 +212,25 @@ generate_password() {
 version_gte() {
   # Returns 0 if $1 >= $2 (semver comparison)
   printf '%s\n%s\n' "$2" "$1" | sort -V -C
+}
+
+# ── Container counting (jq if available; handles NDJSON or a JSON array) ───────
+
+# count_services FILTER — FILTER is a jq select() predicate on the ps JSON.
+# Falls back to `ps --services --status running` when jq is missing/unusable.
+count_services() {
+  local filter="$1" n=""
+  local dc=(docker compose -f infra/docker-compose.prod.yml --env-file infra/.env)
+  if command -v jq &>/dev/null; then
+    n=$("${dc[@]}" ps --format json 2>/dev/null | jq -rs "[.[]] | flatten | .[] | select(${filter}) | .Service" 2>/dev/null | grep -c . || true)
+  fi
+  if [[ -z "$n" || "$n" == 0 ]]; then
+    # fallback: running services (no health detail available)
+    local m
+    m=$("${dc[@]}" ps --status running --services 2>/dev/null | grep -c . || true)
+    [[ "${m:-0}" -gt "${n:-0}" ]] && n=$m
+  fi
+  echo "${n:-0}"
 }
 
 # ── Pre-Flight Checks ────────────────────────────────────────────────────────
@@ -614,8 +641,7 @@ compose_start_infra() {
 
   while [[ $waited -lt $max_wait ]]; do
     local healthy_count
-    healthy_count=$(docker compose -f infra/docker-compose.prod.yml --env-file infra/.env ps --format json 2>/dev/null | \
-      jq -r 'select(.Health == "healthy") | .Service' 2>/dev/null | wc -l || echo "0")
+    healthy_count=$(count_services '.Health == "healthy"')
 
     if [[ "$healthy_count" -ge 4 ]]; then
       all_healthy=true
@@ -652,6 +678,43 @@ compose_run_migrations() {
   else
     # May already be bootstrapped on resume
     check "Per-service database bootstrap (may be already done)" "WARN"
+  fi
+
+  # The compose only mounts bootstrap.generated.sql (8 service DBs). The other
+  # service roles/DBs are created by the files below, in the same order the CI
+  # pipeline (scripts/ci/bootstrap-postgres.sh) applies them. All are idempotent
+  # (IF NOT EXISTS) and are streamed over stdin because they are not mounted in
+  # the container. civitas.allow_dev_pw=on is the CI opt-in those files require.
+  local bf bf_ok=true
+  for bf in infra/db/bootstrap/bootstrap_new_services.sql \
+            infra/db/bootstrap/bootstrap_contract.sql \
+            scripts/ci/bootstrap-remaining-services.sql \
+            infra/db/bootstrap/bootstrap_missing_services.sql; do
+    if [[ ! -f "$bf" ]]; then
+      check "Bootstrap file $bf" "FAIL" "missing"; bf_ok=false; continue
+    fi
+    if docker compose -f infra/docker-compose.prod.yml --env-file infra/.env exec -T \
+         -e PGOPTIONS="-c civitas.allow_dev_pw=on" postgres \
+         psql -U civitasone -d civitasone -v ON_ERROR_STOP=1 -q < "$bf" >>"$INSTALL_LOG" 2>&1; then
+      log OK "Applied $bf"
+    else
+      check "Bootstrap $bf" "FAIL" "see $INSTALL_LOG"; bf_ok=false
+    fi
+  done
+
+  # Verify every <svc>_svc role referenced by the generated DSNs now exists
+  local missing_roles="" role
+  for role in $(grep -o '^DATABASE_URL_[A-Z0-9_]*=postgres://[a-z0-9_]*' infra/.env | sed 's|.*//||'); do
+    if ! docker compose -f infra/docker-compose.prod.yml --env-file infra/.env exec -T postgres \
+         psql -U civitasone -d civitasone -tAc "SELECT 1 FROM pg_roles WHERE rolname='${role}'" 2>/dev/null | grep -q 1; then
+      missing_roles+=" ${role}"
+    fi
+  done
+  if [[ -z "$missing_roles" && "$bf_ok" == true ]]; then
+    check "All per-service DB roles present" "PASS"
+  else
+    check "Per-service DB roles" "FAIL" "missing:${missing_roles:- (bootstrap errors above)}"
+    die "Per-service database bootstrap incomplete. Re-run with --resume after fixing."
   fi
 
   # Run migrations via the migrate-all script
@@ -693,8 +756,7 @@ compose_start_services() {
 
   while [[ $waited -lt $max_wait ]]; do
     local healthy_count
-    healthy_count=$(docker compose -f infra/docker-compose.prod.yml --env-file infra/.env ps --format json 2>/dev/null | \
-      jq -r 'select(.Health == "healthy" or .State == "running") | .Service' 2>/dev/null | wc -l || echo "0")
+    healthy_count=$(count_services '.Health == "healthy" or .State == "running"')
 
     if [[ "$healthy_count" -ge $target_healthy ]]; then
       break
@@ -707,8 +769,7 @@ compose_start_services() {
   printf "\r%80s\r" " "
 
   local final_count
-  final_count=$(docker compose -f infra/docker-compose.prod.yml --env-file infra/.env ps --status running --format json 2>/dev/null | jq -r '.Service' 2>/dev/null | grep -c . || true)
-  final_count=${final_count:-0}
+  final_count=$(count_services '.State == "running"')
   if [[ "$final_count" -ge $target_healthy ]]; then
     check "Services healthy: ${final_count} running" "PASS"
   else
@@ -1040,6 +1101,7 @@ print_summary() {
   printf "  ${BOLD}Files:${NC}\n"
   printf "    Install log: ${DIM}${INSTALL_LOG}${NC}\n"
   printf "    Env config:  ${DIM}infra/.env${NC} (contains secrets — never commit)\n"
+  printf "\n  ${YELLOW}${BOLD}⚠ Rotate the dev database role passwords (<svc>_dev_pw) before production use.${NC}\n"
   printf "\n"
 
   if [[ $FAIL -gt 0 ]]; then

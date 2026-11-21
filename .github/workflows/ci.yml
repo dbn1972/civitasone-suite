@@ -36,6 +36,9 @@ jobs:
       - name: jsx-a11y ratchet guard (UX-005)
         run: node scripts/ci/jsx-a11y-ratchet-guard.mjs
 
+      - name: Installer counter regression (set -e safe increments)
+        run: bash scripts/ci/test-install-counters.sh
+
   # ─────────────────────────────────────────────
   # Security: scan for known dev/test secrets in source
   # Fails the build if any hardcoded dev credential is found outside
