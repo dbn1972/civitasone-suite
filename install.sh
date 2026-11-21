@@ -110,16 +110,16 @@ check() {
   local desc="$1" result="$2" detail="${3:-}"
   if [ "$result" = "PASS" ]; then
     log OK "$desc"
-    ((PASS++))
+    PASS=$((PASS + 1))
   elif [ "$result" = "WARN" ]; then
     log WARN "$desc${detail:+ — $detail}"
-    ((WARN++))
+    WARN=$((WARN + 1))
   elif [ "$result" = "SKIP" ]; then
     printf "${DIM}⊘${NC} %s ${DIM}(skipped)${NC}\n" "$desc"
-    ((SKIP++))
+    SKIP=$((SKIP + 1))
   else
     log ERROR "$desc${detail:+ — $detail}"
-    ((FAIL++))
+    FAIL=$((FAIL + 1))
   fi
 }
 
@@ -134,11 +134,43 @@ die() {
 
 # ── State Management (Resume Support) ────────────────────────────────────────
 
+COMPLETED_STEPS=","   # comma-delimited list of completed step names (for --resume)
+
+step_is_done() { [[ "$COMPLETED_STEPS" == *",$1,"* ]]; }
+mark_step_done() { step_is_done "$1" || COMPLETED_STEPS="${COMPLETED_STEPS}$1,"; }
+
+# run_step NAME FUNC — run FUNC unless --resume and NAME already completed *in
+# this MODE*. Completion is keyed "<mode>:<name>" so a step finished in manual
+# mode is not skipped in compose mode. A step is recorded complete only on a
+# clean pass (no new FAIL and no new WARN), so WARN'd steps are retried on resume.
+# configure_environment is never skipped when infra/.env is missing.
+# Dry-run records nothing.
+run_step() {
+  local name="$1" fn="$2" key="${MODE}:$1"
+  if [[ "$RESUME" == true ]] && step_is_done "$key"; then
+    if [[ "$name" == "configure_environment" && ! -f infra/.env ]]; then
+      log WARN "$name recorded complete but infra/.env is missing — re-running"
+    else
+      STEP=$((STEP + 1))
+      log OK "Step $STEP: $name already completed — skipping (resume)"
+      return 0
+    fi
+  fi
+  local fail_before=$FAIL warn_before=$WARN
+  "$fn"
+  if [[ "$DRY_RUN" != true && $FAIL -eq $fail_before && $WARN -eq $warn_before ]]; then
+    mark_step_done "$key"
+    save_state
+  fi
+}
+
 save_state() {
+  [[ "$DRY_RUN" == true ]] && return 0   # dry-run must not write anything
   cat > "$STATE_FILE" <<EOF
 {
   "mode": "${MODE}",
   "step": ${STEP},
+  "completed": "${COMPLETED_STEPS}",
   "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
   "pass": ${PASS},
   "fail": ${FAIL},
@@ -150,11 +182,13 @@ EOF
 
 load_state() {
   if [[ -f "$STATE_FILE" ]]; then
-    MODE=$(grep -o '"mode": *"[^"]*"' "$STATE_FILE" | cut -d'"' -f4)
-    local saved_step
-    saved_step=$(grep -o '"step": *[0-9]*' "$STATE_FILE" | grep -o '[0-9]*')
-    STEP=${saved_step:-0}
-    log INFO "Resumed from state file (mode=$MODE, step=$STEP)"
+    local saved_mode saved_completed
+    saved_mode=$(grep -o '"mode": *"[^"]*"' "$STATE_FILE" | cut -d'"' -f4 || true)
+    [[ -z "$MODE" ]] && MODE="$saved_mode"
+    saved_completed=$(grep -o '"completed": *"[^"]*"' "$STATE_FILE" | cut -d'"' -f4 || true)
+    [[ -n "$saved_completed" ]] && COMPLETED_STEPS="$saved_completed"
+    # STEP stays 0: run_step re-counts skipped steps so numbering is stable.
+    log INFO "Resumed from state file (mode=$MODE, completed=${COMPLETED_STEPS})"
     return 0
   fi
   return 1
@@ -178,6 +212,53 @@ generate_password() {
 version_gte() {
   # Returns 0 if $1 >= $2 (semver comparison)
   printf '%s\n%s\n' "$2" "$1" | sort -V -C
+}
+
+# ── Compose project isolation (safety) ────────────────────────────────────────
+
+# Every compose call below inherits COMPOSE_PROJECT_NAME, so this installer only
+# ever touches its own project's containers/volumes.
+export COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-civitasone-install}"
+# Fail closed: any DB script that would fall back to the hard-coded
+# `civitasone-postgres` container throws instead (see scripts/dev/psql-exec.mjs).
+export CIVITAS_PSQL_REQUIRE_MODE=1
+
+# assert_own_postgres — resolve the postgres container of OUR compose project and
+# refuse to proceed unless it exists, is running, and carries our project label.
+# Defense-in-depth: migrations must never reach an unrelated (e.g. live pilot)
+# `civitasone-postgres` container on a shared host.
+assert_own_postgres() {
+  local cid proj
+  cid=$(docker compose -p "$COMPOSE_PROJECT_NAME" -f infra/docker-compose.prod.yml --env-file infra/.env ps -q postgres 2>/dev/null | head -1 || true)
+  if [[ -z "$cid" ]]; then
+    die "Safety check failed: no running postgres container in compose project '${COMPOSE_PROJECT_NAME}'. Refusing to run migrations."
+  fi
+  proj=$(docker inspect -f '{{ index .Config.Labels "com.docker.compose.project" }}' "$cid" 2>/dev/null || true)
+  if [[ "$proj" != "$COMPOSE_PROJECT_NAME" ]]; then
+    die "Safety check failed: postgres container ${cid:0:12} belongs to project '${proj:-<none>}', not '${COMPOSE_PROJECT_NAME}'. Refusing to touch a database this installer does not own."
+  fi
+  local name
+  name=$(docker inspect -f '{{.Name}}' "$cid" 2>/dev/null | tr -d '/')
+  log OK "Migration target verified: ${name} (compose project ${COMPOSE_PROJECT_NAME})"
+}
+
+# ── Container counting (jq if available; handles NDJSON or a JSON array) ───────
+
+# count_services FILTER — FILTER is a jq select() predicate on the ps JSON.
+# Falls back to `ps --services --status running` when jq is missing/unusable.
+count_services() {
+  local filter="$1" n=""
+  local dc=(docker compose -f infra/docker-compose.prod.yml --env-file infra/.env)
+  if command -v jq &>/dev/null; then
+    n=$("${dc[@]}" ps --format json 2>/dev/null | jq -rs "[.[]] | flatten | .[] | select(${filter}) | .Service" 2>/dev/null | grep -c . || true)
+  fi
+  if [[ -z "$n" || "$n" == 0 ]]; then
+    # fallback: running services (no health detail available)
+    local m
+    m=$("${dc[@]}" ps --status running --services 2>/dev/null | grep -c . || true)
+    [[ "${m:-0}" -gt "${n:-0}" ]] && n=$m
+  fi
+  echo "${n:-0}"
 }
 
 # ── Pre-Flight Checks ────────────────────────────────────────────────────────
@@ -285,11 +366,41 @@ preflight_deps() {
     check "Docker daemon running" "FAIL" "Start with: sudo systemctl start docker"
   fi
 
+  # Node.js (migrations run via scripts/dev/migrate-all.mjs)
+  if command -v node &>/dev/null; then
+    local node_ver
+    node_ver=$(node --version 2>/dev/null | tr -d 'v' || echo "0.0.0")
+    if version_gte "$node_ver" "$MIN_NODE_VERSION"; then
+      check "Node.js $node_ver (≥$MIN_NODE_VERSION)" "PASS"
+    else
+      check "Node.js $node_ver (≥$MIN_NODE_VERSION required)" "FAIL" "Install Node ${MIN_NODE_VERSION%%.*}+ (e.g. via nvm)"
+    fi
+  else
+    check "Node.js" "FAIL" "Install Node ${MIN_NODE_VERSION%%.*}+ (e.g. via nvm)"
+  fi
+
+  # Helm (helm mode only; also re-run from main() once the mode is chosen)
+  if [[ "$MODE" == "helm" ]]; then preflight_helm; fi
+
   # PostgreSQL client (for validation)
   if command -v psql &>/dev/null; then
     check "psql client available" "PASS"
   else
     check "psql client available" "WARN" "Install for post-install validation: sudo apt-get install -y postgresql-client"
+  fi
+}
+
+preflight_helm() {
+  if command -v helm &>/dev/null; then
+    local helm_ver
+    helm_ver=$(helm version --short 2>/dev/null | sed -E 's/^v?([0-9]+\.[0-9]+\.[0-9]+).*/\1/' || echo "0.0.0")
+    if version_gte "$helm_ver" "$MIN_HELM_VERSION"; then
+      check "Helm $helm_ver (≥$MIN_HELM_VERSION)" "PASS"
+    else
+      check "Helm $helm_ver (≥$MIN_HELM_VERSION required)" "FAIL"
+    fi
+  else
+    check "Helm" "FAIL" "Install from https://helm.sh/docs/intro/install/"
   fi
 }
 
@@ -365,7 +476,7 @@ select_mode() {
 # ── Environment Configuration ─────────────────────────────────────────────────
 
 configure_environment() {
-  ((STEP++))
+  STEP=$((STEP + 1))
   log STEP "Environment Configuration"
 
   local env_file="infra/.env"
@@ -394,7 +505,7 @@ configure_environment() {
   local cors_origin="http://localhost:${web_port}"
   local api_base="http://localhost:${gateway_port}"
 
-  if [[ "$NON_INTERACTIVE" != true ]]; then
+  if [[ "$NON_INTERACTIVE" != true && "$DRY_RUN" != true ]]; then
     printf "\n  ${BOLD}Configuration (press Enter for defaults):${NC}\n\n"
 
     printf "  Gateway port [${gateway_port}]: "
@@ -408,6 +519,25 @@ configure_environment() {
 
     printf "  CORS origin [${cors_origin}]: "
     read -r input; [[ -n "$input" ]] && cors_origin="$input"
+  fi
+
+  # Per-service least-privilege DSNs + candidate JWT secret, required by
+  # infra/docker-compose.prod.yml. The variable list is derived from the compose
+  # file itself so it cannot drift. Convention (infra/db/bootstrap/*.sql):
+  #   role "<svc>_svc", database "civitas_<svc>", bootstrap password
+  #   "<svc>_dev_pw", direct to postgres:5432 (pgbouncer authenticates only the
+  #   cluster user, so per-service roles must bypass it).
+  local candidate_jwt_secret db_url_lines="" var svc
+  candidate_jwt_secret=$(generate_secret 48)
+  while IFS= read -r var; do
+    [[ -z "$var" ]] && continue
+    svc=$(printf '%s' "${var#DATABASE_URL_}" | tr 'A-Z' 'a-z')
+    db_url_lines+="${var}=postgres://${svc}_svc:${svc}_dev_pw@postgres:5432/civitas_${svc}"$'\n'
+  done < <(grep -o 'DATABASE_URL_[A-Z0-9_]*' infra/docker-compose.prod.yml | sort -u)
+
+  if [[ "$DRY_RUN" == true ]]; then
+    check "Environment file (dry-run: would write $env_file with $(printf '%s' "$db_url_lines" | grep -c .) per-service DSNs; nothing written)" "SKIP"
+    return
   fi
 
   # Write the .env file
@@ -430,6 +560,7 @@ POSTGRES_DB=civitasone
 # ── Platform Secrets (auto-generated, cryptographically secure) ──
 INTERNAL_SERVICE_SECRET=${internal_secret}
 DEVICE_TRUST_SECRET=${device_secret}
+CANDIDATE_JWT_SECRET=${candidate_jwt_secret}
 
 # ── PII / MFA Encryption Keys ──
 MFA_ENC_KEY=${mfa_key}
@@ -437,6 +568,10 @@ PII_ENC_KEY=${pii_key}
 CITIZEN_PII_KEY=${citizen_key}
 CRM_PII_KEY=${crm_key}
 
+# ── Per-service least-privilege database DSNs (derived from docker-compose.prod.yml) ──
+# NOTE: passwords are the bootstrap-defined per-service role passwords; rotate
+# them (ALTER ROLE ... PASSWORD) and update these values before real production use.
+${db_url_lines}
 # ── Keycloak (OIDC Identity Provider) ──
 KEYCLOAK_ADMIN=admin
 KEYCLOAK_ADMIN_PASSWORD=${kc_password}
@@ -463,8 +598,13 @@ EOF
 # ── Docker Compose Installation ───────────────────────────────────────────────
 
 compose_validate() {
-  ((STEP++))
+  STEP=$((STEP + 1))
   log STEP "Validate Compose Configuration"
+
+  if [[ "$DRY_RUN" == true && ! -f infra/.env ]]; then
+    check "Compose config validation (dry-run: no infra/.env written, skipped)" "SKIP"
+    return
+  fi
 
   if docker compose -f infra/docker-compose.prod.yml --env-file infra/.env config -q 2>/dev/null; then
     check "Compose config valid (all required vars set)" "PASS"
@@ -475,28 +615,49 @@ compose_validate() {
 }
 
 compose_pull_or_build() {
-  ((STEP++))
+  STEP=$((STEP + 1))
   log STEP "Build/Pull Container Images"
 
   local image_registry
   image_registry=$(grep '^IMAGE_REGISTRY=' infra/.env 2>/dev/null | cut -d= -f2)
 
-  # Check if images exist locally or need building
-  if docker images "${image_registry}/gateway-service" --format '{{.Repository}}' 2>/dev/null | grep -q gateway; then
-    check "Images available locally" "PASS"
+  local dc=(docker compose -f infra/docker-compose.prod.yml --env-file infra/.env)
+
+  # Every service with a build: section must have its image locally. Derive the
+  # list from the compose file (service<TAB>image) instead of probing a single
+  # service, so one missing image (e.g. web) is rebuilt on --resume.
+  local to_build=() svc img total=0 line
+  while IFS=$'\t' read -r svc img; do
+    [[ -z "$svc" ]] && continue
+    total=$((total + 1))
+    docker image inspect "$img" &>/dev/null || to_build+=("$svc")
+  done < <("${dc[@]}" config --format json 2>/dev/null | \
+           jq -r '.services | to_entries[] | select(.value.build != null) | "\(.key)\t\(.value.image)"' 2>/dev/null || true)
+
+  if [[ $total -eq 0 ]]; then
+    # Could not enumerate build targets: fail open and build everything.
+    log WARN "Could not enumerate build targets from compose; building all"
+  elif [[ ${#to_build[@]} -eq 0 ]]; then
+    check "Images available locally (all ${total} build targets present)" "PASS"
     return
+  else
+    log INFO "${#to_build[@]} of ${total} images missing: ${to_build[*]:0:8}$([[ ${#to_build[@]} -gt 8 ]] && echo ' ...')"
   fi
 
-  log INFO "Building all service images (this takes 5-15 minutes on first run)..."
-  printf "  ${DIM}Building 33 services + gateway + web...${NC}\n"
+  log INFO "Building service images (this takes 5-15 minutes on first run)..."
 
   if [[ "$DRY_RUN" == true ]]; then
     check "Image build (dry-run, skipped)" "SKIP"
     return
   fi
 
-  if docker compose -f infra/docker-compose.prod.yml --env-file infra/.env build 2>>"$INSTALL_LOG"; then
-    check "All images built successfully" "PASS"
+  # Throttle parallel builds: ~65 unthrottled builds pushed host load >150 on a
+  # 16-vCPU box. Override with COMPOSE_PARALLEL_LIMIT=<n>.
+  export COMPOSE_PARALLEL_LIMIT="${COMPOSE_PARALLEL_LIMIT:-6}"
+  log INFO "Build parallelism capped at COMPOSE_PARALLEL_LIMIT=${COMPOSE_PARALLEL_LIMIT}"
+
+  if "${dc[@]}" build ${to_build[@]+"${to_build[@]}"} 2>>"$INSTALL_LOG"; then
+    check "Images built successfully" "PASS"
   else
     check "Image build" "FAIL" "Check $INSTALL_LOG for details"
     die "Image build failed. Ensure Docker has at least 8GB memory allocated."
@@ -504,7 +665,7 @@ compose_pull_or_build() {
 }
 
 compose_start_infra() {
-  ((STEP++))
+  STEP=$((STEP + 1))
   log STEP "Start Infrastructure (PostgreSQL, Redis, Keycloak, SQS)"
 
   if [[ "$DRY_RUN" == true ]]; then
@@ -529,8 +690,7 @@ compose_start_infra() {
 
   while [[ $waited -lt $max_wait ]]; do
     local healthy_count
-    healthy_count=$(docker compose -f infra/docker-compose.prod.yml --env-file infra/.env ps --format json 2>/dev/null | \
-      jq -r 'select(.Health == "healthy") | .Service' 2>/dev/null | wc -l || echo "0")
+    healthy_count=$(count_services '.Health == "healthy"')
 
     if [[ "$healthy_count" -ge 4 ]]; then
       all_healthy=true
@@ -539,7 +699,7 @@ compose_start_infra() {
 
     printf "\r  ${DIM}Waiting for infra health... (%ds/${max_wait}s, %d/4 healthy)${NC}" "$waited" "$healthy_count"
     sleep 5
-    ((waited += 5))
+    waited=$((waited + 5))
   done
   printf "\r%80s\r" " "  # clear line
 
@@ -551,7 +711,7 @@ compose_start_infra() {
 }
 
 compose_run_migrations() {
-  ((STEP++))
+  STEP=$((STEP + 1))
   log STEP "Database Bootstrap & Migrations"
 
   if [[ "$DRY_RUN" == true ]]; then
@@ -569,9 +729,54 @@ compose_run_migrations() {
     check "Per-service database bootstrap (may be already done)" "WARN"
   fi
 
+  # The compose only mounts bootstrap.generated.sql (8 service DBs). The other
+  # service roles/DBs are created by the files below, in the same order the CI
+  # pipeline (scripts/ci/bootstrap-postgres.sh) applies them. All are idempotent
+  # (IF NOT EXISTS) and are streamed over stdin because they are not mounted in
+  # the container. civitas.allow_dev_pw=on is the CI opt-in those files require.
+  local bf bf_ok=true
+  for bf in infra/db/bootstrap/bootstrap_new_services.sql \
+            infra/db/bootstrap/bootstrap_contract.sql \
+            scripts/ci/bootstrap-remaining-services.sql \
+            infra/db/bootstrap/bootstrap_missing_services.sql; do
+    if [[ ! -f "$bf" ]]; then
+      check "Bootstrap file $bf" "FAIL" "missing"; bf_ok=false; continue
+    fi
+    if docker compose -f infra/docker-compose.prod.yml --env-file infra/.env exec -T \
+         -e PGOPTIONS="-c civitas.allow_dev_pw=on" postgres \
+         psql -U civitasone -d civitasone -v ON_ERROR_STOP=1 -q < "$bf" >>"$INSTALL_LOG" 2>&1; then
+      log OK "Applied $bf"
+    else
+      check "Bootstrap $bf" "FAIL" "see $INSTALL_LOG"; bf_ok=false
+    fi
+  done
+
+  # Verify every <svc>_svc role referenced by the generated DSNs now exists
+  local missing_roles="" role
+  for role in $(grep -o '^DATABASE_URL_[A-Z0-9_]*=postgres://[a-z0-9_]*' infra/.env | sed 's|.*//||'); do
+    if ! docker compose -f infra/docker-compose.prod.yml --env-file infra/.env exec -T postgres \
+         psql -U civitasone -d civitasone -tAc "SELECT 1 FROM pg_roles WHERE rolname='${role}'" 2>/dev/null | grep -q 1; then
+      missing_roles+=" ${role}"
+    fi
+  done
+  if [[ -z "$missing_roles" && "$bf_ok" == true ]]; then
+    check "All per-service DB roles present" "PASS"
+  else
+    check "Per-service DB roles" "FAIL" "missing:${missing_roles:- (bootstrap errors above)}"
+    die "Per-service database bootstrap incomplete. Re-run with --resume after fixing."
+  fi
+
   # Run migrations via the migrate-all script
   log INFO "Applying migrations (idempotent — safe to re-run)..."
-  if node scripts/dev/migrate-all.mjs 2>>"$INSTALL_LOG" | tail -5; then
+  assert_own_postgres
+  # Force migrate-all to use OUR compose project's postgres (never the hard-coded
+  # `civitasone-postgres` container, never a host/CI psql from the caller's env).
+  # The compose cluster superuser is POSTGRES_USER (civitas_admin is NOSUPERUSER).
+  local pg_super
+  pg_super=$(grep '^POSTGRES_USER=' infra/.env | cut -d= -f2)
+  if CIVITAS_PSQL_MODE=compose CIVITAS_PSQL_USER="${pg_super:-civitasone}" \
+       COMPOSE_PROJECT_NAME="$COMPOSE_PROJECT_NAME" \
+       node scripts/dev/migrate-all.mjs 2>>"$INSTALL_LOG" | tail -5; then
     check "Database migrations applied" "PASS"
   else
     check "Database migrations" "FAIL" "Check $INSTALL_LOG for details"
@@ -580,7 +785,7 @@ compose_run_migrations() {
 }
 
 compose_start_services() {
-  ((STEP++))
+  STEP=$((STEP + 1))
   log STEP "Start Application Services"
 
   if [[ "$DRY_RUN" == true ]]; then
@@ -588,7 +793,11 @@ compose_start_services() {
     return
   fi
 
-  log INFO "Starting all 33 services + gateway + web..."
+  # Derive expected container count from the compose file (not a magic number)
+  local compose_total
+  compose_total=$(docker compose -f infra/docker-compose.prod.yml --env-file infra/.env config --services 2>/dev/null | grep -c . || true)
+  [[ "${compose_total:-0}" -gt 0 ]] || compose_total=$(awk '/^services:/{f=1;next} /^[^ #]/{f=0} f && /^  [A-Za-z0-9_-]+:/{n++} END{print n+0}' infra/docker-compose.prod.yml)
+  log INFO "Starting all ${compose_total} compose services..."
   if docker compose -f infra/docker-compose.prod.yml --env-file infra/.env up -d 2>>"$INSTALL_LOG"; then
     check "All services started" "PASS"
   else
@@ -600,12 +809,11 @@ compose_start_services() {
   log INFO "Waiting for services to pass health checks (up to 3 minutes)..."
   local max_wait=180
   local waited=0
-  local target_healthy=30  # At least 30 of ~35 containers should be healthy
+  local target_healthy=$(( compose_total * 9 / 10 ))  # >=90% of defined services
 
   while [[ $waited -lt $max_wait ]]; do
     local healthy_count
-    healthy_count=$(docker compose -f infra/docker-compose.prod.yml --env-file infra/.env ps --format json 2>/dev/null | \
-      jq -r 'select(.Health == "healthy" or .State == "running") | .Service' 2>/dev/null | wc -l || echo "0")
+    healthy_count=$(count_services '.Health == "healthy" or .State == "running"')
 
     if [[ "$healthy_count" -ge $target_healthy ]]; then
       break
@@ -613,23 +821,23 @@ compose_start_services() {
 
     printf "\r  ${DIM}Services starting... (%ds/${max_wait}s, %d/%d ready)${NC}" "$waited" "$healthy_count" "$target_healthy"
     sleep 10
-    ((waited += 10))
+    waited=$((waited + 10))
   done
   printf "\r%80s\r" " "
 
   local final_count
-  final_count=$(docker compose -f infra/docker-compose.prod.yml --env-file infra/.env ps --status running 2>/dev/null | wc -l || echo "0")
+  final_count=$(count_services '.State == "running"')
   if [[ "$final_count" -ge $target_healthy ]]; then
     check "Services healthy: ${final_count} running" "PASS"
   else
-    check "Services: ${final_count} running (expected ≥${target_healthy})" "WARN" "Some services may need more time"
+    check "Services: ${final_count} running (expected ≥${target_healthy} of ${compose_total})" "WARN" "Some services may need more time"
   fi
 }
 
 # ── Post-Install Validation ───────────────────────────────────────────────────
 
 post_install_validate() {
-  ((STEP++))
+  STEP=$((STEP + 1))
   log STEP "Post-Install Validation"
 
   if [[ "$DRY_RUN" == true ]]; then
@@ -707,7 +915,7 @@ post_install_validate() {
 # ── Enterprise Readiness Score ────────────────────────────────────────────────
 
 compute_readiness_score() {
-  ((STEP++))
+  STEP=$((STEP + 1))
   log STEP "Enterprise Readiness Score"
 
   local score=0
@@ -722,38 +930,41 @@ compute_readiness_score() {
 
   # JWT is RS256 in production
   if grep -q 'JWT_ALGORITHM.*RS256\|JWT_ALGORITHM: RS256' infra/.env infra/docker-compose.prod.yml 2>/dev/null; then
-    printf "    ${GREEN}✓${NC} JWT RS256 configured (5 pts)\n"; ((score+=5)); ((checks_passed++))
+    printf "    ${GREEN}✓${NC} JWT RS256 configured (5 pts)\n"; score=$((score + 5)); checks_passed=$((checks_passed + 1))
   else
     printf "    ${YELLOW}⚠${NC} JWT RS256 not confirmed (0/5 pts)\n"
   fi
-  ((checks_total++)) || true
+  checks_total=$((checks_total + 1))
 
   # Secrets are not defaults
-  if ! grep -q 'CHANGE_ME\|your-secret-here' infra/.env 2>/dev/null; then
-    printf "    ${GREEN}✓${NC} All secrets are non-default (5 pts)\n"; ((score+=5)); ((checks_passed++))
+  # (also fails on placeholder AWS keys, e.g. the LocalStack "test"/"test" pair)
+  if [[ -f infra/.env ]] && ! grep -q 'CHANGE_ME\|your-secret-here' infra/.env 2>/dev/null && \
+     ! grep -qE '^AWS_(ACCESS_KEY_ID|SECRET_ACCESS_KEY)=(test|changeme)?$' infra/.env 2>/dev/null; then
+    printf "    ${GREEN}✓${NC} All secrets are non-default, no placeholder AWS keys (5 pts)\n"; score=$((score + 5)); checks_passed=$((checks_passed + 1))
   else
-    printf "    ${YELLOW}⚠${NC} Default secrets detected (0/5 pts)\n"
+    printf "    ${YELLOW}⚠${NC} Default/placeholder secrets detected, e.g. AWS test keys (0/5 pts)\n"
   fi
 
   # Internal service secret length >= 32
   local iss_len
-  iss_len=$(grep '^INTERNAL_SERVICE_SECRET=' infra/.env 2>/dev/null | cut -d= -f2 | wc -c || echo "0")
+  # (pipefail-safe: a missing .env/var must yield 0, not "0\n0" from `|| echo`)
+  iss_len=$( { grep '^INTERNAL_SERVICE_SECRET=' infra/.env 2>/dev/null || true; } | cut -d= -f2 | tr -d '\n' | wc -c | tr -d ' ')
   if [[ "$iss_len" -ge 32 ]]; then
-    printf "    ${GREEN}✓${NC} Service secret ≥32 chars (5 pts)\n"; ((score+=5)); ((checks_passed++))
+    printf "    ${GREEN}✓${NC} Service secret ≥32 chars (5 pts)\n"; score=$((score + 5)); checks_passed=$((checks_passed + 1))
   else
     printf "    ${YELLOW}⚠${NC} Service secret too short (0/5 pts)\n"
   fi
 
   # PII encryption keys present
   if grep -q '^PII_ENC_KEY=.\{16,\}' infra/.env 2>/dev/null; then
-    printf "    ${GREEN}✓${NC} PII encryption key configured (5 pts)\n"; ((score+=5)); ((checks_passed++))
+    printf "    ${GREEN}✓${NC} PII encryption key configured (5 pts)\n"; score=$((score + 5)); checks_passed=$((checks_passed + 1))
   else
     printf "    ${YELLOW}⚠${NC} PII encryption key missing (0/5 pts)\n"
   fi
 
   # Non-root containers
   if grep -q 'USER node\|runAsNonRoot: true' Dockerfile infra/onprem/helm/civitasone/templates/deployment.yaml 2>/dev/null; then
-    printf "    ${GREEN}✓${NC} Containers run as non-root (5 pts)\n"; ((score+=5)); ((checks_passed++))
+    printf "    ${GREEN}✓${NC} Containers run as non-root (5 pts)\n"; score=$((score + 5)); checks_passed=$((checks_passed + 1))
   else
     printf "    ${YELLOW}⚠${NC} Non-root container check inconclusive (0/5 pts)\n"
   fi
@@ -762,28 +973,28 @@ compute_readiness_score() {
 
   # Database is up
   if docker compose -f infra/docker-compose.prod.yml --env-file infra/.env exec -T postgres pg_isready -U civitasone &>/dev/null 2>&1; then
-    printf "    ${GREEN}✓${NC} PostgreSQL healthy (5 pts)\n"; ((score+=5)); ((checks_passed++))
+    printf "    ${GREEN}✓${NC} PostgreSQL healthy (5 pts)\n"; score=$((score + 5)); checks_passed=$((checks_passed + 1))
   else
     printf "    ${YELLOW}⚠${NC} PostgreSQL not healthy (0/5 pts)\n"
   fi
 
   # Redis is up
   if docker compose -f infra/docker-compose.prod.yml --env-file infra/.env exec -T redis redis-cli ping 2>/dev/null | grep -q PONG; then
-    printf "    ${GREEN}✓${NC} Redis healthy (5 pts)\n"; ((score+=5)); ((checks_passed++))
+    printf "    ${GREEN}✓${NC} Redis healthy (5 pts)\n"; score=$((score + 5)); checks_passed=$((checks_passed + 1))
   else
     printf "    ${YELLOW}⚠${NC} Redis not healthy (0/5 pts)\n"
   fi
 
   # Health checks configured
   if grep -q 'healthcheck:' infra/docker-compose.prod.yml 2>/dev/null; then
-    printf "    ${GREEN}✓${NC} Health checks configured (5 pts)\n"; ((score+=5)); ((checks_passed++))
+    printf "    ${GREEN}✓${NC} Health checks configured (5 pts)\n"; score=$((score + 5)); checks_passed=$((checks_passed + 1))
   else
     printf "    ${YELLOW}⚠${NC} Health checks missing (0/5 pts)\n"
   fi
 
   # PgBouncer connection pooling
   if grep -q 'pgbouncer' infra/docker-compose.prod.yml 2>/dev/null; then
-    printf "    ${GREEN}✓${NC} Connection pooling (PgBouncer) enabled (5 pts)\n"; ((score+=5)); ((checks_passed++))
+    printf "    ${GREEN}✓${NC} Connection pooling (PgBouncer) enabled (5 pts)\n"; score=$((score + 5)); checks_passed=$((checks_passed + 1))
   else
     printf "    ${YELLOW}⚠${NC} No connection pooling (0/5 pts)\n"
   fi
@@ -792,21 +1003,21 @@ compute_readiness_score() {
 
   # Structured logging (Pino)
   if grep -rq 'pino' packages/observability/ 2>/dev/null; then
-    printf "    ${GREEN}✓${NC} Structured logging (Pino) (5 pts)\n"; ((score+=5)); ((checks_passed++))
+    printf "    ${GREEN}✓${NC} Structured logging (Pino) (5 pts)\n"; score=$((score + 5)); checks_passed=$((checks_passed + 1))
   else
     printf "    ${YELLOW}⚠${NC} Structured logging not confirmed (0/5 pts)\n"
   fi
 
   # Health endpoints
   if grep -q '/health\|/ready' Dockerfile 2>/dev/null; then
-    printf "    ${GREEN}✓${NC} Health/readiness probes configured (5 pts)\n"; ((score+=5)); ((checks_passed++))
+    printf "    ${GREEN}✓${NC} Health/readiness probes configured (5 pts)\n"; score=$((score + 5)); checks_passed=$((checks_passed + 1))
   else
     printf "    ${YELLOW}⚠${NC} Health probes not confirmed (0/5 pts)\n"
   fi
 
   # Metrics endpoint
   if grep -rq '/metrics' services/gateway-service/src/response-metrics.ts 2>/dev/null; then
-    printf "    ${GREEN}✓${NC} Prometheus metrics endpoint (5 pts)\n"; ((score+=5)); ((checks_passed++))
+    printf "    ${GREEN}✓${NC} Prometheus metrics endpoint (5 pts)\n"; score=$((score + 5)); checks_passed=$((checks_passed + 1))
   else
     printf "    ${YELLOW}⚠${NC} Metrics endpoint missing (0/5 pts)\n"
   fi
@@ -815,21 +1026,21 @@ compute_readiness_score() {
 
   # Backup script exists
   if [[ -f scripts/ops/backup-databases.sh ]]; then
-    printf "    ${GREEN}✓${NC} Backup script present (5 pts)\n"; ((score+=5)); ((checks_passed++))
+    printf "    ${GREEN}✓${NC} Backup script present (5 pts)\n"; score=$((score + 5)); checks_passed=$((checks_passed + 1))
   else
     printf "    ${YELLOW}⚠${NC} No backup script (0/5 pts)\n"
   fi
 
   # Restore drill exists
   if [[ -f scripts/ops/restore-drill.sh ]]; then
-    printf "    ${GREEN}✓${NC} Restore drill script present (5 pts)\n"; ((score+=5)); ((checks_passed++))
+    printf "    ${GREEN}✓${NC} Restore drill script present (5 pts)\n"; score=$((score + 5)); checks_passed=$((checks_passed + 1))
   else
     printf "    ${YELLOW}⚠${NC} No restore drill (0/5 pts)\n"
   fi
 
   # DR workflow exists
   if [[ -f .github/workflows/dr-drill.yml ]]; then
-    printf "    ${GREEN}✓${NC} Automated DR drill workflow (5 pts)\n"; ((score+=5)); ((checks_passed++))
+    printf "    ${GREEN}✓${NC} Automated DR drill workflow (5 pts)\n"; score=$((score + 5)); checks_passed=$((checks_passed + 1))
   else
     printf "    ${YELLOW}⚠${NC} No DR automation (0/5 pts)\n"
   fi
@@ -837,15 +1048,15 @@ compute_readiness_score() {
   printf "\n  ${BOLD}Performance (10 pts)${NC}\n"
 
   # Redis caching configured
-  if grep -rq 'cache.getOrLoad\|REDIS_URL' services/ 2>/dev/null | head -1 | grep -q .; then
-    printf "    ${GREEN}✓${NC} Redis caching layer (5 pts)\n"; ((score+=5)); ((checks_passed++))
+  if grep -rqE 'cache\.getOrLoad|REDIS_URL' services/ 2>/dev/null; then
+    printf "    ${GREEN}✓${NC} Redis caching layer (5 pts)\n"; score=$((score + 5)); checks_passed=$((checks_passed + 1))
   else
     printf "    ${YELLOW}⚠${NC} Caching not confirmed (0/5 pts)\n"
   fi
 
   # Rate limiting
   if grep -q 'rate-limit\|rateLimit' services/gateway-service/src/app.ts 2>/dev/null; then
-    printf "    ${GREEN}✓${NC} Rate limiting configured (5 pts)\n"; ((score+=5)); ((checks_passed++))
+    printf "    ${GREEN}✓${NC} Rate limiting configured (5 pts)\n"; score=$((score + 5)); checks_passed=$((checks_passed + 1))
   else
     printf "    ${YELLOW}⚠${NC} Rate limiting not confirmed (0/5 pts)\n"
   fi
@@ -854,7 +1065,7 @@ compute_readiness_score() {
 
   # Deploy docs
   if [[ -f infra/DEPLOY.md ]]; then
-    printf "    ${GREEN}✓${NC} Deployment documentation (5 pts)\n"; ((score+=5)); ((checks_passed++))
+    printf "    ${GREEN}✓${NC} Deployment documentation (5 pts)\n"; score=$((score + 5)); checks_passed=$((checks_passed + 1))
   else
     printf "    ${YELLOW}⚠${NC} No deployment docs (0/5 pts)\n"
   fi
@@ -863,7 +1074,7 @@ compute_readiness_score() {
   local runbook_count
   runbook_count=$(find docs/runbooks -name '*.md' 2>/dev/null | wc -l || echo "0")
   if [[ "$runbook_count" -ge 5 ]]; then
-    printf "    ${GREEN}✓${NC} Runbooks present ($runbook_count files) (5 pts)\n"; ((score+=5)); ((checks_passed++))
+    printf "    ${GREEN}✓${NC} Runbooks present ($runbook_count files) (5 pts)\n"; score=$((score + 5)); checks_passed=$((checks_passed + 1))
   else
     printf "    ${YELLOW}⚠${NC} Insufficient runbooks ($runbook_count) (0/5 pts)\n"
   fi
@@ -872,14 +1083,22 @@ compute_readiness_score() {
 
   # No test data flag
   if grep -q 'NODE_ENV.*production\|NODE_ENV: production' infra/.env infra/docker-compose.prod.yml 2>/dev/null; then
-    printf "    ${GREEN}✓${NC} Production mode set (3 pts)\n"; ((score+=3)); ((checks_passed++))
+    printf "    ${GREEN}✓${NC} Production mode set (1 pt)\n"; score=$((score + 1)); checks_passed=$((checks_passed + 1))
   else
-    printf "    ${YELLOW}⚠${NC} Not in production mode (0/3 pts)\n"
+    printf "    ${YELLOW}⚠${NC} Not in production mode (0/1 pt)\n"
+  fi
+
+  # TLS: public URLs must be https
+  if grep -qE '^CORS_ORIGIN=https://' infra/.env 2>/dev/null && \
+     grep -qE '^NEXT_PUBLIC_API_BASE_URL=https://' infra/.env 2>/dev/null; then
+    printf "    ${GREEN}✓${NC} TLS: public URLs use https (2 pts)\n"; score=$((score + 2)); checks_passed=$((checks_passed + 1))
+  else
+    printf "    ${YELLOW}⚠${NC} TLS not configured — public URLs are not https (0/2 pts)\n"
   fi
 
   # .env not committed
   if grep -q 'infra/.env\|\.env\.local' .gitignore 2>/dev/null; then
-    printf "    ${GREEN}✓${NC} Secrets excluded from git (2 pts)\n"; ((score+=2)); ((checks_passed++))
+    printf "    ${GREEN}✓${NC} Secrets excluded from git (2 pts)\n"; score=$((score + 2)); checks_passed=$((checks_passed + 1))
   else
     printf "    ${YELLOW}⚠${NC} .env may be committed (0/2 pts)\n"
   fi
@@ -939,6 +1158,7 @@ print_summary() {
   printf "  ${BOLD}Files:${NC}\n"
   printf "    Install log: ${DIM}${INSTALL_LOG}${NC}\n"
   printf "    Env config:  ${DIM}infra/.env${NC} (contains secrets — never commit)\n"
+  printf "\n  ${YELLOW}${BOLD}⚠ Rotate the dev database role passwords (<svc>_dev_pw) before production use.${NC}\n"
   printf "\n"
 
   if [[ $FAIL -gt 0 ]]; then
@@ -1042,7 +1262,7 @@ main() {
   TOTAL_STEPS=9
 
   # ── Phase 1: Pre-flight ──
-  if [[ $STEP -lt 1 ]]; then
+  if ! { [[ "$RESUME" == true ]] && step_is_done preflight; }; then
     preflight_os
     preflight_deps
     preflight_ports
@@ -1056,22 +1276,28 @@ main() {
       exit 1
     fi
     printf "  ${GREEN}Pre-flight passed: ${PASS} checks OK, ${WARN} warnings.${NC}\n"
+    mark_step_done preflight
+    save_state
+  else
+    log OK "Pre-flight already completed — skipping (resume)"
   fi
 
   # ── Phase 2: Mode Selection ──
-  if [[ $STEP -lt 2 ]]; then
-    select_mode
+  select_mode   # no-op when MODE is preselected or restored from state
+  if [[ "$MODE" == "helm" ]]; then
+    preflight_helm
+    [[ $FAIL -eq 0 ]] || die "Helm pre-flight failed"
   fi
 
   # ── Phase 3: Installation (mode-specific) ──
   case "$MODE" in
     compose)
-      configure_environment
-      compose_validate
-      compose_pull_or_build
-      compose_start_infra
-      compose_run_migrations
-      compose_start_services
+      run_step configure_environment configure_environment
+      run_step compose_validate compose_validate
+      run_step compose_pull_or_build compose_pull_or_build
+      run_step compose_start_infra compose_start_infra
+      run_step compose_run_migrations compose_run_migrations
+      run_step compose_start_services compose_start_services
       post_install_validate
       compute_readiness_score
       ;;
@@ -1085,7 +1311,7 @@ main() {
       printf "      --set image.tag=latest\n\n"
       ;;
     manual)
-      configure_environment
+      run_step configure_environment configure_environment
       printf "\n  ${CYAN}Manual deployment:${NC}\n"
       printf "  Configuration generated at ${BOLD}infra/.env${NC}\n"
       printf "  Use this with your preferred orchestration tool.\n"

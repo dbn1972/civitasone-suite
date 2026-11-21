@@ -13,6 +13,7 @@ ENV PATH=$PNPM_HOME:$PATH
 RUN corepack enable && corepack prepare pnpm@9.0.0 --activate
 WORKDIR /repo
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json turbo.json tsconfig.base.json ./
+COPY vitest.shared.ts ./
 COPY packages ./packages
 COPY services ./services
 COPY apps ./apps
@@ -24,6 +25,10 @@ WORKDIR /repo
 ARG NEXT_PUBLIC_API_BASE_URL=http://localhost:8080
 ENV NEXT_PUBLIC_API_BASE_URL=${NEXT_PUBLIC_API_BASE_URL}
 ENV NEXT_TELEMETRY_DISABLED=1
+# Next.js build of this app exceeds Node's default heap ("JavaScript heap out of
+# memory", exit 134). Override at build time with --build-arg if needed.
+ARG WEB_BUILD_MAX_OLD_SPACE_MB=8192
+ENV NODE_OPTIONS=--max-old-space-size=${WEB_BUILD_MAX_OLD_SPACE_MB}
 RUN pnpm --filter "@civitasone/web..." run build
 
 FROM node:${NODE_VERSION}-bookworm-slim AS runtime
