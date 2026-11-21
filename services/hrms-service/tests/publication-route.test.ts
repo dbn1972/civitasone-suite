@@ -149,17 +149,27 @@ describe("job publication routes", () => {
     });
 
     it("409s publishing once the deadline DATE (IST) is before today, but allows the deadline day itself", async () => {
-      const app = await buildApp();
-      H.findMock.mockResolvedValue(vac({ isPublished: false, applicationDeadline: new Date("2020-01-01T10:00:00Z") }));
-      const past = await publish(app, true);
-      expect(past.statusCode).toBe(409);
-      expect(past.json().code).toBe("DEADLINE_PASSED");
-      expect(H.updMock).not.toHaveBeenCalled();
-      // Deadline is earlier today (IST) -> still the same calendar date -> allowed.
-      H.findMock.mockResolvedValue(vac({ isPublished: false, applicationDeadline: new Date(Date.now() - 60_000) }));
-      const sameDay = await publish(app, true);
-      expect([200, 202]).toContain(sameDay.statusCode);
-      await app.close();
+      // Time-of-day sensitive: the route compares the deadline's IST calendar date
+      // against today's IST date via Date.now(). Run near IST midnight, the same-day
+      // case below (`Date.now() - 60_000`) rolled back to the PREVIOUS IST date and
+      // spuriously 409d. Freeze to a fixed mid-day IST instant so both branches are
+      // deterministic; toFake:["Date"] only, leaving setTimeout real for the queue drain.
+      vi.useFakeTimers({ toFake: ["Date"], now: new Date("2026-06-15T06:30:00Z") }); // 12:00 IST
+      try {
+        const app = await buildApp();
+        H.findMock.mockResolvedValue(vac({ isPublished: false, applicationDeadline: new Date("2020-01-01T10:00:00Z") }));
+        const past = await publish(app, true);
+        expect(past.statusCode).toBe(409);
+        expect(past.json().code).toBe("DEADLINE_PASSED");
+        expect(H.updMock).not.toHaveBeenCalled();
+        // Deadline is earlier today (IST) -> still the same calendar date -> allowed.
+        H.findMock.mockResolvedValue(vac({ isPublished: false, applicationDeadline: new Date(Date.now() - 60_000) }));
+        const sameDay = await publish(app, true);
+        expect([200, 202]).toContain(sameDay.statusCode);
+        await app.close();
+      } finally {
+        vi.useRealTimers();
+      }
     });
 
     it("publishes an open, in-date vacancy and NEVER blocks unpublish (even cancelled / expired)", async () => {

@@ -180,6 +180,12 @@ describe("instances/commands — migrateInstanceVersion", () => {
       { fromNode: "step2", toNode: "step3", sortOrder: 2 },
     ], { code });
 
+    // Create the instance on v1 NOW, while v1 is the ONLY active version of this
+    // code. createInstance resolves the definition by code (findByCodeTx) with no
+    // version tie-break, so once v2 (below) is also 'active' the bind could pick
+    // v2 and the migrate-to-2 below would flake as SAME_VERSION.
+    const instanceId = await setupInstance(tenantId, actorId, code);
+
     // Create v2 of same code - insert with explicit version 2
     const def2Id = randomUUID();
     await sqlAsTenant(tenantId, sql`
@@ -202,9 +208,6 @@ describe("instances/commands — migrateInstanceVersion", () => {
         (${def2Id}, 'step2', 'step3', 2),
         (${def2Id}, 'step3', 'step4', 3)
     `);
-
-    // Create an instance on v1
-    const instanceId = await setupInstance(tenantId, actorId, code);
 
     const ctx = makeCtx(tenantId, actorId);
     const result = await asTenant(tenantId, () => migrateInstanceVersion(ctx, instanceId, 2));
