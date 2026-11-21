@@ -293,7 +293,7 @@ Databases backed up: civitas_hrms, civitas_payroll, civitas_finance, civitas_pro
 
 | Metric | Target |
 |--------|--------|
-| **RPO** (Recovery Point Objective) | 24 hours (daily backup) |
+| **RPO** (Recovery Point Objective) | 24 hours with daily logical backups only; the platform target is <= 15 minutes with WAL archiving (see `SELF-HOSTING.md` section 4 and `operations/SLO-SLI-RUNBOOKS.md`) |
 | **RTO** (Recovery Time Objective) | 4 hours |
 | **Failover** | Manual (single-region); automatic (multi-region with RDS Multi-AZ) |
 

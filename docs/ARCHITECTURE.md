@@ -10,11 +10,11 @@
 
 CivitasOne is composed of:
 
-- **33 Fastify microservices** (Fastify 4.27, Node 20, TypeScript), each owning a bounded context.
+- **67 Fastify microservices** (as of 2026-11; `services/*` with a `package.json`, including the `queue-service` adapter and the `gateway-service` edge proxy) (Fastify 4.27, Node 20, TypeScript), each owning a bounded context.
 - **A Next.js 14.2 web application** (App Router) as the primary operator console.
 - **A Flutter mobile application** for field and citizen-facing use.
 - **An edge gateway** (port `8080`) that terminates public traffic, authenticates, and proxies to services.
-- **32 PostgreSQL 16 databases** (database-per-service), **Redis 7** (read-through cache), **AWS SQS** (command/event transport), and **Keycloak 24** (OIDC identity provider, RS256).
+- **66 PostgreSQL 16 databases** (every service that ships `migrations/`) (database-per-service), **Redis 7** (read-through cache), **AWS SQS** (command/event transport), and **Keycloak 24** (OIDC identity provider, RS256).
 
 The system follows a **CQRS + event-driven** style with a **transactional outbox** for reliable event publication and an **inbox** for exactly-once consumption. Every service is isolated at the data layer (its own database), and cross-service coordination happens exclusively through asynchronous events — never through direct database sharing.
 
@@ -84,7 +84,7 @@ C4Container
       Container(more, "…28 more services", "Fastify", "asset, grant, legal, crm, helpdesk, etc.")
     }
 
-    ContainerDb(pg, "PostgreSQL 16", "32× civitas_<service> DBs", "Database-per-service + RLS")
+    ContainerDb(pg, "PostgreSQL 16", "66× civitas_<service> DBs", "Database-per-service + RLS")
     ContainerDb(redis, "Redis 7", "Read-through cache", "getOrLoad, delByPrefix")
   }
 
@@ -175,7 +175,7 @@ Every service declares its topic surface in `src/shared/topics.ts`, which export
 
 ## 5. Database-per-Service Strategy
 
-Each of the 33 services owns exactly one PostgreSQL database, named `civitas_<service>` (32 databases; `queue` is an embedded library and `gateway` is a stateless proxy, so they hold no database of their own). Examples:
+Each DB-backed service owns exactly one PostgreSQL database, named `civitas_<service>` (66 services ship `migrations/`; the stateless `gateway` proxy holds no database of its own). Counts as of 2026-11 — see `docs/architecture/CONNECTION-BUDGET.md` for the live-derived fleet numbers. Examples:
 
 - `civitas_identity`, `civitas_finance`, `civitas_hrms`, `civitas_payroll`, `civitas_procurement`, `civitas_workflow`, `civitas_analytics`, …
 

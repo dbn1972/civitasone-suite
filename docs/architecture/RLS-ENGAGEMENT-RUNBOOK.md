@@ -1,8 +1,19 @@
 # RLS Engagement Runbook (Platform Review R1)
 
 **Goal:** make Postgres Row-Level Security an *actually enforced* tenant-isolation
-backstop (today it is dormant — the `app.tenant_id` GUC is never set, and
-services run under a role that bypasses RLS).
+backstop.
+
+> **Status update (2026-11, verified against `main`):** the GUC-wiring half of this
+> runbook (Step 2) is **done**. `packages/db` ships `createTenantTxHook`
+> (`tenant-tx.ts`), `wrapWithTenantGuc` (`wrap-tenant-db.ts`) and an AsyncLocalStorage
+> tenant context (`tenant-context.ts`), so every `db.transaction()` in a request sets
+> `app.tenant_id` from the *verified* JWT tenant; every service with a `src/` tree
+> references one of these helpers (checked across all of `services/*`).
+> `FORCE ROW LEVEL SECURITY` appears in 696 migration SQL files across 68 service/package
+> directories. The "Current state" section below is the **original 2026-06 baseline**,
+> kept for history. Not confirmable from source alone: that every deployed environment
+> runs services under a non-`BYPASSRLS` role (Step 3) and that the Step-5 startup
+> assertion exists - verify per environment with the `pg_roles` query in Step 3.
 
 **Why a runbook, not a single PR:** engaging RLS incorrectly breaks every query
 fleet-wide. It must be sequenced so isolation turns on only after the GUC is wired
@@ -13,7 +24,7 @@ and a non-bypass role is in place — per service, behind a verifiable test.
 
 ---
 
-## Current state (verified)
+## Current state (original 2026-06 baseline - superseded by the status update above)
 - `current_tenant_id()` is defined in 17 services; **inconsistent**: some use
   `current_setting('app.tenant_id', false)` (raises if unset) — billing, citizen,
   contract, finance, grant, payroll, procurement, stock, workflow, … — others use

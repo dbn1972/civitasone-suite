@@ -2,7 +2,7 @@
 
 ## Overview
 
-CivitasOne is a **multi-tenant government ERP** built as a CQRS/event-driven microservices platform. It runs 33 domain services + 31 async workers behind a single API gateway, with a Next.js web app and a Flutter mobile app as clients.
+CivitasOne is a **multi-tenant government ERP** built as a CQRS/event-driven microservices platform. It runs 67 HTTP services (incl. gateway and queue adapter) + 66 async workers behind a single API gateway, with a Next.js web app and a Flutter mobile app as clients.
 
 ---
 
@@ -53,16 +53,16 @@ CivitasOne is a **multi-tenant government ERP** built as a CQRS/event-driven mic
               │              ASYNC / CQRS LAYER                      │
               │  SQS (LocalStack :4566 dev / AWS prod)              │
               │  • Command queues per service topic                  │
-              │  • Dead-letter after 3 retries                       │
-              │  • 31 Workers (one per service)                      │
+              │  • Dead-letter after 5 receives (SQS_MAX_RECEIVE_COUNT, default 5)                       │
+              │  • 66 Workers (one per DB-backed service)                      │
               │  • Inbox dedup (messageId → _inbox.processed)        │
               │  • Outbox relay (_outbox.messages → SQS events)      │
               └──────────────────────┬──────────────────────────────┘
                                      │
               ┌──────────────────────▼──────────────────────────────┐
               │                  DATA LAYER                          │
-              │  PostgreSQL 16 (:5435)    Redis 7 (:6381)            │
-              │  • 31 databases           • Read-through cache       │
+              │  PostgreSQL 16 (:5435 direct; apps via PgBouncer :6432)  Redis 7 (:6381)            │
+              │  • 66 databases           • Read-through cache       │
               │  • Per-svc schemas        • Sessions                 │
               │  • RLS (tenant_id)        • Rate limiting            │
               │  • Drizzle ORM            • Negative caching         │
@@ -83,7 +83,7 @@ CivitasOne is a **multi-tenant government ERP** built as a CQRS/event-driven mic
 | Runtime | Node.js 20 |
 | Framework | Fastify 4.x |
 | ORM | Drizzle ORM (pg-core) |
-| Database | PostgreSQL 16 (31 databases) |
+| Database | PostgreSQL 16 (66 databases) |
 | Cache | Redis 7 |
 | Queue | AWS SQS (LocalStack dev) |
 | Object Storage | AWS S3 (LocalStack dev) |
@@ -119,7 +119,7 @@ READ PATH:
 
 ---
 
-## Service Port Map (33 services)
+## Service Port Map (original core subset; the fleet is now 67 services — see `ecosystem.config.js` for the full port map, e.g. ml 3032, meeting 3033, court 3034, visitor 3035, works 3036, smarttransfer 3086)
 
 | Service | Port | Domain |
 | --- | --- | --- |
@@ -160,7 +160,7 @@ READ PATH:
 
 ---
 
-## Shared Packages (12)
+## Shared Packages (33 as of 2026-11; the 12 below are the original core set)
 
 | Package | Purpose |
 | --- | --- |
@@ -177,11 +177,13 @@ READ PATH:
 | types | Shared TypeScript types (RequestContext, entities) |
 | ui-kit | Design tokens CSS + component primitives |
 
+Also present under `packages/` (see the directory for the full list): connector-framework, data-governance, eoffice-sdk, feature-flags, gov-adapters, gst, integration-config, kms, module-licence, numbering, ocr, plugin-sdk, rate-limit, reconciliation, render, scan-link, scanner, search, security-headers, storage, tenant-profile.
+
 ---
 
 ## Database Architecture
 
-- **One database per service** (31 databases in one Postgres cluster)
+- **One database per service** (66 databases in one Postgres cluster)
 - **Per-service schema namespaces** (e.g. payments.finance_bills, budget.allocations, gl.journal_entries)
 - **Standard tables per service**: domain + `_inbox.processed` (dedup) + `_outbox.messages` (relay)
 - **RLS**: `current_tenant_id()` GUC + per-table USING policies
@@ -210,7 +212,7 @@ READ PATH:
 
 | Container | Port | Purpose |
 | --- | --- | --- |
-| civitasone-postgres | 5435 | PostgreSQL 16 (31 DBs) |
+| civitasone-postgres | 5435 | PostgreSQL 16 (66 DBs; direct port — app processes connect via PgBouncer :6432) |
 | civitasone-redis | 6381 | Redis 7 (cache + sessions) |
 | civitasone-localstack | 4566 | SQS + S3 + Secrets Manager |
 | civitasone-keycloak | 8180 | Keycloak OIDC IdP |
@@ -221,10 +223,10 @@ READ PATH:
 
 | Type | Count |
 | --- | --- |
-| HTTP services | 33 |
-| Async workers | 31 |
+| HTTP services (incl. gateway + queue adapter) | 67 |
+| Async workers | 66 |
 | Web (Next.js) | 1 |
-| **Total** | **65** |
+| **Total** | **134** (132 per CONNECTION-BUDGET.md on 2026-09-08; derived from `ecosystem.config.js`) |
 
 ---
 

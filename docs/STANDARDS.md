@@ -18,7 +18,7 @@ These standards apply to every service, package, web app, and mobile app in the 
 - **CQRS surface (CLAUDE.md §6).** Commands are `POST/PUT/PATCH/DELETE` and return **202 Accepted** `{ id, status:"accepted", correlationId }` (the write is applied by the consumer). Queries are `GET` and return **200** from the cache. A `GET` MUST NOT mutate.
 - **Every request** carries `Authorization: Bearer <jwt>` and propagates/echoes `x-correlation-id`. Unauthenticated endpoints exist only if declared public in `policy-service`.
 - **Validation at the boundary.** Every body/params/query parsed with `zod` before the handler touches it. No raw `req.body`.
-- **Pagination** is cursor-based: `{ data, pagination:{ cursor, hasMore, total?, pageSize } }`.
+- **Pagination**: the response envelope is `{ data, pagination:{ cursor, hasMore, total?, pageSize } }` (`paginationSchema`), but the shared list *query* schema in practice is `limit`/`offset` (`listQuerySchema`, max 500, default 50; used by ~119 service source files), with cursor paging on a subset of endpoints. Cursor is the target for new list endpoints; docs/API-GUIDE.md section 3.2 documents the limit/offset form.
 - **Idempotency.** Every command accepts an idempotency key (defaults to the new resource id); duplicate keys are de-duplicated by the consumer.
 - **Uniform error envelope** (also Vol 15):
 

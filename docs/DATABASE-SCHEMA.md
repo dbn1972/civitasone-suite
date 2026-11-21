@@ -45,7 +45,7 @@ Each service owns exactly one database. Money columns are `BigInt` (paise); all 
 | 32 | queue | — (embedded lib) | — | no |
 | 33 | gateway | 8080 (proxy) | — | no |
 
-> 32 of the 33 services are backed by a `civitas_<service>` database. Every one of those databases carries the two infrastructure schemas `_outbox` and `_inbox` in addition to its domain schemas.
+> 66 of the 67 services are backed by a `civitas_<service>` database. Every one of those databases carries the two infrastructure schemas `_outbox` and `_inbox` in addition to its domain schemas.
 
 ---
 
@@ -64,20 +64,26 @@ A service groups its tables into **per-module PostgreSQL schemas**, plus the two
 | Column | Type | Notes |
 |---|---|---|
 | id | uuid PK | outbox row id |
+| topic | varchar(128) | event topic `{service}.{aggregate}.{pastTense}` |
+| event_type | varchar(128) | event type |
 | tenant_id | uuid | tenant scope (RLS) |
-| topic | text | event topic `{service}.{aggregate}.{pastTense}` |
+| actor_id | uuid | acting user |
+| correlation_id | varchar(64) | request correlation id |
+| schema_version | varchar(16) | topic schema version captured at enqueue (default `1.0`) |
 | payload | jsonb | serialized event |
 | created_at | timestamptz | insertion time (ordering) |
-| delivered_at | timestamptz null | set when relay publishes |
+| published_at | timestamptz null | set when relay publishes |
+
+(Source: `packages/outbox/src/index.ts` and `services/*/migrations/0001_init.sql`. In services that applied the partitioning migration, e.g. identity `0016_partition_outbox.sql`, the table is monthly-partitioned on `created_at`. Published rows are purged after a retention window, default 7 days.)
 
 **`_inbox.processed`**
 
 | Column | Type | Notes |
 |---|---|---|
-| message_id | text PK | dedup key; `INSERT ... ON CONFLICT DO NOTHING` |
-| tenant_id | uuid | tenant scope |
-| topic | text | consumed event topic |
+| message_id | uuid PK | dedup key; `INSERT ... ON CONFLICT DO NOTHING` |
 | processed_at | timestamptz | first-seen timestamp |
+
+(The table is `message_id`-only: there is **no** `tenant_id` or `topic` column; see `packages/outbox/src/index.ts` and the note in `contract-service/migrations/0016_outbox_inbox_rls.sql`. A sibling `_inbox.command_results` table records per-command terminal outcomes.)
 
 ---
 
@@ -344,7 +350,7 @@ CREATE POLICY tenant_isolation ON leave.leave_request
 - `current_tenant_id()` reads the **`app.tenant_id` GUC**, which the service sets per request via `SET LOCAL app.tenant_id = '<tenant>'` inside a tenant-scoped transaction.
 - `USING` filters reads; `WITH CHECK` prevents writing rows for another tenant.
 - `FORCE ROW LEVEL SECURITY` ensures the policy applies even to the table owner.
-- The `_outbox` and `_inbox` schemas are likewise `tenant_id`-scoped so relayed events and dedup records never cross tenants.
+- `_outbox.messages` is `tenant_id`-scoped; `_inbox.processed` is keyed by `message_id` only (no `tenant_id` column), so it carries no per-tenant RLS policy.
 - **Silo tier** tenants get a dedicated database; RLS still applies but the tenant set is a single tenant.
 
 ---

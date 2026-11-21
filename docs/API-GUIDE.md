@@ -47,9 +47,9 @@ Access tokens are deliberately short-lived. Clients should:
 Downstream services read these from the verified JWT:
 
 - `sub` — user id.
-- `tenant_id` (or realm/group mapping) — drives tenant isolation. **Every** query is
+- `tid` — tenant id (custom claim minted by Keycloak's `tenant-id-mapper` from the user attribute `tenantId`); drives tenant isolation (`packages/auth/src/index.ts`; dev/test tokens may carry `tenantId`). **Every** query is
   scoped to the caller's tenant.
-- `realm_access.roles` / `resource_access` — RBAC roles (e.g. `plugin_admin`,
+- `roles` — flat `string[]` of RBAC roles (from the realm-roles mapper; not nested under `realm_access`) (e.g. `plugin_admin`,
   `super_admin`, module-specific roles).
 - `edition` — one of `govt`, `psu`, `private`, `ngo`, `section8`, `cooperative`,
   `small_office`. Feature gating keys off this.
@@ -124,7 +124,7 @@ Use the `correlationId` to:
 
 ### 3.2 Reads: data + pagination
 
-List endpoints accept `limit` and `offset` and return the page plus paging metadata:
+List endpoints accept `limit` and `offset` (the shared `listQuerySchema` in `packages/schemas/src/common.ts`: `limit` 1-500, default 50; `offset` default 0) and return the page plus paging metadata. Some endpoints additionally or instead use cursor paging via the `paginationSchema` envelope (`{ cursor, hasMore, total?, pageSize }`); check the endpoint's schema:
 
 ```http
 GET /api/v1/finance/invoices?limit=25&offset=50
@@ -139,7 +139,7 @@ GET /api/v1/finance/invoices?limit=25&offset=50
 }
 ```
 
-- `limit` — page size (bounded by the service; oversized values are clamped).
+- `limit` — page size (max 500 in the shared schema; services may apply a lower bound).
 - `offset` — number of rows to skip.
 - `total` — total matching rows (for computing page count).
 

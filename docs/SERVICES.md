@@ -1,6 +1,6 @@
 # CivitasOne Suite — Service Catalog
 
-> **Version:** 0.1.0 · 33 Fastify microservices + Next.js 14 web + Flutter mobile
+> **Version:** 0.1.0 · 67 Fastify microservices + Next.js 14 web + Flutter mobile
 > Every service is an independently deployable Fastify 4.27 app on Node 20, owning one `civitas_<service>` database and its own SQS topic surface.
 
 ---
@@ -25,7 +25,7 @@ Cross-service infrastructure (SQS transport, outbox relay, cache `getOrLoad`/`de
 
 ## 2. Tier Overview
 
-The 33 services (31 with an HTTP surface plus the embedded `queue` library and the `gateway` proxy) are grouped into four tiers by their role in the platform. Lower tiers are depended upon by higher ones; dependencies always flow **through events**, never through shared databases.
+The services (67 `services/*` packages as of 2026-11, each with an HTTP surface and a paired `<svc>-worker` PM2 process; the tier table below lists the original core subset, see `ecosystem.config.js` for the full fleet and ports) are grouped into four tiers by their role in the platform. Lower tiers are depended upon by higher ones; dependencies always flow **through events**, never through shared databases.
 
 | Tier | Services | Role |
 |---|---|---|
