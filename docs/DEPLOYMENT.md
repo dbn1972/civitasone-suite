@@ -17,7 +17,7 @@ migration strategy, per-service health endpoints, and rollback procedures.
 ## 1. Architecture at a glance
 
 Every service is independently deployable, owns its **own PostgreSQL database**
-(`civitas_<service>`, database-per-service, 32 databases total), and exposes a uniform ops
+(`civitas_<service>`, database-per-service, 66 databases total), and exposes a uniform ops
 surface (`/health`, `/ready`, `/metrics`, `/openapi.json`). East–west traffic between
 services is authenticated with `INTERNAL_SERVICE_SECRET`; north–south client traffic enters
 through the **gateway** edge reverse proxy on port **8080**.
@@ -169,10 +169,19 @@ removed from Endpoints during dependency outages rather than serving errors.
 
 Terraform lives at `infra/aws`:
 
-- `infra/aws/envs/production` — the production environment root module (VPC wiring, EKS/RDS
-  references, and the SQS queues consumed by services).
+- `infra/aws/envs/production` — the production environment root module. **It currently composes
+  only three modules:** `sns-alerts`, `sqs` and `rds-replica` (a read replica of an *existing*
+  primary, identified by `var.primary_db_identifier`). The `alb`, `ecs`, `rds`, `elasticache`
+  and `s3` modules are **commented-out placeholders** ("expand per sprint"); no VPC, EKS,
+  primary RDS, ElastiCache or S3 is provisioned by this Terraform, and `infra/aws/modules/`
+  contains only `ecs-autoscaling`, `rds-replica`, `sns-alerts` and `sqs`.
 - `infra/aws/modules/sqs` — reusable SQS module (main queue + dead-letter queue per topic,
-  redrive policy, encryption).
+  redrive policy with `max_receive_count = 5` by default, encryption).
+
+> **What actually ships vs. pattern:** the production deployment today runs the fleet defined by
+> `infra/docker-compose.prod.yml` (PM2 hosts use `ecosystem.config.js`); the VPC/EKS/RDS/cache/
+> object-storage layers are provisioned outside this repo. Treat those layers as a recommended
+> pattern, not shipped IaC.
 
 ```bash
 cd infra/aws/envs/production
@@ -263,6 +272,8 @@ Key practices to encode in the roles:
 
 ### 6.3 Service → port map
 
+> Original core subset only. The fleet is now 67 services; the authoritative port map is `ecosystem.config.js` (e.g. ml 3032, meeting 3033, court 3034, visitor 3035, works 3036, smarttransfer 3086). Services reach Postgres through PgBouncer :6432; the direct Postgres port (:5435 on the EC2 host) is used only by PgBouncer itself and admin tooling.
+
 | Service | Port | Service | Port |
 |---------|------|---------|------|
 | identity | 3001 | asset | 3015 |
@@ -314,7 +325,7 @@ imported by producers/consumers rather than deployed separately. pgbouncer liste
 
 ## 8. Health-check endpoints
 
-All 33 services expose the same ops surface:
+All 67 services expose the same ops surface:
 
 | Endpoint | Semantics |
 |----------|-----------|

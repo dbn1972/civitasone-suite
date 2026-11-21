@@ -7,7 +7,7 @@ IT wings, and cooperative/Section-8 IT staff — who will run CivitasOne inside 
 infrastructure. It covers hardware sizing, network topology, TLS, backup & disaster recovery,
 monitoring, log aggregation, and upgrades.
 
-CivitasOne is **33 Fastify microservices** + a **Next.js 14** web app + a **Flutter** mobile
+CivitasOne is **67 Fastify microservices** + a **Next.js 14** web app + a **Flutter** mobile
 app, backed by **PostgreSQL 16**, **Redis 7**, **AWS SQS** (or a compatible queue), and
 **Keycloak 24** for OIDC. Each service owns its own database (`civitas_<service>`), and all
 services sit behind the **gateway** edge proxy on port **8080**.
@@ -52,7 +52,7 @@ graph TB
     end
 
     subgraph App Zone (private)
-        SVC[33 Fastify services<br/>:3001-3031, :4012]
+        SVC[67 Fastify services<br/>ports per ecosystem.config.js]
         KC[Keycloak 24 OIDC]
     end
 
@@ -106,11 +106,11 @@ a fully on-prem broker in air-gapped sites).
 
 ## 4. Backup & Disaster Recovery
 
-**Targets:** RPO ≤ 15 minutes, RTO ≤ 4 hours.
+**Targets:** RPO ≤ 15 minutes, RTO ≤ 4 hours (Charter 28.3; the weekly `dr-drill.yml` workflow cites these. Other docs quote 1 h / 30 min or 24 h / 4 h; those are superseded. The repo contains no WAL-archiving config, so the 15-minute RPO depends on the operator enabling the archiving described in 4.1).
 
 ### 4.1 PostgreSQL strategy (per-database)
 
-Because each service owns `civitas_<service>`, back up **all 32 databases**. Use a combined
+Because each service owns `civitas_<service>`, back up **all 66 `civitas_*` databases**. Use a combined
 logical + physical (WAL) strategy:
 
 1. **Nightly logical dumps** — `pg_dump` per database for portable, granular restore:
@@ -171,7 +171,7 @@ The repository ships observability config under `infra/observability`
 (**Prometheus + Grafana + Alertmanager**).
 
 - Every service exposes `GET /metrics` in Prometheus format, guarded by `METRICS_TOKEN` or an
-  internal-IP allowlist. Point Prometheus at all 33 services plus pgbouncer, Postgres, and
+  internal-IP allowlist. Point Prometheus at all 67 services plus pgbouncer, Postgres, and
   Redis exporters.
 - Import the shipped Grafana dashboards for per-service RED metrics (Rate, Errors, Duration).
 - Alertmanager rules to configure at minimum:
@@ -238,7 +238,7 @@ data-safety checklist are in `DEPLOYMENT.md` §9.
 ## 8. Operational checklist
 
 - [ ] pgbouncer in transaction mode on `:6432`; app connects only through it.
-- [ ] All 32 `civitas_*` databases backed up nightly + WAL archived (RPO ≤ 15m).
+- [ ] All 66 `civitas_*` databases backed up nightly + WAL archived (RPO ≤ 15m).
 - [ ] DR restore rehearsed to confirm RTO ≤ 4h.
 - [ ] TLS 1.2+ at edge; Keycloak over HTTPS; RS256 JWKS reachable.
 - [ ] Prometheus scraping all `/metrics`; Alertmanager routes wired.
