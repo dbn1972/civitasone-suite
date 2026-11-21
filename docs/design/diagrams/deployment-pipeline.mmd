@@ -1,0 +1,27 @@
+flowchart LR
+    DEV["Developer: feature branch -> PR"] --> CI
+
+    subgraph CI["GitHub Actions ci.yml (PR + push)"]
+        L["typecheck-lint, secret-scan"]
+        T["unit + integration tests, arch-guard, contract-tests"]
+        W["web-build, verify-screens, accessibility, e2e, mobile"]
+        Q["quality-gates-schema/domain, mutation, coverage-gate"]
+        RG["release-gate (evidence audit, main enforces)"]
+        L --> T --> W --> Q --> RG
+    end
+
+    CI --> SEC["security.yml: dependency audit, CodeQL, Trivy container, ZAP baseline vs mock gateway (non-blocking)"]
+    RG -->|merge to main| BM["docker-matrix: derive services from tree + ecosystem.config.js"]
+    BM --> BP["docker-build: build and push one image per service (root Dockerfile) to ghcr.io, tags latest + version"]
+    BP --> REL["release.yml (workflow_run on CI success): QA score >= 95, production-readiness score, staging /health probe, GitHub Release"]
+    REL --> MIG["Run DB migrations FIRST (expand phase): pnpm -r run db:migrate / bootstrap Job"]
+    MIG --> ROLL{"Target"}
+    ROLL -->|Kubernetes| HELM["helm upgrade --install civitasone (values.staging.yaml / values.production.yaml)"]
+    ROLL -->|Single host| DC["docker compose -f infra/docker-compose.prod.yml pull and up -d"]
+    ROLL -->|Bare VM| PM2["PM2 ecosystem.config.js (current EC2 fleet)"]
+    HELM --> VER["Verify: /ready 200 on all services, gateway JWKS, SQS draining, SLOs"]
+    DC --> VER
+    PM2 --> VER
+    VER -->|fail| RB["helm rollback / re-pin previous image tag (migrations are backward compatible)"]
+    VER -->|pass| DONE["Contract phase later, once stable"]
+    NIGHT["nightly.yml 03:00 UTC, perf-k6.yml 05:00 UTC, dr-drill.yml Sun 03:00 UTC"] -.-> VER

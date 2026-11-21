@@ -1,0 +1,88 @@
+erDiagram
+  HRMS_DEPARTMENTS ||--o{ HRMS_EMPLOYEES : "department_id"
+  HRMS_DESIGNATIONS ||--o{ HRMS_EMPLOYEES : "designation_id"
+  HRMS_EMPLOYEES ||--o{ HRMS_EMPLOYEES : "manager_id"
+  HRMS_EMPLOYEES ||--o{ HRMS_LEAVE_ALLOCS : "employee_id"
+  HRMS_LEAVE_TYPES ||--o{ HRMS_LEAVE_ALLOCS : "leave_type_id"
+  HRMS_LEAVE_ALLOCS ||--o{ HRMS_LEAVE_APPS : "alloc_id"
+  HRMS_EMPLOYEES ||--o{ HRMS_LEAVE_APPS : "employee_id"
+  HRMS_LEAVE_TYPES ||--o{ HRMS_LEAVE_APPS : "leave_type_id"
+  HRMS_EMPLOYEES ||--o{ HRMS_ATTENDANCE : "employee_id"
+  HRMS_LEAVE_APPS }o--o{ HRMS_ATTENDANCE : "approval marks leave days"
+
+  HRMS_EMPLOYEES {
+    uuid id PK
+    uuid tenant_id "RLS key"
+    text employee_no "UNIQUE per tenant"
+    text full_name
+    uuid department_id FK
+    uuid designation_id FK
+    uuid manager_id FK
+    date date_of_joining
+    varchar employee_type
+    varchar status "probation confirmed separated"
+    bigint basic_minor
+    text pan "encrypted at rest"
+    text aadhaar_ref "encrypted at rest"
+    text bank_account_no "encrypted at rest"
+    varchar pension_scheme "NPS GPF CPF"
+    uuid pay_structure_id
+  }
+  HRMS_DEPARTMENTS {
+    uuid id PK
+    uuid tenant_id
+    text name
+  }
+  HRMS_DESIGNATIONS {
+    uuid id PK
+    uuid tenant_id
+    text name
+  }
+  HRMS_LEAVE_TYPES {
+    uuid id PK
+    uuid tenant_id
+    text code
+    int max_days
+    boolean is_encashable
+    boolean carry_forward
+    int lop_fraction_bps "consumed by payroll LOP"
+    varchar system_code
+  }
+  HRMS_LEAVE_ALLOCS {
+    uuid id PK
+    uuid tenant_id
+    uuid employee_id FK
+    uuid leave_type_id FK
+    char fy
+    int total_days
+    int balance_days
+    numeric balance_days_exact
+    varchar status
+  }
+  HRMS_LEAVE_APPS {
+    uuid id PK
+    uuid tenant_id
+    uuid employee_id FK
+    uuid leave_type_id FK
+    uuid alloc_id FK
+    date from_date
+    date to_date
+    int days_applied
+    numeric days_applied_exact
+    varchar day_part
+    varchar status "draft pending approved rejected cancelled routing_failed"
+    uuid approved_by
+    uuid created_by "maker for SELF_APPROVAL_FORBIDDEN"
+    int version
+  }
+  HRMS_ATTENDANCE {
+    uuid id PK
+    uuid tenant_id
+    uuid employee_id FK
+    date attendance_date
+    varchar status
+    time in_time
+    time out_time
+    uuid shift_id
+    varchar source
+  }

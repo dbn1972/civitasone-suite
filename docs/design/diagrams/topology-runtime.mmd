@@ -1,0 +1,14 @@
+flowchart LR
+  WEB["Web (Next.js :3000) and Flutter mobile"] --> GW["gateway-service :8080"]
+  GW -->|"prefix routing, x-tenant-id from verified tid"| SVC["66 HTTP services (65 behind the gateway + gateway itself) :3001-:3086, :4012"]
+  GW -->|"module licence lookup"| ADM["admin-service :3022 composition projection"]
+  GW -->|"optional ABAC for mutations"| POL["policy-service :3003"]
+  SVC --> PGB["PgBouncer :6432 transaction mode"]
+  PGB --> PG[("PostgreSQL 16, :5435 direct, one DB per service, FORCE RLS")]
+  SVC --> RED[("Redis :6381 cache, idempotency, denylist, rate limit")]
+  SVC -->|"202 commands"| SQS[["SQS queues (LocalStack :4566 in dev)"]]
+  SQS --> WK["worker per service: consumers"]
+  WK --> PGB
+  WK -->|"_outbox.messages relay"| SQS
+  SVC --> KC["Keycloak :8180 OIDC RS256 JWKS"]
+  SVC --> S3[("S3 bucket civitasone")]

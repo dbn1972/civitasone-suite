@@ -1,0 +1,80 @@
+erDiagram
+    HRMS_EMPLOYEE ||--o{ HRMS_LEAVE_REQUEST : "has (same DB)"
+    HRMS_EMPLOYEE ||--o{ HRMS_GPF_TRANSACTION : "has (same DB)"
+    HRMS_LEAVE_TYPE ||--o{ HRMS_LEAVE_REQUEST : "typed by (same DB)"
+    HRMS_EMPLOYEE ||--o{ WORKFORCE_POST_OCCUPANCY : "occupies (by id)"
+    WORKFORCE_POST ||--o{ WORKFORCE_POST_OCCUPANCY : "filled by (same DB)"
+    HRMS_EMPLOYEE {
+        uuid id PK
+        uuid tenant_id "RLS key"
+        varchar code
+        varchar pan "AES-256-GCM plus blind index"
+        varchar bank_account_no "encrypted, masked on read"
+        uuid manager_id
+    }
+    HRMS_LEAVE_REQUEST {
+        uuid id PK
+        uuid tenant_id
+        uuid employee_id FK
+        uuid type_id FK
+        varchar status
+    }
+    WORKFORCE_POST_OCCUPANCY {
+        uuid id PK
+        uuid tenant_id
+        uuid post_id FK
+        uuid employee_id "plain id, no FK"
+        date effective_from
+        date effective_to "EXCLUDE gist no overlap"
+    }
+    HRMS_OUTBOX_MESSAGES {
+        uuid id PK
+        varchar topic
+        uuid tenant_id
+        uuid actor_id
+        varchar correlation_id
+        varchar schema_version
+        jsonb payload
+        timestamptz created_at
+        timestamptz published_at
+    }
+    HRMS_INBOX_PROCESSED {
+        uuid message_id PK
+        timestamptz processed_at
+    }
+    PAYROLL_POSTING_HISTORY {
+        uuid id PK
+        uuid tenant_id "FORCE RLS"
+        uuid employee_id "plain id, event-carried, no FK"
+        uuid from_office_id
+        uuid to_office_id
+        date effective_from
+        varchar order_number
+        uuid event_id "unique with tenant_id, idempotency key"
+    }
+    PAYROLL_PAYSLIP {
+        uuid id PK
+        uuid tenant_id
+        uuid run_id FK
+        uuid employee_id "plain id"
+        bigint gross_minor
+        bigint net_minor
+    }
+    PAYROLL_RUN ||--o{ PAYROLL_PAYSLIP : "contains (same DB)"
+    PAYROLL_RUN {
+        uuid id PK
+        uuid tenant_id
+        char period
+        varchar status
+    }
+    ANALYTICS_FACT_EVENTS {
+        uuid id PK
+        uuid tenant_id
+        varchar source
+        varchar event_type
+        bigint amount "paise"
+        varchar dedupe_key "unique per tenant"
+        timestamptz ingested_at "partition key"
+    }
+    HRMS_EMPLOYEE }o..o{ PAYROLL_POSTING_HISTORY : "event-carried via hrms.posting.changed (no FK)"
+    HRMS_EMPLOYEE }o..o{ PAYROLL_PAYSLIP : "referenced by id only (no FK)"

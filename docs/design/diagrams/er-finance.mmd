@@ -1,0 +1,101 @@
+erDiagram
+  FINANCE_HEADS ||--o{ FINANCE_BUDGET_ALLOCATION : "head_id"
+  FINANCE_HEADS ||--o{ FINANCE_COMMITMENTS : "budget_head_id"
+  FINANCE_HEADS ||--o{ FINANCE_BILLS : "head_id"
+  FINANCE_VENDORS ||--o{ FINANCE_BILLS : "vendor_id"
+  FINANCE_BILLS ||--o{ FINANCE_PAYMENTS : "bill_id"
+  FINANCE_JOURNALS ||--o{ FINANCE_JOURNAL_LINES : "journal_id"
+  FINANCE_HEADS ||--o{ FINANCE_JOURNAL_LINES : "head_id"
+  FINANCE_PAYMENTS ||--o{ FINANCE_CASH_BOOK : "reference payment:id"
+  FINANCE_PAYMENTS ||--o| FINANCE_JOURNALS : "sourceKey payment:id"
+
+  FINANCE_HEADS {
+    uuid id PK
+    uuid tenant_id "RLS key"
+    text code "LMMHA, UNIQUE per tenant"
+    text name
+    int level "0 major 1 minor 2 sub"
+    text classification "revenue capital plan nonplan"
+    int version
+  }
+  FINANCE_BUDGET_ALLOCATION {
+    uuid id PK
+    uuid tenant_id
+    uuid head_id FK
+    char fy "YYYY-YY, UNIQUE tenant head fy"
+    bigint allocated_minor
+    bigint committed_minor
+    bigint actual_minor
+    boolean enforce
+  }
+  FINANCE_COMMITMENTS {
+    uuid id PK
+    uuid tenant_id
+    uuid budget_head_id FK
+    varchar reference_type "po contract indent sanction"
+    uuid reference_id
+    bigint committed_minor
+    bigint released_minor
+    bigint balance_minor
+    varchar status
+  }
+  FINANCE_VENDORS {
+    uuid id PK
+    uuid tenant_id
+    text name
+    varchar pan "UNIQUE per tenant, regex checked"
+    varchar gstin
+    text bank_account_no "PII"
+    text ifsc
+    boolean is_active
+  }
+  FINANCE_BILLS {
+    uuid id PK
+    uuid tenant_id
+    text bill_no "UNIQUE per tenant"
+    uuid vendor_id FK
+    uuid head_id FK
+    bigint gross_minor
+    jsonb deductions
+    bigint net_minor
+    varchar stage "section accounts pay"
+    varchar status "pending passed rejected paid"
+    uuid created_by "maker"
+    uuid updated_by "passer"
+  }
+  FINANCE_PAYMENTS {
+    uuid id PK
+    uuid tenant_id
+    uuid bill_id FK
+    varchar mode "NEFT RTGS IMPS DBT PFMS cheque"
+    bigint amount_minor
+    text utr
+    varchar status "initiated released cancelled pending_approval"
+  }
+  FINANCE_JOURNALS {
+    uuid id PK
+    uuid tenant_id
+    text voucher_no "UNIQUE per tenant"
+    varchar type
+    date posting_date
+    varchar status "draft posted reversed"
+  }
+  FINANCE_JOURNAL_LINES {
+    uuid id PK
+    uuid tenant_id
+    uuid journal_id FK
+    uuid head_id FK
+    bigint debit_minor
+    bigint credit_minor
+    date posting_date
+  }
+  FINANCE_CASH_BOOK {
+    uuid id PK
+    uuid tenant_id
+    date entry_date
+    varchar voucher_type
+    bigint receipt_minor
+    bigint payment_minor
+    varchar bank_or_cash
+    varchar reference "idempotency key"
+  }

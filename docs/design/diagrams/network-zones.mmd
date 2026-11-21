@@ -1,0 +1,55 @@
+flowchart LR
+    NET["Clients / Internet"]
+
+    subgraph EDGE["Zone 1 - DMZ / Edge (public)"]
+        LB["Load balancer / Ingress (TLS 1.2+ termination), :443"]
+        WAF["WAF / rate limiting (recommended)"]
+    end
+
+    subgraph APP["Zone 2 - Application (private)"]
+        ING["Ingress routes: /api -> gateway, / -> web"]
+        GW["Gateway edge proxy :8080 (JWT verify, per-tenant rate limit)"]
+        WEB["Web Next.js :3000"]
+        SVC["Fastify services :3001-3031, :3086, :4012 + CQRS workers"]
+        QS["queue service :3030"]
+        KC["Keycloak OIDC RS256 (JWKS)"]
+    end
+
+    subgraph DATA["Zone 3 - Data (isolated, no internet route)"]
+        PGB["pgbouncer :6432 (transaction mode, max_client_conn 1000, pool 2)"]
+        PG[("PostgreSQL 16 :5432 civitas_service databases, RLS")]
+        PGR[("Read replica DATABASE_REPLICA_URL")]
+        RD[("Redis 7 :6379 cache")]
+    end
+
+    subgraph MSG["Zone 4 - Messaging / Object store"]
+        SQSQ[["SQS (VPC endpoint :443) or RabbitMQ / LocalStack :4566"]]
+        OBJ[("S3 / object storage")]
+    end
+
+    subgraph OPS["Zone 5 - Management / Observability"]
+        PROM["Prometheus :9090"]
+        GRAF["Grafana"]
+        AM["Alertmanager :9093"]
+        LOKI["Loki :3100 + Promtail"]
+    end
+
+    NET -->|HTTPS 443| WAF --> LB --> ING
+    ING --> GW
+    ING --> WEB
+    GW -->|"HTTP + INTERNAL_SERVICE_SECRET"| SVC
+    GW -->|JWKS| KC
+    WEB --> GW
+    SVC --> QS
+    SVC -->|6432 only| PGB --> PG
+    PGB -.-> PGR
+    SVC -->|6379| RD
+    SVC --> SQSQ
+    SVC --> OBJ
+    KC -->|5432 keycloak DB| PG
+    PROM -->|"scrape /metrics (token or IP allowlist)"| GW
+    PROM --> SVC
+    PROM --> AM
+    PROM --> GRAF
+    SVC -. "stdout / logs" .-> LOKI
+    LOKI --> GRAF

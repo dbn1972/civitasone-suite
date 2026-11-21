@@ -1,0 +1,51 @@
+flowchart TB
+    U["Users: web (Next.js 15.5) and Flutter mobile"]
+    DNS["DNS (Route 53 or NIC/gov DNS) civitasone.gov.example.in"]
+    U --> DNS
+
+    subgraph REGION["AWS Region ap-south-1 (Mumbai) - TARGET design"]
+        subgraph VPC["VPC (e.g. 10.20.0.0/16)"]
+            subgraph AZA["AZ ap-south-1a"]
+                PUBA["Public subnet A: ALB node, NAT GW"]
+                APPA["Private app subnet A: K8s nodes - gateway, 33 services, workers, Keycloak, web"]
+                DATAA["Private data subnet A: RDS PRIMARY, pgbouncer, ElastiCache primary"]
+            end
+            subgraph AZB["AZ ap-south-1b"]
+                PUBB["Public subnet B: ALB node, NAT GW"]
+                APPB["Private app subnet B: K8s nodes - gateway, 33 services, workers, Keycloak, web"]
+                DATAB["Private data subnet B: RDS STANDBY (Multi-AZ), RDS read replica, ElastiCache replica"]
+            end
+        end
+        subgraph REG["Regional managed services (via VPC endpoints)"]
+            SQS["SQS: queue + DLQ per topic (SHIPPED Terraform)"]
+            SNS["SNS alerts topic (SHIPPED Terraform)"]
+            S3["S3: documents, backups, dr-drills/ (bucket: civitasone)"]
+            KMS["KMS CMKs"]
+            SM["Secrets Manager / External Secrets"]
+            ECR["ECR or Harbor/GHCR registry"]
+            CW["CloudWatch alarms (DLQ, queue age)"]
+        end
+    end
+
+    DNS --> PUBA
+    DNS --> PUBB
+    PUBA --> APPA
+    PUBB --> APPB
+    APPA --> DATAA
+    APPB --> DATAA
+    APPA -. read traffic .-> DATAB
+    APPB -. read traffic .-> DATAB
+    DATAA == sync replication ==> DATAB
+    APPA --> SQS
+    APPB --> SQS
+    APPA --> S3
+    APPA --> SM
+    SQS --> CW --> SNS
+    KMS -. encrypts .-> DATAA
+    KMS -. encrypts .-> S3
+    ECR -. image pull .-> APPA
+
+    classDef shipped fill:#d4edda,stroke:#2d6a2d,color:#000;
+    classDef target fill:#fff3cd,stroke:#8a6d00,color:#000;
+    class SQS,SNS,CW shipped;
+    class PUBA,PUBB,APPA,APPB,DATAA,DATAB,S3,KMS,SM,ECR,DNS target;

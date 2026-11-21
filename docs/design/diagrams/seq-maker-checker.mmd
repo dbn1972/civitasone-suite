@@ -1,0 +1,42 @@
+sequenceDiagram
+  autonumber
+  actor Maker as Creator (employee)
+  actor Approver as Approver (HR admin)
+  participant GW as gateway-service
+  participant API as hrms-service API
+  participant Q as SQS hrms.leave topics
+  participant W as hrms worker consumer
+  participant DB as civitas_hrms (RLS)
+  participant OB as _outbox.messages relay
+  participant WF as workflow-service
+  participant PAY as payroll / notification consumers
+
+  Maker->>GW: POST leave application (Bearer JWT)
+  GW->>API: proxy with x-tenant-id = tid
+  API->>Q: publish hrms.leave.apply command, return 202 id
+  Q->>W: deliver command
+  W->>DB: tx: markProcessed, insert hrms_leave_apps (createdBy = Maker), enqueue event
+  W->>OB: outbox row committed with the business row
+  OB->>WF: leave_approval workflow instance (refType leave_app)
+
+  Approver->>GW: PATCH /api/v1/hrms/leave-applications/:id/approve
+  GW->>API: proxy
+  API->>API: requireRole HR_ROLES, requirePermissionKey hrms.leave.approve
+  API->>DB: findLeaveAppById (tenant scoped)
+  alt createdBy equals actorId (self approval)
+    API-->>Approver: 403 SELF_APPROVAL_FORBIDDEN
+  else illegal status transition
+    API-->>Approver: 409 domain code (stale or duplicate approve)
+  else distinct approver
+    API->>Q: publish hrms.leave.approve command
+    API-->>Approver: 202 accepted with commandId
+    Q->>W: deliver command
+    W->>DB: tx: markProcessed, assert transition, debit balance, UPDATE WHERE status = pending
+    alt rowsAffected is 0
+      W->>W: LEAVE_ALREADY_PROCESSED, return without retry
+    else row updated
+      W->>OB: enqueue hrms.leave.approved, notification.send, audit.event.record
+      OB->>PAY: hrms.leave.approved to payroll LOP and notification
+    end
+  end
+  Note over WF,W: Workflow path: strict SoD in workflow tasks consumer refuses initiator or repeat actor, super_admin override does not cover STRICT_SOD_REF_TYPES

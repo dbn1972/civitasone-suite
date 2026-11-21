@@ -1,0 +1,36 @@
+sequenceDiagram
+    autonumber
+    participant C as Client
+    participant R as Route in service A
+    participant Q as Queue bus (SQS)
+    participant K as Command consumer in service A
+    participant DB as civitas_A (domain plus _outbox plus _inbox)
+    participant L as Outbox relay
+    participant P as Consumer in service B
+    participant DBB as civitas_B (projection plus _inbox)
+    participant AN as analytics-service
+    participant AU as audit-service
+
+    C->>R: POST /v1/... with x-idempotency-key
+    R->>R: zod validate, requireRole
+    R->>Q: publish command topic with messageId
+    R-->>C: 202 Accepted commandId correlationId
+    Q->>K: deliver command
+    K->>DB: BEGIN (tenant GUC set)
+    K->>DB: markProcessed(messageId) INSERT ON CONFLICT DO NOTHING
+    K->>DB: write domain rows
+    K->>DB: enqueue event row in _outbox.messages (same tx)
+    K->>DB: COMMIT
+    Note over K,DB: Business write and event are atomic. No dual-write gap.
+    L->>DB: Poll unpublished outbox rows (bounded concurrency)
+    L->>Q: publish event topic (envelope with tenantId and schemaVersion)
+    L->>DB: set published_at for rows that succeeded
+    Q->>P: deliver event to B's own queue
+    P->>DBB: BEGIN, markProcessed(messageId)
+    P->>DBB: upsert minimal projection (no FK to A)
+    P->>DBB: COMMIT
+    Q->>AN: deliver whitelisted INBOUND event
+    AN->>AN: normalizeFact, insert fact_events ON CONFLICT dedupe_key DO NOTHING
+    Q->>AU: audit.event.record
+    AU->>AU: append event with prev_hash and event_hash
+    Note over P,DBB: Failures retry with backoff, then DLQ after maxReceiveCount 5. NonRetryableError goes straight to DLQ.

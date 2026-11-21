@@ -1,0 +1,45 @@
+flowchart TB
+  subgraph PLAT["1. Platform and administration"]
+    A1["admin, platform-admin, tenant, tenant-admin,<br/>setup, settings, domains, install,<br/>identity, policy, audit, notifications,<br/>themes, plugins, developer-portal,<br/>metadata, designer, change"]
+  end
+  subgraph GOV["2. Governance and eOffice"]
+    A2["estab and establishment (eOffice files, DAK, DFA),<br/>approvals, workflow, meeting, documents,<br/>knowledge, court, legal"]
+  end
+  subgraph FIN["3. Finance and revenue"]
+    A3["finance (GL, budget, treasury, payments),<br/>revenue, billing, grants, refund"]
+  end
+  subgraph HR["4. People"]
+    A4["hr (hrms, payroll, recruitment,<br/>learning, attendance, GPF, pension)"]
+  end
+  subgraph PRO["5. Procurement and contracts"]
+    A5["procurement, contracts, vendor"]
+  end
+  subgraph WRK["6. Works, projects and assets"]
+    A6["works, projects, assets, inventory,<br/>stock, fleet, inspection, field"]
+  end
+  subgraph CIT["7. Citizen, service desk and CRM"]
+    A7["citizen (RTI, grievance), crm, helpdesk,<br/>telephony, visitor, loyalty, cdp,<br/>journeys, recommendations, catalogue, locations"]
+  end
+  subgraph MUN["8. Municipal (ULB) services"]
+    A8["municipal console driven by serviceKey:<br/>trade, shop, market, parking, parks, fire,<br/>building, advertisement, animal, swm,<br/>sewerage, drainage, roadcut, crematorium,<br/>event, smarttransfer"]
+  end
+  subgraph INS["9. Insight and AI"]
+    A9["analytics, reports, dashboard, ai, ml"]
+  end
+
+  GOV ==>|"raise file / decide-back"| FIN
+  GOV ==>|"raise file / decide-back"| HR
+  GOV ==>|"raise file / decide-back"| PRO
+  GOV ==>|"raise file / decide-back"| WRK
+  PLAT -->|"identity, tenancy, audit, notify"| GOV
+  PLAT --> FIN
+  PLAT --> HR
+  PRO -->|"GRN, capitalisation"| FIN
+  PRO --> WRK
+  HR -->|"payroll run"| FIN
+  CIT --> GOV
+  MUN --> FIN
+  MUN --> CIT
+  FIN --> INS
+  HR --> INS
+  WRK --> INS

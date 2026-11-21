@@ -1,0 +1,30 @@
+flowchart TB
+  subgraph DEV["Development (single host)"]
+    DC["Docker Compose: Postgres :5435, Redis :6381,<br/>LocalStack :4566, Keycloak :8180, PgBouncer :6432"]
+    PM["PM2 fleet: HTTP services + workers + web<br/>(ecosystem.config.js)"]
+    PM --> DC
+  end
+
+  subgraph ONP["Production A: on-prem / Kubernetes (Helm)"]
+    ING["Ingress: /api to gateway, / to web"]
+    HEL["Helm chart infra/onprem/helm/civitasone:<br/>Deployment + Service + optional worker Deployment + HPA per service"]
+    SEC["K8s Secret civitasone-secrets<br/>+ ConfigMap"]
+    DEP["Postgres, Redis, Keycloak, Meilisearch<br/>in-cluster charts or external endpoints"]
+    ING --> HEL
+    SEC --> HEL
+    HEL --> DEP
+  end
+
+  subgraph CMP["Production B: Docker Compose (single host / on-prem box)"]
+    PC["infra/docker-compose.prod.yml<br/>gateway :8080, web :3000"]
+  end
+
+  subgraph AWSX["Production C: AWS (Terraform infra/aws)"]
+    TF["modules: sqs, rds-replica, sns-alerts, ecs-autoscaling"]
+  end
+
+  subgraph OBS["Observability (infra/observability)"]
+    PR["Prometheus + Alertmanager + Grafana + Loki + Promtail"]
+  end
+  HEL -.->|"/metrics"| PR
+  PC -.-> PR

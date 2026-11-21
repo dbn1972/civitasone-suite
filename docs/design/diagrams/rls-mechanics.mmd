@@ -1,0 +1,15 @@
+flowchart TB
+  JWT["Verified JWT: tid claim"] --> CTX["req.ctx.tenantId (authPlugin)"]
+  MSG["Queue envelope: tenantId"] --> RWT["runWithTenant(msg.tenantId) in worker.ts"]
+  CTX --> HOOK["createTenantTxHook(db) onRequest"]
+  CTX --> TT["tenantTransaction / withTenantScope"]
+  RWT --> ALS["AsyncLocalStorage tenant context"]
+  HOOK --> GUC["SELECT set_config('app.tenant_id', tid, true) - transaction local"]
+  TT --> GUC
+  ALS --> GUC
+  GUC --> POL["RLS policy tenant_isolation USING tenant_id = current_tenant_id()"]
+  POL --> ROWS["Only the tenant's rows visible or writable"]
+  FORCE["ENABLE + FORCE ROW LEVEL SECURITY, per-service NOBYPASSRLS DB role"] --> POL
+  SCAN["Scanner roles (e.g. IDENTITY_SCANNER_DATABASE_URL): cross-tenant maintenance, separate credential"] -.-> ROWS
+  OBX["_outbox.messages: RLS dropped so relay can poll without GUC"] -.-> ROWS
+  MISSING["No GUC set"] --> DENY["unset GUC yields NULL in most services (no rows, write rejected), a minority raise: deny, never leak"]

@@ -1,0 +1,39 @@
+sequenceDiagram
+  autonumber
+  actor Officer as Grant officer (maker)
+  actor Approver as eOffice approver
+  participant GR as grant-service
+  participant GW as grant worker
+  participant EO as eOffice / estab + workflow
+  participant FIN as finance-service worker
+  participant PF as PFMS / NACH egress
+  participant GL as GL spine consumer
+  participant DB as civitas_finance
+
+  Officer->>GR: POST /v1/grants/installments/:id/disburse
+  GR-->>Officer: 202 accepted
+  GR->>GW: command grant.disbursement.initiate
+  GW->>GW: guards: installment not already disbursed, approved amount cap, scheme budget reserve, prior-tranche UC validated
+  alt guard fails
+    GW->>GW: emit uc_gate_blocked / exceeds_approved / budget_exceeded
+  else requireApproval
+    GW->>GW: insert disbursement status pending_approval, eft_emitted false
+    Officer->>GR: POST /v1/grants/disbursements/:id/submit-approval
+    GR->>EO: raise eFile (refType grant_disbursement)
+    Approver->>EO: approve file
+    EO->>GW: grant.disbursement.file_decided {approved, decidedBy, dscHash}
+    GW->>GW: if eft_emitted is false then emit EFT and set eft_emitted true
+  end
+  GW->>FIN: outbox finance.payment.eft.initiate {disbursementId, amountMinor, pfmsTxnId, mode}
+  FIN->>FIN: tx: markProcessed, insert pfms batch (submission pending)
+  FIN->>PF: after commit write NACH file and SFTP upload
+  PF-->>FIN: file_sent or left pending for retry
+  FIN->>GL: outbox finance.gl.post (Dr AP / Cr Bank, deterministic id from sourceKey)
+  GL->>DB: post journal, ledger rows, cash book (idempotent on reference)
+  FIN->>GW: finance.payment.made {disbursementId, outcome}
+  GW->>GW: mark disbursement completed or failed, release budget on failure
+  Note over FIN,DB: Bill-based payment path (POST /v1/finance/payments/eft) additionally enforces maker differs from payer and passer differs from payer, amount equals bill net, open period, then Dr AP / Cr Bank and cash-book out
+  alt eOffice rejects a posted payment
+    EO->>FIN: finance.payment.file_decided rejected
+    FIN->>DB: reversePostedPayment: bill back to passed, appropriation, GL, cash book
+  end

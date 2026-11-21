@@ -1,0 +1,33 @@
+flowchart LR
+  CIT["Citizen / Applicant<br/>(public portal, mobile)"]
+  OFF["Official / Operator<br/>(clerk, SO, US, DS, approver)"]
+  TAD["Tenant Admin"]
+  PAD["Platform Admin / Ops"]
+
+  subgraph CIV["CivitasOne Suite (multi-tenant government ERP)"]
+    SYS["Web console + Mobile app + Gateway + Domain services"]
+  end
+
+  KC["Keycloak 24<br/>OIDC / SAML, RS256 JWT"]
+  PFMS["PFMS<br/>(e-Kuber disbursement adapter)"]
+  NACH["NPCI NACH / APBS<br/>(bank file generation)"]
+  GSTN["GSTN via GSP<br/>(GSTR filing adapter)"]
+  IPOST["India Post / CPGRAMS / DigiPIN<br/>(adapters, scaffolded)"]
+  PAY["Razorpay<br/>(subscription billing)"]
+  MSG["Email / SMS / Push providers"]
+  AWS["AWS SQS / S3 / RDS<br/>(or RabbitMQ / MinIO on-prem)"]
+  SRCH["Meilisearch / OpenSearch"]
+
+  CIT -->|HTTPS| SYS
+  OFF -->|HTTPS| SYS
+  TAD -->|HTTPS| SYS
+  PAD -->|HTTPS| SYS
+  SYS -->|OIDC login, JWKS verify| KC
+  SYS -->|disbursement, reconciliation| PFMS
+  SYS -->|salary / pension bank files| NACH
+  SYS -->|return filing| GSTN
+  SYS -->|adapter event bridge| IPOST
+  SYS -->|checkout, dunning| PAY
+  SYS -->|notifications| MSG
+  SYS -->|commands, events, objects| AWS
+  SYS -->|full-text search| SRCH

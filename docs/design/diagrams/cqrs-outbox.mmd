@@ -1,0 +1,16 @@
+flowchart LR
+  C["Client"] -->|"POST / PUT / PATCH / DELETE"| R["Route handler<br/>zod validate"]
+  R -->|"publish COMMAND<br/>service.aggregate.action"| QC[["Command queue"]]
+  R -->|"202 Accepted<br/>id, status, correlationId"| C
+  QC --> W["Worker / consumer"]
+  W -->|"1 transaction"| D[("Domain tables")]
+  W -->|"same transaction"| O[("_outbox.messages")]
+  O --> RL["Outbox relay<br/>at-least-once, ordered"]
+  RL -->|"publish EVENT<br/>service.aggregate.pastTense"| QE[["Event queue / topics"]]
+  QE --> S["Subscriber worker (other service)"]
+  S -->|"markProcessed<br/>INSERT ON CONFLICT DO NOTHING"| I[("_inbox.processed")]
+  I -->|"first seen only"| X["Apply reaction"]
+  QE --> AU["audit-service<br/>append-only hash chain"]
+  QC -. "5 failed receives (default)" .-> DLQ[["Dead-letter queue"]]
+  G["Client GET"] --> RC{"Redis getOrLoad"}
+  RC -->|miss| D
