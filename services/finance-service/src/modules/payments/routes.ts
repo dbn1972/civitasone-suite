@@ -81,7 +81,8 @@ function requireSampleDataRoutes(): void {
 
 const FINANCE_ROLES  = ["finance_officer", "finance_admin", "super_admin"];
 const APPROVER_ROLES = ["accounts_officer", "finance_admin", "super_admin"];
-const READER_ROLES   = [...FINANCE_ROLES, "audit_officer", "procurement_officer"];
+// accounts_officer approves/rejects bills (APPROVER_ROLES), so must be able to read the bill screen they act on.
+const READER_ROLES   = [...FINANCE_ROLES, "accounts_officer", "audit_officer", "procurement_officer"];
 
 // Mirrors budget/distribution-routes.ts's toDomain(): a DomainError from a
 // pure/domain assertion becomes a proper HttpError at the given status

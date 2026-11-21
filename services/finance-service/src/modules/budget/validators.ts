@@ -1,3 +1,4 @@
+import { zFyLabel } from "@civitasone/schemas/validators";
 import { z } from "zod";
 import { zMoneyMinor as zMoneyMinorBase } from "@civitasone/schemas/money";
 import { PFMS_HOA_REGEX } from "../../shared/pfms.js";
@@ -26,7 +27,7 @@ const moneyMinorFieldNonNeg = zMoneyMinorBase.pipe(z.bigint().nonnegative());
 
 export const createBudgetBody = z.object({
   headId:   z.string().uuid(),
-  fy:       z.string().regex(/^\d{4}-\d{2}$/, "FY must be YYYY-YY"),
+  fy:       zFyLabel,
   beMinor:  moneyMinorFieldNonNeg,
 });
 export type CreateBudgetBody = z.infer<typeof createBudgetBody>;

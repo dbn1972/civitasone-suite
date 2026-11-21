@@ -1,6 +1,7 @@
+import { zFyLabel } from "@civitasone/schemas/validators";
 import { z } from "zod";
 
-const FY = z.string().regex(/^\d{4}-\d{2}$/, "FY must be YYYY-YY");
+const FY = zFyLabel;
 
 export const createOutcomeBody = z.object({
   headId:         z.string().uuid(),
