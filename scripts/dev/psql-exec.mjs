@@ -10,6 +10,18 @@
  * NOSUPERUSER/NOBYPASSRLS and cannot create schemas or seed RLS-protected tables.
  */
 export function psqlInvocation(db) {
+  // Fail closed under the installer: install.sh exports CIVITAS_PSQL_REQUIRE_MODE=1,
+  // meaning "the only acceptable target is the installer's own compose project".
+  // Never fall back to the hard-coded `civitasone-postgres` container (which may be
+  // an unrelated live database on a shared host). Standalone dev callers don't set
+  // this and keep the old default.
+  if (process.env.CIVITAS_PSQL_REQUIRE_MODE === "1" && process.env.CIVITAS_PSQL_MODE !== "compose") {
+    throw new Error(
+      "CIVITAS_PSQL_REQUIRE_MODE=1 but CIVITAS_PSQL_MODE is " +
+      JSON.stringify(process.env.CIVITAS_PSQL_MODE ?? null) +
+      " (must be \"compose\"); refusing to fall back to a hard-coded postgres container",
+    );
+  }
   if (process.env.CIVITAS_PSQL_MODE === "compose") {
     // Installer mode: talk ONLY to the postgres service of an explicit compose
     // project, never to a hard-coded container name that may belong to another

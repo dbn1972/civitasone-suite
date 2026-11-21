@@ -219,6 +219,9 @@ version_gte() {
 # Every compose call below inherits COMPOSE_PROJECT_NAME, so this installer only
 # ever touches its own project's containers/volumes.
 export COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-civitasone-install}"
+# Fail closed: any DB script that would fall back to the hard-coded
+# `civitasone-postgres` container throws instead (see scripts/dev/psql-exec.mjs).
+export CIVITAS_PSQL_REQUIRE_MODE=1
 
 # assert_own_postgres — resolve the postgres container of OUR compose project and
 # refuse to proceed unless it exists, is running, and carries our project label.

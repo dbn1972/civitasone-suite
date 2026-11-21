@@ -3,7 +3,8 @@
  * grant-all.mjs — grant service role access to all non-system schemas in its database.
  * Migrations run as civitas_admin; services connect as *_svc roles.
  */
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
+import { psqlInvocation } from "./psql-exec.mjs";
 
 const DB_USERS = {
   civitas_admin: "admin_svc",
@@ -115,13 +116,13 @@ END $$;
 let errors = 0;
 for (const [db, role] of Object.entries(DB_USERS)) {
   try {
-    execSync(
-      `docker exec -i civitasone-postgres psql -U civitas_admin -d ${db} -v ON_ERROR_STOP=1`,
-      { input: GRANT_SQL(role), stdio: ["pipe", "pipe", "pipe"] },
-    );
+    // Honors CIVITAS_PSQL_MODE (compose/host/default) exactly like migrate-all.mjs;
+    // never hard-codes a container name.
+    const inv = psqlInvocation(db);
+    execFileSync(inv.file, inv.args, { input: GRANT_SQL(role), stdio: ["pipe", "pipe", "pipe"], env: inv.env });
     console.log(`[ok] grants → ${db} (${role})`);
   } catch (err) {
-    const msg = ((err.stderr ?? "") + (err.stdout ?? "")).toString().trim();
+    const msg = ((err.stderr ?? "") + (err.stdout ?? "") || err.message).toString().trim();
     console.error(`[ERR] grants ${db}: ${msg.slice(0, 200)}`);
     errors++;
   }
