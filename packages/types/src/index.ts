@@ -1930,9 +1930,9 @@ export type EstabFileSummary = {
   currentHolder?: string;
   /**
    * Register vocabulary. The service statuses are draft | active | closed | transferred | archived
-   * (files.estab_files CHECK); a draft is still in work, so the mapper presents it as "active"
-   * (apiMappers), while "closed" (what a file close writes) is kept distinct. "draft" and
-   * "transferred" stay in the union for callers that pass the raw service value. "pending" and
+   * (files.estab_files CHECK); the mapper keeps a draft as "draft" (never labelled Active),
+   * and "closed" (what a file close writes) is kept distinct. "draft" and
+   * "transferred" are kept as the raw service value. "pending" and
    * "disposed" are register-side values. closed, archived and disposed are terminal
    * (isFileReadOnly in estab/files/[id]/FileDetailActions.tsx); closed and archived are never overdue.
    */

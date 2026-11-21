@@ -5,7 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Button, DataTable, StatusPill, ConfirmDialog, useConfirmAction, ErrorState } from "../../../_components/ds";
 import { toHumanError } from "@/lib/messages";
 import { useTranslations } from "next-intl";
-import { loadMaps, resolveLabel, type OfficerMaps } from "../files/[id]/OfficerName";
+import { loadMaps, requestOfficerNames, resolveLabel, type OfficerMaps } from "../files/[id]/OfficerName";
 
 type Operator = { id: string; employeeId: string; division: string; deskRole: string; active: boolean };
 type Handover = {
@@ -82,6 +82,7 @@ export function HandoverPanel() {
       // A non-OK status is a real failure - never swallow it into an empty list,
       // which would falsely read as "no handovers recorded".
       let rosterLoaded = false;
+      let historyRows: Handover[] = [];
       if (opRes.status === "fulfilled" && opRes.value.ok) {
         try {
           setOperators(((await opRes.value.json()) as { data?: Operator[] }).data ?? []);
@@ -94,7 +95,8 @@ export function HandoverPanel() {
       }
       if (hoRes.status === "fulfilled" && hoRes.value.ok) {
         try {
-          setRows(((await hoRes.value.json()) as { data?: Handover[] }).data ?? []);
+          historyRows = ((await hoRes.value.json()) as { data?: Handover[] }).data ?? [];
+          setRows(historyRows);
         } catch {
           setHistoryFailed(true);
         }
@@ -104,6 +106,14 @@ export function HandoverPanel() {
       // GAP-ESTAB-HANDOVER-01: best-effort name resolution (shared with OfficerName).
       if (rosterLoaded) {
         try { setOfficerMaps(await loadMaps()); } catch { /* degrade to short id */ }
+      }
+      // History ids can be login/actor ids the roster does not hold: resolve them in one batch.
+      if (historyRows.length > 0) {
+        try {
+          await requestOfficerNames(historyRows.flatMap((h) => [h.fromOfficerId, h.toOfficerId]).filter(Boolean));
+          const base = await loadMaps();
+          setOfficerMaps({ ...base });
+        } catch { /* degrade to Unknown employee */ }
       }
     } finally {
       setLoading(false);

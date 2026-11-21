@@ -861,10 +861,8 @@ export function mapEstabFileSummaries(payload: unknown): EstabFileSummary[] | nu
     // so My Desk counted closed past-due files that the dashboard excludes.
     const rawStatus = (toText(row.status) ?? "active").toLowerCase();
     const status: EstabFileSummary["status"] =
-      // GAP-ESTAB-DASHBOARD-01 keeps every service status; a draft is still in work, so it is
-      // presented as "active" (GAP-ESTAB list/detail status display).
-      rawStatus === "draft" ? "active"
-        : (ESTAB_FILE_STATUSES as readonly string[]).includes(rawStatus)
+      // A draft stays "draft" (it is still open for the SLA rules); it is never labelled Active.
+      (ESTAB_FILE_STATUSES as readonly string[]).includes(rawStatus)
           ? (rawStatus as EstabFileSummary["status"])
           : "active";
     mapped.push({
