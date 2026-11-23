@@ -23,7 +23,13 @@
  * be more restrictive than the backend, never looser.
  */
 
-/** May view any grants page (list + detail). Superset — mirrors the service READER_ROLES union. */
+/**
+ * Module-level door: may enter /grants at all. Superset — the union of the per-page
+ * reader sets below (finance_admin is retained although NO grant-service read route
+ * admits it; see "Flagged for product decision" in the alignment PR). Do NOT use this
+ * to gate an individual page: use the per-page GRANTS_*_READ_ROLES sets so a role
+ * only sees the pages whose primary endpoint it can actually read.
+ */
 export const GRANTS_VIEW_ROLES = [
   "grant_officer",
   "grant_admin",
@@ -67,3 +73,27 @@ export const GRANTS_RELEASE_APPROVE_ROLES = ["grant_admin", "super_admin"];
  * grant_reviewer + the maker set. GAP-GRANTS-APPLICATIONS-DETAIL-01/02.
  */
 export const GRANT_REVIEWER_ROLES = ["grant_reviewer", ...GRANTS_MAKER_ROLES];
+
+/*
+ * Per-page reader sets. Each mirrors the roles grant-service admits on the page's
+ * PRIMARY read endpoint (web-gate = service reader set; narrowing only — never
+ * widen a service role set from here). The service stays the authority.
+ */
+
+/** /grants/schemes (+ [id]) -> GET /v1/grants/schemes: scheme/routes.ts READER_ROLES. */
+export const GRANTS_SCHEME_READ_ROLES = [...GRANTS_MAKER_ROLES, "audit_officer", "finance_officer", "grant_viewer"];
+
+/** /grants/applications (+ [id]), /grants/list, /grants/[id] -> application/routes.ts READER_ROLES. */
+export const GRANTS_APPLICATION_READ_ROLES = ["grant_reviewer", ...GRANTS_MAKER_ROLES, "audit_officer"];
+
+/**
+ * /grants/installments, /grants/releases, /grants/utilization (+ disbursements/[id]) ->
+ * disbursement/routes.ts + utilisation/routes.ts READER_ROLES (identical sets).
+ */
+export const GRANTS_DISBURSEMENT_READ_ROLES = [...GRANTS_DISBURSE_ROLES, "audit_officer"];
+
+/** /grants/grantees (+ [id]) -> beneficiary/routes.ts READER_ROLES. */
+export const GRANTS_GRANTEE_READ_ROLES = [...GRANTS_MAKER_ROLES, "audit_officer"];
+
+/** /grants/dashboard -> GET /v1/grants/dashboard: dashboard/routes.ts ROLES (maker set only). */
+export const GRANTS_DASHBOARD_ROLES = GRANTS_MAKER_ROLES;
