@@ -345,13 +345,17 @@ describe("alert routing to the project manager and line manager", () => {
   });
 
   it("the weekly digest counts contracts ending within 30 days and those with no renewal request, to HR", async () => {
+    // runDetector(ON) in earlier tests also emits the Monday digest (isDigestDay), so on a Monday the outbox already holds
+    // digests from those runs. Count only what THIS call adds, not the tenant's whole history.
+    const before = (await notices(ON, "contract_expiry_weekly_digest")).length;
     await runWithTenant(ON, () => sendWeeklyDigest(ON, day(0)));
-    const d = await notices(ON, "contract_expiry_weekly_digest");
+    const d = (await notices(ON, "contract_expiry_weekly_digest")).slice(before);
     expect(d).toHaveLength(1);
     expect(d[0]!.roles).toEqual(["hr_admin"]);
     expect(d[0]!.data.endingSoon).toBeGreaterThanOrEqual(1);
     expect(d[0]!.data.withoutRenewal).toBeGreaterThanOrEqual(1);
-    expect(d[0]!.data.windowDays).toBe(30);  });
+    expect(d[0]!.data.windowDays).toBe(30);
+  });
 });
 
 describe("project manager as renewal initiator (maker); HR stays the approver", () => {
