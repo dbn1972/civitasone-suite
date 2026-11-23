@@ -57,6 +57,12 @@ export const AUDIT_ROLES = ["audit_officer", "audit_admin", "platform_admin", "s
 // platform_admin is NOT accepted by any legal-service route, so it is deliberately absent.
 export const LEGAL_ROLES = ["legal_officer", "legal_admin", "super_admin", "audit_officer"];
 
+// Roles legal-service admits on the endpoints behind the Dashboard (dashboard/routes.ts ROLES),
+// case creation (cases/routes.ts LEGAL_ROLES) and /v1/legal/officers. audit_officer is a
+// READER_ROLES-only member (cases / hearings / court-orders / opinions / advocates reads) and is
+// therefore NOT here: those pages stay reachable to it, these 403 it.
+export const LEGAL_OPERATOR_ROLES = ["legal_officer", "legal_admin", "super_admin"];
+
 export const LOCATION_VIEW_ROLES = [
   "location_user",
   "location_admin",

@@ -1,5 +1,6 @@
 import {
   CRM_ADMIN_ROLES,
+  CRM_CONTACT_READ_ROLES,
   CRM_DEDUP_RULES_ROLES,
   CRM_PIPELINE_WRITE_ROLES,
   CRM_STRICT_ADMIN_ROLES,
@@ -25,6 +26,11 @@ import {
  *                    crm-service admits on /v1/crm/pipelines writes; tenant_admin
  *                    would see a wired editor whose every call 403s)
  *
+ *   - "contactRead"  the route layout calls requireAnyRole(CRM_CONTACT_READ_ROLES, ...)
+ *                    (Contacts: crm_user, crm_admin, super_admin -- the roles crm-service
+ *                    admits on /v1/crm/contacts; tenant_admin passes the parent CRM
+ *                    layout but would hit a 403 on the contact list)
+ *
  * hubTiles.test.ts reads every destination layout.tsx and fails if a tile's
  * `access` drifts from the guard the route really enforces. Hiding a tile is UX
  * only -- crm-service stays the authority.
@@ -32,7 +38,7 @@ import {
  * Section and tile keys map to the crm.hub.sections.* / crm.hub.tiles.* i18n
  * keys (GAP-CRM-HOME-03); hrefs are static.
  */
-export type TileAccess = "all" | "admin" | "strictAdmin" | "dedupRules" | "pipelineWrite";
+export type TileAccess = "all" | "admin" | "strictAdmin" | "dedupRules" | "pipelineWrite" | "contactRead";
 
 export interface TileDef {
   tileKey: string;
@@ -50,7 +56,7 @@ export const CRM_HUB_SECTIONS: SectionDef[] = [
     sectionKey: "core",
     tiles: [
       { tileKey: "dashboard", href: "/crm/dashboard", access: "all" },
-      { tileKey: "contacts", href: "/crm/contacts", access: "all" },
+      { tileKey: "contacts", href: "/crm/contacts", access: "contactRead" },
       { tileKey: "accounts", href: "/crm/accounts", access: "all" },
       { tileKey: "deals", href: "/crm/deals", access: "all" },
       { tileKey: "activities", href: "/crm/activities", access: "all" },
@@ -123,6 +129,7 @@ export function canSeeTile(access: TileAccess, roles: readonly string[]): boolea
   if (access === "strictAdmin") return hasAnyRole(roles, CRM_STRICT_ADMIN_ROLES);
   if (access === "dedupRules") return hasAnyRole(roles, CRM_DEDUP_RULES_ROLES);
   if (access === "pipelineWrite") return hasAnyRole(roles, CRM_PIPELINE_WRITE_ROLES);
+  if (access === "contactRead") return hasAnyRole(roles, CRM_CONTACT_READ_ROLES);
   return true;
 }
 

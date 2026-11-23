@@ -53,6 +53,7 @@ describe("CRM hub tile access mirrors the destination route guards (GAP-CRM-HOME
     const src = readFileSync(layout, "utf8");
     // One source of truth: no layout may keep its own copy of an admin role list.
     expect(src, `${href}/layout.tsx must not declare a local role array`).not.toMatch(/^\s*(?:export\s+)?const\s+\w*ROLES\s*=\s*\[/m);
+    if (/requireAnyRole\(\s*CRM_CONTACT_READ_ROLES\b/.test(src)) return "contactRead";
     if (/requireAnyRole\(\s*CRM_STRICT_ADMIN_ROLES\b/.test(src)) return "strictAdmin";
     if (/requireAnyRole\(\s*CRM_DEDUP_RULES_ROLES\b/.test(src)) return "dedupRules";
     if (/requireAnyRole\(\s*CRM_PIPELINE_WRITE_ROLES\b/.test(src)) return "pipelineWrite";
@@ -73,7 +74,7 @@ describe("CRM hub tile access mirrors the destination route guards (GAP-CRM-HOME
 
   it("never offers a crm_user a tile whose destination gate they fail", () => {
     const shown = visibleHubSections(["crm_user"]).flatMap((s) => s.tiles);
-    for (const tile of shown) expect(tile.access).toBe("all");
+    for (const tile of shown) expect(["all", "contactRead"]).toContain(tile.access);
     const hidden = allTiles.filter((t) => !shown.includes(t)).map((t) => t.tileKey);
     // The ten Configuration routes the finding names, plus the other admin-only layouts.
     expect(hidden).toEqual(
@@ -112,6 +113,13 @@ describe("CRM hub tile access mirrors the destination route guards (GAP-CRM-HOME
     }
     expect(CRM_PIPELINE_WRITE_ROLES.every((r) => CRM_STRICT_ADMIN_ROLES.includes(r))).toBe(true);
     expect(allTiles.find((t) => t.tileKey === "pipelines")?.access).toBe("pipelineWrite");
+  });
+
+  it("offers the Contacts tile only to the roles crm-service admits on /v1/crm/contacts", () => {
+    for (const role of ["crm_user", "crm_admin", "super_admin"]) expect(canSeeTile("contactRead", [role]), role).toBe(true);
+    // tenant_admin clears the parent CRM layout but the contacts list answers 403.
+    expect(canSeeTile("contactRead", ["tenant_admin"])).toBe(false);
+    expect(allTiles.find((t) => t.tileKey === "contacts")?.access).toBe("contactRead");
   });
 
   it("drops a section that has no visible tile instead of rendering an empty heading", () => {
