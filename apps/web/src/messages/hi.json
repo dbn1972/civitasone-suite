@@ -7532,6 +7532,8 @@
   },
   "salarySlipsTable": {
     "colEmployee": "कर्मचारी",
+    "colProfile": "प्रोफ़ाइल",
+    "viewEmployeeLink": "कर्मचारी देखें",
     "colDept": "विभाग",
     "colPayPeriod": "वेतन अवधि",
     "colGross": "सकल",

@@ -48,5 +48,6 @@ describe("SalarySlipsTable", () => {
     const { container } = renderTable([makeSlip()]);
     expect(container.querySelectorAll("a a")).toHaveLength(0);
     expect(screen.getByText("Asha Verma").closest("a")).toHaveAttribute("href", "/hr/payroll/salary-slips/s1");
+    expect(screen.getByText("View employee").closest("a")).toHaveAttribute("href", "/hr/employees/e1");
   });
 });

@@ -29,6 +29,19 @@ export function SalarySlipsTable({ slips }: { slips: SalarySlipSummary[] }) {
       // HTML parser reparents -> React hydration error #418. Plain text only.
       render: (r) => <>{r.employeeName?.trim() || tFallback("unknownEmployee")}</>,
     },
+    // The employee-profile link lives in its own non-first column: DataTable
+    // wraps only the FIRST column in the row-link <a>, so a <Link> here cannot
+    // nest inside another anchor.
+    {
+      key: "employeeId",
+      label: t("colProfile"),
+      sortable: false,
+      render: (r) => (
+        <Link href={`/hr/employees/${r.employeeId}`} style={{ color: "var(--primary-d)", fontWeight: 600 }}>
+          {t("viewEmployeeLink")}
+        </Link>
+      ),
+    },
     { key: "department", label: t("colDept") },
     // GAP-PAYROLL-SALARY-SLIPS-03: payPeriod printed the raw backend string
     // ("2026-08") verbatim; formatPayPeriod gives the same "August 2026"

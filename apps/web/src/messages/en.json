@@ -9737,6 +9737,8 @@
   },
   "salarySlipsTable": {
     "colEmployee": "Employee",
+    "colProfile": "Profile",
+    "viewEmployeeLink": "View employee",
     "colDept": "Dept",
     "colPayPeriod": "Pay Period",
     "colGross": "Gross",
