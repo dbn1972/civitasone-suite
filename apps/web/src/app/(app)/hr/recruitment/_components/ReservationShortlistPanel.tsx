@@ -56,12 +56,12 @@ export function ReservationShortlistPanel({ jobOpeningId, candidates }: { jobOpe
       <h3 className="text-xs font-bold text-slate-700 dark:text-slate-300">{t("shortlistTitle")}</h3>
       <p className="text-[11px] text-slate-600 dark:text-slate-400 mb-2">{t("shortlistIntro")}</p>
       {candidates.length === 0 ? (
-        <p className="text-xs text-slate-600 italic">{t("shortlistNoCandidates")}</p>
+        <p className="text-xs text-slate-600 dark:text-slate-400 italic">{t("shortlistNoCandidates")}</p>
       ) : (
         <form onSubmit={compute} className="flex flex-col gap-2">
           <table className="w-full text-xs">
             <thead>
-              <tr className="text-start text-slate-600">
+              <tr className="text-start text-slate-600 dark:text-slate-400">
                 <th scope="col" className="text-start font-medium py-1">{t("shortlistCandidate")}</th>
                 <th scope="col" className="text-start font-medium py-1">{t("shortlistCategory")}</th>
                 <th scope="col" className="text-start font-medium py-1">{t("shortlistScore")}</th>
@@ -108,7 +108,7 @@ export function ReservationShortlistPanel({ jobOpeningId, candidates }: { jobOpe
               </ol>
             </>
           )}
-          <p className="mt-2 text-slate-600">{t("shortlistAdvisory")}</p>
+          <p className="mt-2 text-slate-600 dark:text-slate-400">{t("shortlistAdvisory")}</p>
         </div>
       )}
     </section>

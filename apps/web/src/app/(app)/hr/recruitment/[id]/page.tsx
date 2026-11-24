@@ -1190,7 +1190,7 @@ export default function JobOpeningDetailPage() {
           className="w-full px-5 py-3 flex items-center justify-between text-sm font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
         >
           {t("advertSectionTitle")}
-          <span aria-hidden="true" className="text-slate-600">{advertOpen ? "▴" : "▾"}</span>
+          <span aria-hidden="true" className="text-slate-600 dark:text-slate-400">{advertOpen ? "▴" : "▾"}</span>
         </button>
         {advertOpen && (
           <div id="advert-panel" className="px-5 pb-5">
