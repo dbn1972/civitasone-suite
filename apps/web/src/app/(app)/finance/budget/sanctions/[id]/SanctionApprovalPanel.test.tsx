@@ -11,6 +11,7 @@ const render = (ui: ReactElement) =>
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }) }));
 vi.mock("../../../_components/FinanceActions", () => ({
   SanctionApproveAction: () => <button type="button">Approve sanction</button>,
+  SanctionRejectAction: () => <button type="button">Reject sanction</button>,
 }));
 
 import { SanctionApprovalPanel } from "./SanctionApprovalPanel";
@@ -140,5 +141,25 @@ describe("sanctionApprovalMode (base)", () => {
   });
   it("direct approval is limited to the roles finance-service accepts", () => {
     expect(SANCTION_APPROVER_ROLES).toEqual(["finance_admin", "super_admin"]);
+  });
+});
+
+describe("SanctionApprovalPanel: Reject (maker-checker)", () => {
+  beforeEach(() => vi.restoreAllMocks());
+  it("a pending sanction offers Reject to a finance role, even one that cannot approve directly", async () => {
+    mockLinkedFile(null);
+    render(<SanctionApprovalPanel id="s-1" isPending canApprove={false} canReject {...noteProps} />);
+    expect(await screen.findByRole("button", { name: "Reject sanction" })).toBeInTheDocument();
+  });
+  it("hides Reject for a role the server 403s", async () => {
+    mockLinkedFile(null);
+    render(<SanctionApprovalPanel id="s-1" isPending canApprove canReject={false} {...noteProps} />);
+    expect(await screen.findByRole("button", { name: "Approve sanction" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Reject sanction" })).not.toBeInTheDocument();
+  });
+  it("hides Reject on a non-pending sanction", async () => {
+    mockLinkedFile(null);
+    render(<SanctionApprovalPanel id="s-1" isPending={false} canApprove canReject {...noteProps} />);
+    expect(screen.queryByRole("button", { name: "Reject sanction" })).not.toBeInTheDocument();
   });
 });

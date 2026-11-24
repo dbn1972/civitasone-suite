@@ -19,6 +19,9 @@ export function normalizeSanctionStatus(status: string | null | undefined): stri
 /** Roles finance-service accepts on PATCH /v1/finance/sanctions/:id/approve. */
 export const SANCTION_APPROVER_ROLES = ["finance_admin", "super_admin"];
 
+/** Roles finance-service accepts on PATCH /v1/finance/sanctions/:id/reject (FINANCE_ROLES in budget/routes.ts). */
+export const SANCTION_REJECT_ROLES = ["finance_officer", "finance_admin", "super_admin"];
+
 export type SanctionApprovalMode = "pending-lookup" | "awaiting-eoffice" | "choose" | "eoffice-only" | "none";
 
 /** Only an open / in-progress / pending file locks direct approval; a rejected or closed one does not. */

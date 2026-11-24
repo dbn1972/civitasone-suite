@@ -23,6 +23,23 @@ import { toHumanError } from "@/lib/messages";
 import { BILL_PASSABLE, BILL_PAYABLE } from "@/lib/records/status/bill";
 
 /**
+ * Text for the reject / reverse actions: the real catalogue entry when a next-intl provider is mounted, the English
+ * fallback otherwise (the sanction panel and the ledger table are rendered with and without a provider in tests).
+ */
+function useActionText(namespace: string, fallback: Record<string, string>): (key: string) => string {
+  try {
+    const t = useTranslations(namespace);
+    return (key: string) => t(key);
+  } catch {
+    return (key: string) => fallback[key] ?? key;
+  }
+}
+
+/** finance-service reject routes require a reason of 3..500 characters (rejectBillBody / rejectSanctionBody). */
+const REJECT_REASON_MIN = 3;
+const REJECT_REASON_MAX = 500;
+
+/**
  * Plain-language failure message for a failed finance maker-checker command.
  * postJson/patchJson are plain async helpers shared across several exported
  * components below, not a component or hook, so they can't call the
@@ -43,6 +60,13 @@ async function patchJson(url: string, body: unknown, area = "request"): Promise<
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body),
   });
+  if (!(res.ok || res.status === 202)) {
+    throw new Error(financeActionError(area));
+  }
+}
+
+async function postJson(url: string, area = "request"): Promise<void> {
+  const res = await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
   if (!(res.ok || res.status === 202)) {
     throw new Error(financeActionError(area));
   }
@@ -83,6 +107,107 @@ export function SanctionApproveAction({ id }: { id: string }) {
         await patchJson(`/api/proxy/v1/finance/sanctions/${id}/approve`, { reason }, "sanction approval");
       }}
       onSuccess={() => { toast.info("Approval submitted — the sanction status updates once processing completes."); router.refresh(); }}
+    />
+  );
+}
+
+const SANCTION_REJECT_FALLBACK: Record<string, string> = {
+  rejectLabel: "Reject sanction",
+  rejectTitle: "Reject this sanction?",
+  rejectDescription: "Rejecting closes this sanction without committing any budget. The reason is recorded in the audit trail.",
+  rejectConfirm: "Reject sanction",
+  rejectReasonLabel: "Reason for rejection (at least 3 characters)",
+  rejectSubmitted: "Sanction rejection submitted for processing.",
+};
+
+/** PATCH /v1/finance/sanctions/:id/reject -- a pending sanction is declined with a mandatory reason (maker-checker). */
+export function SanctionRejectAction({ id }: { id: string }) {
+  const router = useRouter();
+  const { toast } = useToast();
+  const t = useActionText("sanctionApproval", SANCTION_REJECT_FALLBACK);
+  return (
+    <ActionButton
+      label={t("rejectLabel")}
+      className="btn ghost"
+      danger
+      confirmTitle={t("rejectTitle")}
+      confirmDescription={t("rejectDescription")}
+      confirmLabel={t("rejectConfirm")}
+      requireReason
+      minReasonLength={REJECT_REASON_MIN}
+      maxReasonLength={REJECT_REASON_MAX}
+      reasonLabel={t("rejectReasonLabel")}
+      onConfirm={async (reason) => {
+        await patchJson(`/api/proxy/v1/finance/sanctions/${id}/reject`, { reason: (reason ?? "").trim() }, "sanction rejection");
+      }}
+      onSuccess={() => { toast.info(t("rejectSubmitted")); router.refresh(); }}
+    />
+  );
+}
+
+const JOURNAL_REVERSE_FALLBACK: Record<string, string> = {
+  reverseLabel: "Reverse voucher",
+  reverseTitle: "Reverse this voucher?",
+  reverseDescription: "This posts a mirror (contra) journal that cancels the original voucher in the ledger. The original entry stays on record. A voucher can be reversed only once, and the reversal itself cannot be undone.",
+  reverseConfirm: "Reverse voucher",
+  reverseSubmitted: "Reversal submitted for processing. The reversing entry appears in the ledger once it completes.",
+};
+
+/**
+ * POST /v1/finance/journals/:id/reverse -- un-posts a finalised journal by posting a mirror contra entry. finance-service
+ * takes NO body here (reverseParam only; no reason is captured server-side), so no reason box is shown: a reason that
+ * is silently dropped would mislead the officer. Gated to JOURNAL_APPROVE_ROLES by the caller (the tier the route requires).
+ */
+export function JournalReverseAction({ journalId, voucherNo }: { journalId: string; voucherNo?: string }) {
+  const router = useRouter();
+  const { toast } = useToast();
+  const t = useActionText("financeGeneralLedger", JOURNAL_REVERSE_FALLBACK);
+  return (
+    <ActionButton
+      label={t("reverseLabel")}
+      className="btn ghost"
+      danger
+      confirmTitle={voucherNo ? `${t("reverseTitle")} (${voucherNo})` : t("reverseTitle")}
+      confirmDescription={t("reverseDescription")}
+      confirmLabel={t("reverseConfirm")}
+      onConfirm={async () => {
+        await postJson(`/api/proxy/v1/finance/journals/${journalId}/reverse`, "reversal");
+      }}
+      onSuccess={() => { toast.info(t("reverseSubmitted")); router.refresh(); }}
+    />
+  );
+}
+
+const BILL_REJECT_FALLBACK: Record<string, string> = {
+  rejectLabel: "Reject bill",
+  rejectTitle: "Reject this bill?",
+  rejectDescription: "Rejecting returns the bill to the lodger without passing it for payment. A bill that has already been passed or paid cannot be rejected. The reason is recorded in the audit trail.",
+  rejectConfirm: "Reject bill",
+  rejectReasonLabel: "Reason for rejection (at least 3 characters)",
+  rejectSubmitted: "Bill rejection submitted for processing.",
+};
+
+/** PATCH /v1/finance/bills/:id/reject -- the checker declines a bill awaiting pre-audit, with a mandatory reason. */
+export function BillRejectAction({ id }: { id: string }) {
+  const router = useRouter();
+  const { toast } = useToast();
+  const t = useActionText("expenditureBillDetail", BILL_REJECT_FALLBACK);
+  return (
+    <ActionButton
+      label={t("rejectLabel")}
+      className="btn ghost"
+      danger
+      confirmTitle={t("rejectTitle")}
+      confirmDescription={t("rejectDescription")}
+      confirmLabel={t("rejectConfirm")}
+      requireReason
+      minReasonLength={REJECT_REASON_MIN}
+      maxReasonLength={REJECT_REASON_MAX}
+      reasonLabel={t("rejectReasonLabel")}
+      onConfirm={async (reason) => {
+        await patchJson(`/api/proxy/v1/finance/bills/${id}/reject`, { reason: (reason ?? "").trim() }, "bill rejection");
+      }}
+      onSuccess={() => { toast.info(t("rejectSubmitted")); router.refresh(); }}
     />
   );
 }
@@ -183,6 +308,7 @@ export function BillPassPayActions({
       </span>
       {passBlocked ? <span style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0 0 0 0)" }}>{passBlocked}</span> : null}
       </>) : null}
+      {canPass && passable ? <BillRejectAction id={id} /> : null}
       {canPay && canRelease ? (
         releaseConflict ? (
           <span role="note" style={SOD_NOTE_STYLE}>{releaseConflict === "lodger" ? t("cannotReleaseLodged") : t("cannotReleasePassed")}</span>

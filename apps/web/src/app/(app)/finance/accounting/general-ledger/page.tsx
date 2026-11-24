@@ -3,6 +3,8 @@ import { Alert, PageHeader, LoadErrorState } from "../../../../_components/ds";
 import { getChartOfAccounts, getFinanceGLPage } from "../../../../_data/loaders";
 import { buildHeadLookup } from "../../_components/headLookup";
 import { GLTable } from "./GLTable";
+import { getSessionRoles } from "@/lib/auth/roleGuard";
+import { canWrite, JOURNAL_APPROVE_ROLES } from "@/lib/finance/writeRoles";
 import { PrintExportButton } from "../../_components/PrintExportButton";
 import { PrintHeader } from "../../_components/PrintHeader";
 import { FyFilter } from "../../_components/FyFilter";
@@ -81,7 +83,7 @@ export default async function GeneralLedgerPage(
       {result.source === "error" ? (
         <LoadErrorState result={result} area="general ledger" backHref="/finance" />
       ) : (
-        <GLTable entries={result.data.entries} pagination={result.data.pagination} totals={result.data.totals} ledgerTotals={result.data.ledgerTotals} view={view} heads={heads} />
+        <GLTable entries={result.data.entries} pagination={result.data.pagination} totals={result.data.totals} ledgerTotals={result.data.ledgerTotals} view={view} heads={heads} canReverse={canWrite(getSessionRoles(), JOURNAL_APPROVE_ROLES)} />
       )}
     </>
   );

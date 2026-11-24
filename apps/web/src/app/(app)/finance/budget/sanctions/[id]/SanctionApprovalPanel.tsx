@@ -17,7 +17,7 @@ import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { RaiseEOfficeNote, type LinkedFile, type RaiseEOfficeNoteProps } from "../../../../../_components/RaiseEOfficeNote";
 import { sanctionApprovalMode } from "./sanctionApproval";
-import { SanctionApproveAction } from "../../../_components/FinanceActions";
+import { SanctionApproveAction, SanctionRejectAction } from "../../../_components/FinanceActions";
 
 const FALLBACK: Record<string, string> = {
   chooseHint: "Approve directly (approving authority, a different officer from the proposer) or route through eOffice file noting.",
@@ -43,6 +43,7 @@ export function SanctionApprovalPanel({
   id,
   isPending,
   canApprove,
+  canReject = false,
   efileInFlight = false,
   efileFileNo,
   ...noteProps
@@ -50,6 +51,8 @@ export function SanctionApprovalPanel({
   id: string;
   isPending: boolean;
   canApprove: boolean;
+  /** PATCH sanctions/:id/reject is FINANCE_ROLES (wider than approve); false hides Reject for roles the server 403s. */
+  canReject?: boolean;
   /** finance-service says an eOffice file is deciding this sanction (authoritative; see sanctionApprovalMode). */
   efileInFlight?: boolean;
   efileFileNo?: string;
@@ -80,6 +83,11 @@ export function SanctionApprovalPanel({
       {mode === "choose" ? (
         <div style={{ marginTop: 8 }}>
           <SanctionApproveAction id={id} />
+        </div>
+      ) : null}
+      {canReject && (mode === "choose" || mode === "eoffice-only") ? (
+        <div style={{ marginTop: 8 }}>
+          <SanctionRejectAction id={id} />
         </div>
       ) : null}
       <RaiseEOfficeNote {...noteProps} notifyWithFileNo allowRaiseAfterTerminal refType="finance_sanction" refId={id} onLinkedFileChange={setState} />

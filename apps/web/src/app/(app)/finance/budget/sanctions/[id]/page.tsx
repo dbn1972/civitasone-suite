@@ -8,7 +8,7 @@ import { canRaiseForApproval, outcomeLine, raiseBlockedReason, isTerminalStatus 
 import { SANCTION_STATUS_RULE } from "@/lib/records/status/sanction";
 import { SanctionLineItemsTable } from "./SanctionLineItemsTable";
 import { SanctionApprovalPanel } from "./SanctionApprovalPanel";
-import { SANCTION_APPROVER_ROLES, normalizeSanctionStatus } from "./sanctionApproval";
+import { SANCTION_APPROVER_ROLES, SANCTION_REJECT_ROLES, normalizeSanctionStatus } from "./sanctionApproval";
 import { PrintButton } from "../../../../../_components/PrintButton";
 
 const STATUS_LABEL: Record<string, string> = { approved: "Approved", pending: "Pending approval", rejected: "Rejected" };
@@ -49,6 +49,7 @@ export default async function SanctionDetailPage(props: { params: Promise<{ id: 
   // DETAIL-04: direct approval is an approver-role action server-side
   // (finance_admin/super_admin, plus a distinct-approver 409); only offer it to them.
   const canApprove = getSessionRoles().some((r) => SANCTION_APPROVER_ROLES.includes(r));
+  const canReject = getSessionRoles().some((r) => SANCTION_REJECT_ROLES.includes(r));
 
   // UX-R5: ONE batched, tenant-scoped lookup for every person this page names.
   const trail = sanction.approvalTrail ?? [];
@@ -112,6 +113,7 @@ export default async function SanctionDetailPage(props: { params: Promise<{ id: 
           id={params.id}
           isPending={isPending}
           canApprove={canApprove}
+          canReject={canReject}
           efileInFlight={sanction.efileInFlight === true}
           {...(sanction.efileFileNo ? { efileFileNo: sanction.efileFileNo } : {})}
           subject={sanction.subject}

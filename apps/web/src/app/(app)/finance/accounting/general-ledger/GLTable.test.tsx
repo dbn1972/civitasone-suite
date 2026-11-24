@@ -7,6 +7,7 @@ import enMessages from "@/messages/en.json";
 const pushMock = vi.fn();
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: pushMock, refresh: vi.fn() }) }));
 
+import { ToastProvider } from "@/app/_components/ds";
 import { GLTable } from "./GLTable";
 import { GL_PAGE_SIZE, parseGlView, type GlView } from "./glPage";
 
@@ -182,3 +183,16 @@ describe("GLTable account columns", () => {
     expect(screen.queryByText("c0f46ca3-0339-422e-842f-8d0eb882b378")).not.toBeInTheDocument();
   });
 });
+
+describe("GLTable: Reverse voucher (maker-checker correction of posted money)", () => {
+  const two = [ENTRY({ id: "j1:1000" }), ENTRY({ id: "j1:1100", accountCode: "1100", debit: "0", credit: "50000" })];
+  it("offers one Reverse per voucher to a role the server admits", () => {
+    render(<ToastProvider><GLTable entries={two as never} pagination={pag(2)} totals={totals() as never} view={view()} canReverse /></ToastProvider>);
+    expect(screen.getAllByRole("button", { name: "Reverse voucher" })).toHaveLength(1);
+  });
+  it("offers no Reverse to a role the server 403s", () => {
+    render(<ToastProvider><GLTable entries={two as never} pagination={pag(2)} totals={totals() as never} view={view()} /></ToastProvider>);
+    expect(screen.queryByRole("button", { name: "Reverse voucher" })).not.toBeInTheDocument();
+  });
+});
+

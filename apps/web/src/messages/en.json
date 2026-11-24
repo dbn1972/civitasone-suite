@@ -3857,7 +3857,13 @@
     "recordKind": "Bill",
     "payee": "Payee",
     "lodgedBy": "Lodged by",
-    "backBills": "Bills"
+    "backBills": "Bills",
+    "rejectLabel": "Reject bill",
+    "rejectTitle": "Reject this bill?",
+    "rejectDescription": "Rejecting returns the bill to the lodger without passing it for payment. A bill that has already been passed or paid cannot be rejected. The reason is recorded in the audit trail.",
+    "rejectConfirm": "Reject bill",
+    "rejectReasonLabel": "Reason for rejection (at least 3 characters)",
+    "rejectSubmitted": "Bill rejection submitted for processing."
   },
   "expenditureBillLineItemsTable": {
     "colDescription": "Description",
@@ -4224,7 +4230,13 @@
     "openFile": "Open file",
     "directUnavailable": "Direct approval is unavailable while this file is in flight.",
     "fileEnded": "The linked eOffice file did not result in approval (it was rejected or closed). You may raise a new file or, as an approving authority, approve directly.",
-    "awaitingNoFile": "Awaiting an eOffice decision on this sanction."
+    "awaitingNoFile": "Awaiting an eOffice decision on this sanction.",
+    "rejectLabel": "Reject sanction",
+    "rejectTitle": "Reject this sanction?",
+    "rejectDescription": "Rejecting closes this sanction without committing any budget. The reason is recorded in the audit trail.",
+    "rejectConfirm": "Reject sanction",
+    "rejectReasonLabel": "Reason for rejection (at least 3 characters)",
+    "rejectSubmitted": "Sanction rejection submitted for processing."
   },
   "form16": {
     "loadingAriaLabel": "Loading…",
@@ -19061,7 +19073,13 @@
     "total": "Total",
     "filteredTotal": "Filtered total ({count, plural, one {# entry} other {# entries}})",
     "cardsNoteFiltered": "The cards above show the whole FY {fy} ledger. The totals at the foot of the table cover only the entries matching your tab or search.",
-    "cardsNoteUnavailable": "Ledger-wide totals are not available for this view, so the cards show a dash. The totals at the foot of the table cover only the entries matching your tab or search."
+    "cardsNoteUnavailable": "Ledger-wide totals are not available for this view, so the cards show a dash. The totals at the foot of the table cover only the entries matching your tab or search.",
+    "reverseColumn": "Reverse",
+    "reverseLabel": "Reverse voucher",
+    "reverseTitle": "Reverse this voucher?",
+    "reverseDescription": "This posts a mirror (contra) journal that cancels the original voucher in the ledger. The original entry stays on record. A voucher can be reversed only once, and the reversal itself cannot be undone.",
+    "reverseConfirm": "Reverse voucher",
+    "reverseSubmitted": "Reversal submitted for processing. The reversing entry appears in the ledger once it completes."
   },
   "financeBudgetFormulation": {
     "tabAll": "All",
