@@ -5,7 +5,7 @@ import { publishF3Write } from "../../shared/f3-publish.js";
  *
  *   POST /v1/hrms/applications/:id/fee/assess   assess fee (exempt or pending) from the vacancy
  *   POST /v1/hrms/applications/:id/fee/pay      record a manual (offline) payment
- *   GET  /v1/hrms/applications/:id/fee          fee status
+ *   GET  /v1/hrms/applications/:id/fee          fee status (200 { data: null } until assessed)
  *
  * Fee/exemption is derived from the vacancy fee + candidate category. Payment is
  * recorded manually (offline challan/DD/UTR reference — the government norm). The
@@ -81,7 +81,8 @@ export async function applicationFeeRoutes(app: FastifyInstance): Promise<void> 
     }).parse(req.body ?? {});
 
     const fee = await repo.findFee(ctx.tenantId, id);
-    if (!fee) throw new HttpError(404, "NOT_FOUND", "no fee has been assessed for this application");
+    // No fee assessed yet is a normal state: 200 with a null payload (not a 404).
+    if (!fee) return reply.send({ data: null });
     if (fee.status === "exempt") throw new HttpError(409, "FEE_EXEMPT", "this application is fee-exempt; there is nothing to pay");
     // Only a PENDING fee is payable (guards paid AND refunded — allow-list, not
     // a deny-list, per adversarial review M2).
@@ -115,7 +116,8 @@ export async function applicationFeeRoutes(app: FastifyInstance): Promise<void> 
     requireRole(ctx, HR_ROLES);
     const { id } = idParam.parse(req.params);
     const fee = await repo.findFee(ctx.tenantId, id);
-    if (!fee) throw new HttpError(404, "NOT_FOUND", "no fee has been assessed for this application");
+    // No fee assessed yet is a normal state: 200 with a null payload (not a 404).
+    if (!fee) return reply.send({ data: null });
     return reply.send({ data: feeView(fee) });
   });
 

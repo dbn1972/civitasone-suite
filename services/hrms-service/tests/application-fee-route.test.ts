@@ -194,6 +194,22 @@ describe("application fee (R-RA-0099)", () => {
     await app.close();
   });
 
+  it("no fee assessed yet: 200 with data:null (not a 404)", async () => {
+    H.findFee.mockResolvedValue(null);
+    const app = await buildApp();
+    const r = await injectF3(app, { method: "GET", url: `/v1/hrms/applications/${APP}/fee`, headers: auth(["hr_officer"]) });
+    expect(r.statusCode).toBe(200);
+    expect(r.json()).toEqual({ data: null });
+    await app.close();
+  });
+
+  it("fee read still enforces roles (403 for a non-HR caller)", async () => {
+    const app = await buildApp();
+    const r = await injectF3(app, { method: "GET", url: `/v1/hrms/applications/${APP}/fee`, headers: auth(["employee"]) });
+    expect(r.statusCode).toBe(403);
+    await app.close();
+  });
+
   it("requires auth (401)", async () => {
     const app = await buildApp();
     const r = await injectF3(app, { method: "GET", url: `/v1/hrms/applications/${APP}/fee` });

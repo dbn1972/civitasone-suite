@@ -6,7 +6,7 @@
  *  GET    /v1/hrms/medical/claims            — list my claims
  *  PATCH  /v1/hrms/medical/claims/:id/approve — HR approves/rejects
  *  GET    /v1/hrms/medical/hospitals         — empanelled hospital list
- *  GET    /v1/hrms/medical/insurance         — insurance details (CGHS/state/mediclaim/ESIC)
+ *  GET    /v1/hrms/medical/insurance         — insurance details (CGHS/state/mediclaim/ESIC); 200 { data: null } when none on file
  *  PUT    /v1/hrms/medical/insurance/:employeeId — HR upserts (CQRS 202)
  *  DELETE /v1/hrms/medical/insurance/:employeeId — HR removes (CQRS 202)
  *  POST   /v1/hrms/medical/insurance/:employeeId/reveal — HR audited reveal of card number / scheme id
@@ -555,11 +555,13 @@ export async function medicalClaimsRoutes(app: FastifyInstance): Promise<void> {
     // IDOR guard: same self-scoping as the claims list above. employeeId is
     // mandatory here, but a bare "employee" caller's value is still ignored
     // and replaced by their own linked id — an unresolvable link folds into
-    // the same 404 a genuinely-missing record gets (never leaks whether the
-    // record exists for someone else). A manager is limited to self + direct
+    // the same 200 `{ data: null }` a genuinely-missing record gets (never
+    // leaks whether the record exists for someone else). A manager is limited to self + direct
     // reports (403 otherwise).
     const effectiveEmployeeId = await resolveOwnEmployeeIdIfBareEmployee(ctx, req, query.employeeId, HR_ROLES);
-    if (!effectiveEmployeeId) throw new HttpError(404, "NOT_FOUND", "no insurance record found for employee");
+    // "No record on file" is a normal state, not an error: 200 with a null payload
+    // (a 404 here only produced console noise on the employee screen).
+    if (!effectiveEmployeeId) return reply.send({ data: null });
 
     // Masking (owner-approved, PR #2397 review):
     //  - the employee themself sees their own record in full;
@@ -586,7 +588,7 @@ export async function medicalClaimsRoutes(app: FastifyInstance): Promise<void> {
       WHERE tenant_id = ${ctx.tenantId} AND employee_id = ${effectiveEmployeeId}
     `);
 
-    if (!row) throw new HttpError(404, "NOT_FOUND", "no insurance record found for employee");
+    if (!row) return reply.send({ data: null });
     const view = toInsuranceView(row as unknown as InsuranceDbRow, { cardInFull: isSelf, dependantsFullAccess }, () => {
       // No value, no ciphertext — just which record needs attention.
       insuranceLog.warn({ employeeId: effectiveEmployeeId, code: "PII_DECRYPT_FAILED" }, "medical insurance PII could not be decrypted; returned masked");
