@@ -18,11 +18,11 @@ const historyQuery = z.object({
 
 const factorsSchema = z
   .object({
-    recency: z.number().min(0).max(100).optional(),
-    frequency: z.number().min(0).max(100).optional(),
-    monetary: z.number().min(0).max(100).optional(),
-    supportTickets: z.number().min(0).max(100).optional(),
+    productUsage: z.number().min(0).max(100).optional(),
     engagement: z.number().min(0).max(100).optional(),
+    supportBurden: z.number().min(0).max(100).optional(),
+    paymentTimeliness: z.number().min(0).max(100).optional(),
+    relationshipDepth: z.number().min(0).max(100).optional(),
   })
   .strict();
 
