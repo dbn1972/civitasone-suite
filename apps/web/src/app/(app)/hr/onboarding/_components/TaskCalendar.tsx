@@ -59,6 +59,7 @@ export function TaskCalendar({ tasks, joiningDate }: TaskCalendarProps) {
       {days.length === 0 ? (
         <p style={{ fontSize: 12, color: "var(--muted)", fontStyle: "italic" }}>No tasks</p>
       ) : (
+        // Scrollable region must be keyboard-focusable (axe scrollable-region-focusable).
         <div
           style={{
             display: "grid",
@@ -68,6 +69,8 @@ export function TaskCalendar({ tasks, joiningDate }: TaskCalendarProps) {
           }}
           role="list"
           aria-label="Onboarding due-day columns"
+          // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
+          tabIndex={0}
         >
           {days.map((day) => {
             const colTasks = tasks.filter((t) => t.dueByDay === day);
