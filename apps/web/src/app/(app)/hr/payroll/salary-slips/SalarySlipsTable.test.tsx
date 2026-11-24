@@ -41,4 +41,12 @@ describe("SalarySlipsTable", () => {
     expect(screen.getByText("August 2026")).toBeInTheDocument();
     expect(screen.queryByText("2026-08")).not.toBeInTheDocument();
   });
+
+  // Hydration #418: DataTable wraps the first column in an <a>; a nested <a>
+  // inside it is invalid HTML and gets reparented by the browser.
+  it("never nests anchors in the first column", () => {
+    const { container } = renderTable([makeSlip()]);
+    expect(container.querySelectorAll("a a")).toHaveLength(0);
+    expect(screen.getByText("Asha Verma").closest("a")).toHaveAttribute("href", "/hr/payroll/salary-slips/s1");
+  });
 });
