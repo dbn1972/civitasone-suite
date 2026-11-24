@@ -73,7 +73,7 @@ export default async function Page() {
                     <td>{shortId(row.ownerId)}</td>
                     <td style={overdue ? { color: "var(--bad)" } : undefined}>{formatIndianDate(row.dueDate)}</td>
                     <td>
-                      <CapaRowAction id={row.id} status={String(row.status ?? "")} />
+                      <CapaRowAction id={row.id} status={String(row.status ?? "")} reInspectionTriggered={row.reInspectionTriggered === true} />
                     </td>
                   </tr>
                 );

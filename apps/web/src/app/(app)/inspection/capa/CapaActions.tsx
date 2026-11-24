@@ -3,13 +3,17 @@
 import { UserFacingError } from "@/lib/userFacingError";
 import { useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
-import { AcceptedNotice, ActionButton } from "@/app/_components/ds";
+import { useTranslations } from "next-intl";
+import { AcceptedNotice, ActionButton, EntityPicker, Input, Select, Textarea } from "@/app/_components/ds";
+import { searchDirectoryUsers, resolveDirectoryUsers } from "@/lib/directory/searchUsers";
+import { todayIST } from "@/lib/formatters";
+import { CAPA_TYPES } from "../intakeMeta";
 import { useAcceptedWrite } from "@/lib/useAcceptedWrite";
 import { useFormError } from "@/lib/useFormError";
 
-type RowProps = { id: string; status: string };
+type RowProps = { id: string; status: string; reInspectionTriggered?: boolean };
 
-export function CapaRowAction({ id, status }: RowProps) {
+export function CapaRowAction({ id, status, reInspectionTriggered = false }: RowProps) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
@@ -40,7 +44,10 @@ export function CapaRowAction({ id, status }: RowProps) {
   const canComplete = status === "in_progress" || status === "overdue";
   const canVerify = status === "completed";
 
-  if (!canStart && !canComplete && !canVerify) {
+  // A verified CAPA can trigger the follow-up re-inspection (POST /capa/:id/trigger-reinspection), once.
+  const canReinspect = status === "verified" && !reInspectionTriggered;
+
+  if (!canStart && !canComplete && !canVerify && !canReinspect) {
     return <span style={{ color: "var(--ink2)", fontSize: 12 }}>&#8212;</span>;
   }
 
@@ -129,6 +136,15 @@ export function CapaRowAction({ id, status }: RowProps) {
             }}
           />
         ) : null}
+        {canReinspect ? (
+          <ReinspectionButton
+            id={id}
+            onDone={() => {
+              router.refresh();
+              markAccepted(status);
+            }}
+          />
+        ) : null}
       </div>
       {accepted.phase !== "idle" ? (
         <AcceptedNotice {...accepted.noticeProps} message={message} />
@@ -143,5 +159,101 @@ export function CapaRowAction({ id, status }: RowProps) {
         </span>
       ) : null}
     </div>
+  );
+}
+
+/** Trigger the follow-up re-inspection for a verified CAPA. Body-less POST; the service returns 202. */
+function ReinspectionButton({ id, onDone }: { id: string; onDone: () => void }) {
+  const t = useTranslations("inspectionIntake");
+  const formError = useFormError("capa");
+  return (
+    <ActionButton
+      label={t("reinspectLabel")}
+      className="btn ghost"
+      confirmTitle={t("reinspectConfirmTitle")}
+      confirmDescription={t("reinspectConfirmDescription")}
+      confirmLabel={t("reinspectLabel")}
+      onConfirm={async () => {
+        const res = await fetch(`/api/proxy/v1/inspection/capa/${id}/trigger-reinspection`, { method: "POST" });
+        if (res.status !== 202 && !res.ok) throw UserFacingError.from(await formError.fromResponse(res, "save"));
+      }}
+      onSuccess={onDone}
+    />
+  );
+}
+
+/**
+ * Raise a CAPA against a finding: POST /v1/inspection/capa
+ * body { findingId, type: corrective|preventive, description, ownerId?, dueDate?: YYYY-MM-DD }
+ * (capa/routes.ts createCapaSchema).
+ */
+export function CreateCapaButton({ findingId }: { findingId: string }) {
+  const t = useTranslations("inspectionIntake");
+  const router = useRouter();
+  const formError = useFormError("capa");
+  const [type, setType] = useState<string>("corrective");
+  const [description, setDescription] = useState("");
+  const [dueDate, setDueDate] = useState("");
+  const [ownerId, setOwnerId] = useState<string | null>(null);
+  const [message, setMessage] = useState("");
+
+  async function create() {
+    const body = {
+      findingId,
+      type,
+      description: description.trim(),
+      ...(ownerId ? { ownerId } : {}),
+      ...(dueDate ? { dueDate } : {}),
+    };
+    const res = await fetch("/api/proxy/v1/inspection/capa", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (res.status !== 202 && !res.ok) throw UserFacingError.from(await formError.fromResponse(res, "save"));
+  }
+
+  const lbl = { display: "block", fontSize: 13, margin: "8px 0 2px" } as const;
+  return (
+    <>
+      <ActionButton
+        label={t("capaRaiseLabel")}
+        className="btn ghost"
+        confirmTitle={t("capaRaiseTitle")}
+        confirmDescription={t("capaRaiseDescription")}
+        confirmLabel={t("capaRaiseSubmit")}
+        blockConfirm={description.trim() === ""}
+        onConfirm={create}
+        onSuccess={() => {
+          setDescription("");
+          setDueDate("");
+          setOwnerId(null);
+          setMessage(t("capaRaised"));
+          router.refresh();
+        }}
+      >
+        <label style={lbl} htmlFor={`capa-type-${findingId}`}>{t("capaTypeLabel")}</label>
+        <Select id={`capa-type-${findingId}`} value={type} onChange={(e) => setType(e.target.value)}>
+          {CAPA_TYPES.map((c) => (
+            <option key={c} value={c}>{t(c === "corrective" ? "capaTypeCorrective" : "capaTypePreventive")}</option>
+          ))}
+        </Select>
+        <label style={lbl} htmlFor={`capa-desc-${findingId}`}>{t("capaDescriptionLabel")}</label>
+        <Textarea id={`capa-desc-${findingId}`} rows={3} value={description} onChange={(e) => setDescription(e.target.value)} />
+        <label style={lbl} htmlFor={`capa-due-${findingId}`}>{t("capaDueLabel")}</label>
+        <Input id={`capa-due-${findingId}`} type="date" min={todayIST()} value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+        <label style={lbl}>{t("capaOwnerLabel")}</label>
+        <EntityPicker
+          value={ownerId}
+          onChange={(v) => setOwnerId(Array.isArray(v) ? (v[0] ?? null) : v)}
+          search={searchDirectoryUsers}
+          resolve={resolveDirectoryUsers}
+          placeholder={t("capaOwnerPlaceholder")}
+        />
+      </ActionButton>
+      {message ? (
+        <span role="status" aria-live="polite" style={{ fontSize: 11, color: "var(--good)" }}>{message}</span>
+      ) : null}
+    </>
   );
 }

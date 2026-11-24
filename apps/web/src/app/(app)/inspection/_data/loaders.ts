@@ -101,6 +101,7 @@ export const CapaListItemSchema = z
     ownerId: z.string().nullish(),
     type: z.string().optional(),
     findingId: z.string().optional(),
+    reInspectionTriggered: z.boolean().nullish(),
   })
   .passthrough();
 export type CapaListItem = z.infer<typeof CapaListItemSchema>;
@@ -243,6 +244,16 @@ export function getInspectionReports(inspectionId?: string): Promise<LoaderResul
     revalidateSeconds: 0,
     telemetryKey: "inspection.reports",
     mapResponse: asReports,
+  });
+}
+
+/** Findings raised on one inspection (GET /v1/inspection/findings?inspectionId=). Needs a findings read role. */
+export function getInspectionFindings(inspectionId: string): Promise<LoaderResult<Record<string, unknown>[]>> {
+  const qs = new URLSearchParams({ pageSize: "100", inspectionId });
+  return fetchJson<unknown, Record<string, unknown>[]>(`/api/v1/inspection/findings?${qs.toString()}`, [], {
+    revalidateSeconds: 0,
+    telemetryKey: "inspection.findings",
+    mapResponse: asRows,
   });
 }
 
