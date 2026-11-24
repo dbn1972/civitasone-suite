@@ -102,7 +102,7 @@ export default function VacancyResultsPage() {
       {loadFailed ? (
         <p role="alert" className="text-sm text-red-700 dark:text-red-400">{t("resLoadFailed")} <button type="button" className="underline" onClick={() => { setLoadFailed(false); void load(); }}>{t("retry")}</button></p>
       ) : schedules === null ? (
-        <p role="status" className="text-sm text-slate-600">{t("resLoading")}</p>
+        <p role="status" className="text-sm text-slate-600 dark:text-slate-400">{t("resLoading")}</p>
       ) : (
         <>
           <div className="mb-4">
@@ -116,10 +116,10 @@ export default function VacancyResultsPage() {
           {scheduleId && (attemptsFailed ? (
             <p role="alert" className="text-sm text-red-700 dark:text-red-400">{t("resAttemptsFailed")}</p>
           ) : hasNoAttempts(rows) ? (
-            <p className="text-sm text-slate-600">{t("resNoAttempts")}</p>
+            <p className="text-sm text-slate-600 dark:text-slate-400">{t("resNoAttempts")}</p>
           ) : (
             <table className="w-full text-sm" aria-label={t("resHeading")}>
-              <thead><tr className="text-start text-xs text-slate-600">
+              <thead><tr className="text-start text-xs text-slate-600 dark:text-slate-400">
                 <th scope="col" className="text-start font-medium py-1">{t("resCandidate")}</th>
                 <th scope="col" className="text-start font-medium py-1">{t("resStatus")}</th>
                 <th scope="col" className="text-start font-medium py-1">{t("resResult")}</th>

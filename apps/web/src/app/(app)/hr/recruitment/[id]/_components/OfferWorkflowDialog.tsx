@@ -123,7 +123,7 @@ export function OfferWorkflowDialog({ applicationId, applicantName, onClose, onC
       <div className="flex flex-col gap-4">
         <p className="text-xs text-slate-600 dark:text-slate-400">{t("offerIntro")}</p>
 
-        {offers === null && !loadFailed && <p role="status" className="text-sm text-slate-600">{t("offerLoading")}</p>}
+        {offers === null && !loadFailed && <p role="status" className="text-sm text-slate-600 dark:text-slate-400">{t("offerLoading")}</p>}
         {loadFailed && (
           <p role="alert" className="text-sm text-red-700 dark:text-red-400">
             {t("offerLoadFailed")}{" "}
@@ -173,7 +173,7 @@ export function OfferWorkflowDialog({ applicationId, applicantName, onClose, onC
               {acts.canReturn && <Button variant="secondary" disabled={busy || comments.trim() === ""} onClick={() => void post(`/v1/hrms/offers/${active.id}/return`, { comments: comments.trim() }, t("offerReturned"))}>{t("offerReturn")}</Button>}
               {acts.canRelease && <Button disabled={busy} onClick={() => void post(`/v1/hrms/offers/${active.id}/release`, {}, t("offerReleased"))}>{t("offerRelease")}</Button>}
             </div>
-            {acts.canReturn && comments.trim() === "" && <p className="text-[11px] text-slate-600">{t("offerReturnNeedsComment")}</p>}
+            {acts.canReturn && comments.trim() === "" && <p className="text-[11px] text-slate-600 dark:text-slate-400">{t("offerReturnNeedsComment")}</p>}
           </div>
         )}
 

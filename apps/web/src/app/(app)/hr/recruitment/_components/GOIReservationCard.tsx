@@ -196,7 +196,7 @@ export function GOIReservationCard({ jobOpeningId, totalVacancies, hiredByCatego
 
       {open && (
         <div className="px-5 pb-5 pt-3 border-t border-slate-100 dark:border-slate-700">
-          {loadState === "loading" && <p className="text-xs text-slate-600" role="status">{t("loadingRoster")}</p>}
+          {loadState === "loading" && <p className="text-xs text-slate-600 dark:text-slate-400" role="status">{t("loadingRoster")}</p>}
           {loadState === "error" && (
             <p className="text-xs text-red-700 dark:text-red-400" role="alert">
               {t("rosterLoadError")}{" "}
@@ -223,7 +223,7 @@ export function GOIReservationCard({ jobOpeningId, totalVacancies, hiredByCatego
                         <div className="flex items-center justify-between mb-1.5">
                           <span className="text-xs font-bold text-slate-700 dark:text-slate-300" title={t(`note${key.charAt(0)}${key.slice(1).toLowerCase()}`)}>{key}</span>
                           <span className="text-xs text-slate-600 dark:text-slate-400">
-                            {sanctioned ? null : <>{guidancePct}%<span className="ms-1 text-slate-600">·</span></>}
+                            {sanctioned ? null : <>{guidancePct}%<span className="ms-1 text-slate-600 dark:text-slate-400">·</span></>}
                             <span className="ms-1">{t("postsCount", { count: total })}</span>
                             {categoryDataAvailable && hired > 0 && (
                               <span className="ms-1 text-emerald-700 dark:text-emerald-400 font-medium">· {t("filledCount", { count: hired })}</span>
@@ -281,9 +281,9 @@ export function GOIReservationCard({ jobOpeningId, totalVacancies, hiredByCatego
                         />
                       </Field>
                     ))}
-                    <p className="col-span-3 text-[11px] text-slate-600">{t("horizontalHelp")}</p>
+                    <p className="col-span-3 text-[11px] text-slate-600 dark:text-slate-400">{t("horizontalHelp")}</p>
                   </fieldset>
-                  <p className={`text-xs ${draftMatchesTotal ? "text-slate-600" : "text-red-700 dark:text-red-400"}`} role="status">
+                  <p className={`text-xs ${draftMatchesTotal ? "text-slate-600 dark:text-slate-400" : "text-red-700 dark:text-red-400"}`} role="status">
                     {t("rosterSum", { sum: draftSum, total: totalVacancies })}
                   </p>
                   <div className="flex gap-2">

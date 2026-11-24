@@ -192,16 +192,16 @@ export default function SelectionListsPage() {
       {loadFailed ? (
         <p role="alert" className="text-sm text-red-700 dark:text-red-400">{t("selLoadFailed")} <button type="button" className="underline" onClick={() => { setLoadFailed(false); void loadLists(); }}>{t("retry")}</button></p>
       ) : lists === null ? (
-        <p role="status" className="text-sm text-slate-600">{t("selLoading")}</p>
+        <p role="status" className="text-sm text-slate-600 dark:text-slate-400">{t("selLoading")}</p>
       ) : isNoLists(lists) ? (
-        <p className="text-sm text-slate-600">{t("selNone")}</p>
+        <p className="text-sm text-slate-600 dark:text-slate-400">{t("selNone")}</p>
       ) : (
         <ul className="flex flex-col gap-2 mb-6" aria-label={t("selHeading")}>
           {lists.map((l) => (
             <li key={l.id} className="rounded-lg border border-slate-200 dark:border-slate-700 p-3 flex flex-wrap items-center justify-between gap-2">
               <div>
                 <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">{l.title}</p>
-                <p className="text-xs text-slate-600">{t("selMeta", { vacancies: l.vacancies, until: l.validityUntil ? formatIndianDate(l.validityUntil) : "—" })}</p>
+                <p className="text-xs text-slate-600 dark:text-slate-400">{t("selMeta", { vacancies: l.vacancies, until: l.validityUntil ? formatIndianDate(l.validityUntil) : "—" })}</p>
               </div>
               <div className="flex items-center gap-2">
                 <StatusPill status={l.status} />
@@ -221,7 +221,7 @@ export default function SelectionListsPage() {
           {detail.list.status === "draft" ? (
             <>
               <table className="w-full text-xs mb-3">
-                <thead><tr className="text-start text-slate-600">
+                <thead><tr className="text-start text-slate-600 dark:text-slate-400">
                   <th scope="col" className="text-start font-medium py-1">{t("selCandidate")}</th>
                   <th scope="col" className="text-start font-medium py-1">{t("selPlacement")}</th>
                   <th scope="col" className="text-start font-medium py-1">{t("selRank")}</th>
@@ -271,7 +271,7 @@ export default function SelectionListsPage() {
               {(detail.list.status === "approved" || detail.list.status === "published") && <div><Button variant="danger" disabled={busy} onClick={() => expire.trigger()}>{t("selExpire")}</Button></div>}
             </div>
           )}
-          {!isAdmin && who.loaded && <p className="mt-3 text-xs text-slate-600">{t("selAdminOnly")}</p>}
+          {!isAdmin && who.loaded && <p className="mt-3 text-xs text-slate-600 dark:text-slate-400">{t("selAdminOnly")}</p>}
         </section>
       )}
 

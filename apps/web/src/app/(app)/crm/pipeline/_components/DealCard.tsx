@@ -77,7 +77,7 @@ export function DealCard({ deal, isMoving, isDragging, onDragStart, onKeyboardMo
           type="button"
           onKeyDown={handleKeyDown}
           aria-label={t("moveHandle", { name: deal.name })}
-          className="mt-0.5 cursor-grab rounded px-0.5 text-slate-600 hover:text-slate-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+          className="mt-0.5 cursor-grab rounded px-0.5 text-slate-600 hover:text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
         >
           <span aria-hidden="true">⠿</span>
         </button>

@@ -97,7 +97,7 @@ export default async function Page() {
           </StatGrid>
 
           <Card title="Overall progress" padding>
-            <div className="flex items-center justify-between text-xs text-slate-600 mb-2">
+            <div className="flex items-center justify-between text-xs text-slate-600 dark:text-slate-400 mb-2">
               <span>
                 {completedAll} of {total} steps complete
               </span>
