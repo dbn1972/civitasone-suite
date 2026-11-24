@@ -1,4 +1,4 @@
-import { PageHeader, StatGrid, StatCard, Card } from "@/app/_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, LoadErrorState } from "@/app/_components/ds";
 import { getFinanceVendors } from "@/app/_data/loaders";
 import Link from "next/link";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
@@ -8,7 +8,8 @@ import { canWrite, VENDOR_EXPORT_ROLES, VENDOR_WRITE_ROLES } from "@/lib/finance
 import { vendorStats } from "./vendorStats";
 
 export default async function VendorsPage() {
-  const { data: vendors, source } = await getFinanceVendors();
+  const result = await getFinanceVendors();
+  const { data: vendors, source } = result;
   const stats = vendorStats(vendors);
   // GAP-FINANCE-VENDORS-01: vendors now carry a real pending | active | inactive | rejected
   // status (finance-service approval workflow, maker != checker), so the Pending Approval card is a
@@ -30,6 +31,12 @@ export default async function VendorsPage() {
         back="/finance"
         actions={canCreate ? <Link href="/finance/vendors/new" className="btn primary">New vendor</Link> : null}
       />
+      {source === "error" ? (
+        // A failed load (invalid payload / 403 / 5xx / timeout) is NOT an empty register: say so instead of
+        // rendering "No vendors registered yet." over an empty list.
+        <LoadErrorState result={result} area="vendors" backHref="/finance" />
+      ) : (
+      <>
       <StatGrid>
         <StatCard icon="🏢" tone="info" label="Total Vendors" value={stats.total} />
         <StatCard icon="✅" tone="good" label="Active" value={stats.active} />
@@ -39,8 +46,10 @@ export default async function VendorsPage() {
       <Card title="Vendors">
         {/* PAN is masked HERE, on the server, so the full PAN never reaches the client table
             (or its offline cache / CSV export). */}
-        <VendorsTable vendors={vendors.map((v) => ({ ...v, pan: v.pan ? maskPan(String(v.pan)) : v.pan }))} source={source === "error" ? "error" : "api"} canExport={canExport} />
+        <VendorsTable vendors={vendors.map((v) => ({ ...v, pan: v.pan ? maskPan(String(v.pan)) : v.pan }))} source="api" canExport={canExport} />
       </Card>
+      </>
+      )}
     </div>
   );
 }

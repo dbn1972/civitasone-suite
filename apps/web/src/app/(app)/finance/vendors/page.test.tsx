@@ -47,4 +47,27 @@ describe("VendorsPage (GAP-FINANCE-VENDORS-02 / review MEDIUM-3)", () => {
     render(await VendorsPage());
     expect((tableProps.last as { canExport: boolean }).canExport).toBe(true);
   });
+
+  it("a failed load renders the load-error state, not the table / empty register", async () => {
+    tableProps.last = null;
+    getFinanceVendors.mockResolvedValue({ data: [], source: "error", status: 500 });
+    render(await VendorsPage());
+    expect(screen.queryByText("vendors-table")).not.toBeInTheDocument();
+    expect(screen.queryByText("Total Vendors")).not.toBeInTheDocument();
+    expect(tableProps.last).toBeNull();
+    expect(screen.getByRole("alert")).toBeInTheDocument();
+  });
+
+  it("a genuine empty result (source api, 0 rows) still renders the table, which owns the empty state", async () => {
+    getFinanceVendors.mockResolvedValue({ data: [], source: "api" });
+    render(await VendorsPage());
+    expect(screen.getByText("vendors-table")).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("source api with rows renders the table", async () => {
+    getFinanceVendors.mockResolvedValue({ data: [{ id: "v1", name: "Acme", category: "Goods", pan: null, gstin: null, status: "active", ratingDisplay: "x" }], source: "api" });
+    render(await VendorsPage());
+    expect(screen.getByText("vendors-table")).toBeInTheDocument();
+  });
 });
