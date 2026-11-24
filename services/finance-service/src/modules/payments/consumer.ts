@@ -677,6 +677,8 @@ export function registerPaymentsConsumers(queue: Queue): void {
     // no-op path, where insertedPayment stays undefined and there is nothing
     // new to cache.
     if (insertedPayment) {
+      // New row: cached register list pages predate it — drop them before warming the detail key.
+      await cache.invalidateResource(msg.tenantId, "payment");
       await cache.put(cache.makeKey(msg.tenantId, "payment", p.id), insertedPayment);
     }
   });
@@ -858,7 +860,10 @@ export function registerPaymentsConsumers(queue: Queue): void {
       }
       await audit(tx, msg, "submit_for_eoffice_approval", "payment", p.id);
     });
-    await cache.invalidate(cache.makeKey(msg.tenantId, "payment", p.id));
+    // The register LIST is cached per (limit, offset); a bare single-key invalidate left it
+    // showing the pre-write status (every row "Queued") while the uncached summary counted
+    // pending-approval — drop the whole payment resource (lists + this row).
+    await cache.invalidateResource(msg.tenantId, "payment");
   });
 }
 

@@ -54,7 +54,8 @@ export function registerPaymentEOfficeDecisionConsumers(queue: Queue): void {
         await audit(tx, msg, "eoffice_returned", cb.refId, { fileNo: cb.fileNo });
       }
     });
-    await cache.invalidate(cache.makeKey(msg.tenantId, "payment", cb.refId));
+    // Resource-wide: also clears the cached register list pages, which would otherwise keep the old status label.
+    await cache.invalidateResource(msg.tenantId, "payment");
   });
 }
 

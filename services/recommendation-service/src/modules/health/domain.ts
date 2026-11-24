@@ -11,6 +11,8 @@ import {
   SIGNAL_WEIGHTS,
   HEALTH_SIGNAL_NAMES,
   computeHealthScore as computeSignalScore,
+  bandOf,
+  type HealthBand,
   type HealthSignals,
   type HealthSignalName,
 } from "./scoring-domain.js";
@@ -30,14 +32,12 @@ export type HealthFactorName = HealthSignalName;
 
 export const HEALTH_FACTOR_NAMES: readonly HealthFactorName[] = HEALTH_SIGNAL_NAMES;
 
-export type HealthClassification = "critical" | "at_risk" | "healthy" | "excellent";
-
-/** Lower bound (inclusive) of each band. */
-export const HEALTH_BANDS = {
-  atRisk: 40,
-  healthy: 60,
-  excellent: 80,
-} as const;
+/**
+ * Same KA-004 bands as the /breakdown path (scoring-domain.ts bandOf):
+ * 0-25 critical, 26-50 at_risk, 51-75 healthy, 76-100 thriving. One source of
+ * truth so the legacy /health/:id route and the breakdown never disagree.
+ */
+export type HealthClassification = HealthBand;
 
 function clamp(value: number, min: number, max: number): number {
   if (!Number.isFinite(value)) return min;
@@ -55,13 +55,9 @@ export function computeHealthScore(factors: HealthFactors): number {
   return computeSignalScore(factors).score;
 }
 
-/** Map a 0..100 score onto a relationship-health band. */
+/** Map a 0..100 score onto a relationship-health band (KA-004 bands). */
 export function classifyHealth(score: number): HealthClassification {
-  const value = clamp(score, 0, 100);
-  if (value >= HEALTH_BANDS.excellent) return "excellent";
-  if (value >= HEALTH_BANDS.healthy) return "healthy";
-  if (value >= HEALTH_BANDS.atRisk) return "at_risk";
-  return "critical";
+  return bandOf(score);
 }
 
 /**

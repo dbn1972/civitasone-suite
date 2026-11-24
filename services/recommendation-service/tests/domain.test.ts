@@ -34,6 +34,7 @@ import {
   validateFactors,
   type HealthFactors,
 } from "../src/modules/health/domain.js";
+import { bandOf } from "../src/modules/health/scoring-domain.js";
 import {
   FEEDBACK_ACTIONS,
   MAX_REASON_LENGTH,
@@ -611,48 +612,16 @@ describe("computeHealthScore", () => {
 // ── health/domain: classifyHealth ─────────────────────────────────────────────
 
 describe("classifyHealth", () => {
-  it("classifies 0 as critical", () => {
-    expect(classifyHealth(0)).toBe("critical");
+  it.each([
+    [0, "critical"], [25, "critical"], [26, "at_risk"], [50, "at_risk"],
+    [51, "healthy"], [75, "healthy"], [76, "thriving"], [100, "thriving"],
+    [250, "thriving"], [-25, "critical"], [NaN, "critical"],
+  ])("classifies %s as %s (KA-004 bands)", (score, band) => {
+    expect(classifyHealth(score)).toBe(band);
   });
 
-  it("classifies 39 as critical", () => {
-    expect(classifyHealth(39)).toBe("critical");
-  });
-
-  it("classifies 40 as at_risk", () => {
-    expect(classifyHealth(40)).toBe("at_risk");
-  });
-
-  it("classifies 59 as at_risk", () => {
-    expect(classifyHealth(59)).toBe("at_risk");
-  });
-
-  it("classifies 60 as healthy", () => {
-    expect(classifyHealth(60)).toBe("healthy");
-  });
-
-  it("classifies 79 as healthy", () => {
-    expect(classifyHealth(79)).toBe("healthy");
-  });
-
-  it("classifies 80 as excellent", () => {
-    expect(classifyHealth(80)).toBe("excellent");
-  });
-
-  it("classifies 100 as excellent", () => {
-    expect(classifyHealth(100)).toBe("excellent");
-  });
-
-  it("clamps above 100 to excellent", () => {
-    expect(classifyHealth(250)).toBe("excellent");
-  });
-
-  it("clamps below 0 to critical", () => {
-    expect(classifyHealth(-25)).toBe("critical");
-  });
-
-  it("treats NaN as critical", () => {
-    expect(classifyHealth(NaN)).toBe("critical");
+  it("agrees with the breakdown path bandOf for every integer score", () => {
+    for (let s = 0; s <= 100; s++) expect(classifyHealth(s)).toBe(bandOf(s));
   });
 });
 
