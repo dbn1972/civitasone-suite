@@ -205,7 +205,7 @@ function ScheduleInterviewDialog({
       <div className="w-full">
         {status === "success" && submittedPayload.current ? (
           <div className="mt-3 flex flex-col gap-3">
-            <p className="text-sm text-emerald-600 dark:text-emerald-400">{t("interviewScheduledMessage")}</p>
+            <p className="text-sm text-emerald-700 dark:text-emerald-400">{t("interviewScheduledMessage")}</p>
             <InterviewCard
               candidateName={applicantName}
               roleApplied={jobTitle}
@@ -230,7 +230,7 @@ function ScheduleInterviewDialog({
                 searchingText={t("interviewersSearching")}
                 removeOptionAriaLabel={(label) => t("interviewersRemove", { label })}
               />
-              <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-1">{t("interviewerIdsHelp")}</p>
+              <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-1">{t("interviewerIdsHelp")}</p>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
@@ -275,7 +275,7 @@ function ScheduleInterviewDialog({
             </div>
 
             {status === "error" && message && (
-              <p role="alert" className="text-xs text-red-600 dark:text-red-400">{message}</p>
+              <p role="alert" className="text-xs text-red-700 dark:text-red-400">{message}</p>
             )}
 
             <div className="flex justify-end gap-2 mt-1">
@@ -399,7 +399,7 @@ function ContextMenu({
 
   if (actions.length === 0) { // ux-001-ok: static STAGE_ACTIONS lookup keyed by app.stage (see the COMP-004 note above) -- not a loader result
     return (
-      <span className="text-xs text-slate-400 dark:text-slate-500 italic">{t("noActions")}</span>
+      <span className="text-xs text-slate-600 dark:text-slate-400 italic">{t("noActions")}</span>
     );
   }
 
@@ -415,7 +415,7 @@ function ContextMenu({
         className="inline-flex items-center gap-1 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-gray-900 px-2.5 py-1 text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50"
       >
         {actionState === "submitting" ? "…" : t("actionsButton")}
-        <span aria-hidden="true" className="text-slate-400 dark:text-slate-500">▾</span>
+        <span aria-hidden="true" className="text-slate-600 dark:text-slate-400">▾</span>
       </button>
 
       {open && (
@@ -456,7 +456,7 @@ function ContextMenu({
                   act.disabled
                     ? "text-slate-300 dark:text-slate-600 cursor-not-allowed"
                     : act.variant === "danger"
-                    ? "text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20"
+                    ? "text-red-700 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20"
                     : "text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800",
                 ].join(" ")}
               >
@@ -473,7 +473,7 @@ function ContextMenu({
             </div>
           ))}
           {actionState === "error" && (
-            <p className="px-4 py-1 text-[10px] text-red-500 dark:text-red-400">{t("actionFailed")}</p>
+            <p className="px-4 py-1 text-[10px] text-red-700 dark:text-red-400">{t("actionFailed")}</p>
           )}
         </div>
       )}
@@ -919,7 +919,7 @@ export default function JobOpeningDetailPage() {
   if (loadingOpening) {
     return (
       <div className="page-main">
-        <p className="text-center text-slate-500 dark:text-slate-400 py-12">{t("loadingVacancy")}</p>
+        <p className="text-center text-slate-600 dark:text-slate-400 py-12">{t("loadingVacancy")}</p>
       </div>
     );
   }
@@ -931,7 +931,7 @@ export default function JobOpeningDetailPage() {
           {t("backToRecruitment")}
         </button>
         <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-gray-900 p-6 shadow-sm">
-          <p className="text-center text-slate-400 dark:text-slate-500">{error ?? t("vacancyNotFound")}</p>
+          <p className="text-center text-slate-600 dark:text-slate-400">{error ?? t("vacancyNotFound")}</p>
         </div>
       </div>
     );
@@ -957,7 +957,7 @@ export default function JobOpeningDetailPage() {
           <h1 id="page-heading" className="text-2xl font-bold text-slate-800 dark:text-slate-100">
             {opening.jobTitle}
           </h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">{opening.refNo ? `${opening.refNo} · ` : ""}{opening.department ?? "—"}</p>
+          <p className="text-sm text-slate-600 dark:text-slate-400 mt-0.5">{opening.refNo ? `${opening.refNo} · ` : ""}{opening.department ?? "—"}</p>
           <nav aria-label={t("subpagesNav")} className="mt-2 flex flex-wrap gap-3 text-xs">
             <Link href={`/hr/recruitment/${id}/selection`} className="text-indigo-600 dark:text-indigo-400 hover:underline">{t("linkSelectionLists")}</Link>
             <Link href={`/hr/recruitment/${id}/results`} className="text-indigo-600 dark:text-indigo-400 hover:underline">{t("linkResults")}</Link>
@@ -965,7 +965,7 @@ export default function JobOpeningDetailPage() {
         </div>
         <div className="flex flex-col items-end gap-1.5">
           <div className="flex items-center gap-2">
-            <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${published ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>
+            <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${published ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-600"}`}>
               {published ? t("published") : t("notPublished")}
             </span>
             <StatusPill status={opening.status} />
@@ -986,13 +986,13 @@ export default function JobOpeningDetailPage() {
             </button>
           </div>
           {publishBlockedReason && (
-            <p id="publish-blocked-reason" className="text-xs text-slate-500 dark:text-slate-400 max-w-xs text-end">{publishBlockedReason}</p>
+            <p id="publish-blocked-reason" className="text-xs text-slate-600 dark:text-slate-400 max-w-xs text-end">{publishBlockedReason}</p>
           )}
           {publishPending !== null && (
-            <p role="status" className="text-xs text-slate-500 dark:text-slate-400 max-w-xs text-end">{publishPending ? t("publishing") : t("unpublishing")}</p>
+            <p role="status" className="text-xs text-slate-600 dark:text-slate-400 max-w-xs text-end">{publishPending ? t("publishing") : t("unpublishing")}</p>
           )}
           {publishError && (
-            <p role="alert" className="text-xs text-red-600 dark:text-red-400 max-w-xs text-end">{publishError}</p>
+            <p role="alert" className="text-xs text-red-700 dark:text-red-400 max-w-xs text-end">{publishError}</p>
           )}
         </div>
       </div>
@@ -1007,7 +1007,7 @@ export default function JobOpeningDetailPage() {
         ].map(({ label, value }) => (
           <div key={label} className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-gray-900 p-4 shadow-sm text-center">
             <p className="text-2xl font-bold text-slate-800 dark:text-slate-100">{String(value)}</p>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{label}</p>
+            <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">{label}</p>
           </div>
         ))}
       </div>
@@ -1073,9 +1073,9 @@ export default function JobOpeningDetailPage() {
           </div>
         </div>
 
-        {resumeError && <p role="alert" className="px-5 py-2 text-xs text-red-600 dark:text-red-400">{resumeError}</p>}
+        {resumeError && <p role="alert" className="px-5 py-2 text-xs text-red-700 dark:text-red-400">{resumeError}</p>}
         {loadingApps ? (
-          <div className="px-5 py-10 text-center text-slate-500 dark:text-slate-400 text-sm">{t("loadingApplications")}</div>
+          <div className="px-5 py-10 text-center text-slate-600 dark:text-slate-400 text-sm">{t("loadingApplications")}</div>
         ) : appsLoadError ? (
           <div className="px-5 py-8">
             <ErrorState error={toHumanError("load", { area: "applications" })} onRetry={() => loadApplications()} />
@@ -1083,7 +1083,7 @@ export default function JobOpeningDetailPage() {
         ) : filtered.length === 0 ? (
           <div className="px-5 py-12 text-center">
             <p className="text-3xl mb-2">📭</p>
-            <p className="text-slate-500 dark:text-slate-400 text-sm">
+            <p className="text-slate-600 dark:text-slate-400 text-sm">
               {applications.length === 0
                 ? t("noApplicationsYet")
                 : t("noApplicationsMatchFilter")}
@@ -1113,9 +1113,9 @@ export default function JobOpeningDetailPage() {
                         {app.applicantName}
                       </Link>
                       {blind ? (
-                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 truncate">{t("blindRowHint")}</p>
+                        <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5 truncate">{t("blindRowHint")}</p>
                       ) : (
-                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                        <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
                           {app.contactMasked === false ? (
                             <span>{app.email}{app.mobile ? ` · ${app.mobile}` : ""}</span>
                           ) : (
@@ -1144,7 +1144,7 @@ export default function JobOpeningDetailPage() {
                             <span key={sk} className="rounded bg-indigo-50 dark:bg-indigo-900/30 px-1.5 py-0.5 text-xs text-indigo-700 dark:text-indigo-300">{sk}</span>
                           ))}
                           {(app.skills ?? []).length > 5 && (
-                            <span className="text-xs text-slate-400 dark:text-slate-500">{t("moreSkills", { count: (app.skills ?? []).length - 5 })}</span>
+                            <span className="text-xs text-slate-600 dark:text-slate-400">{t("moreSkills", { count: (app.skills ?? []).length - 5 })}</span>
                           )}
                         </div>
                       )}
@@ -1161,7 +1161,7 @@ export default function JobOpeningDetailPage() {
                         </p>
                       )}
                       {app.appliedAt && (
-                        <p className="text-xs text-slate-500 dark:text-slate-400">{formatIndianDate(app.appliedAt)}</p>
+                        <p className="text-xs text-slate-600 dark:text-slate-400">{formatIndianDate(app.appliedAt)}</p>
                       )}
                       {/* Context-aware action menu */}
                       <ContextMenu
@@ -1190,7 +1190,7 @@ export default function JobOpeningDetailPage() {
           className="w-full px-5 py-3 flex items-center justify-between text-sm font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
         >
           {t("advertSectionTitle")}
-          <span aria-hidden="true" className="text-slate-400">{advertOpen ? "▴" : "▾"}</span>
+          <span aria-hidden="true" className="text-slate-600">{advertOpen ? "▴" : "▾"}</span>
         </button>
         {advertOpen && (
           <div id="advert-panel" className="px-5 pb-5">

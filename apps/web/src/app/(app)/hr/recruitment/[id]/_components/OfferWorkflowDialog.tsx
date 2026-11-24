@@ -121,11 +121,11 @@ export function OfferWorkflowDialog({ applicationId, applicantName, onClose, onC
   return (
     <Modal open onClose={onClose} title={t("offerTitle", { name: applicantName })} size="lg">
       <div className="flex flex-col gap-4">
-        <p className="text-xs text-slate-500 dark:text-slate-400">{t("offerIntro")}</p>
+        <p className="text-xs text-slate-600 dark:text-slate-400">{t("offerIntro")}</p>
 
-        {offers === null && !loadFailed && <p role="status" className="text-sm text-slate-500">{t("offerLoading")}</p>}
+        {offers === null && !loadFailed && <p role="status" className="text-sm text-slate-600">{t("offerLoading")}</p>}
         {loadFailed && (
-          <p role="alert" className="text-sm text-red-600">
+          <p role="alert" className="text-sm text-red-700 dark:text-red-400">
             {t("offerLoadFailed")}{" "}
             <button type="button" className="underline" onClick={() => { setLoadFailed(false); void load(); }}>{t("retry")}</button>
           </p>
@@ -173,7 +173,7 @@ export function OfferWorkflowDialog({ applicationId, applicantName, onClose, onC
               {acts.canReturn && <Button variant="secondary" disabled={busy || comments.trim() === ""} onClick={() => void post(`/v1/hrms/offers/${active.id}/return`, { comments: comments.trim() }, t("offerReturned"))}>{t("offerReturn")}</Button>}
               {acts.canRelease && <Button disabled={busy} onClick={() => void post(`/v1/hrms/offers/${active.id}/release`, {}, t("offerReleased"))}>{t("offerRelease")}</Button>}
             </div>
-            {acts.canReturn && comments.trim() === "" && <p className="text-[11px] text-slate-500">{t("offerReturnNeedsComment")}</p>}
+            {acts.canReturn && comments.trim() === "" && <p className="text-[11px] text-slate-600">{t("offerReturnNeedsComment")}</p>}
           </div>
         )}
 
@@ -260,14 +260,14 @@ export function OfferWorkflowDialog({ applicationId, applicantName, onClose, onC
                 onChange={set("joiningDate")}
               />
             </Field>
-            {errText && <p role="alert" className="col-span-2 text-xs text-red-600">{errText}</p>}
+            {errText && <p role="alert" className="col-span-2 text-xs text-red-700 dark:text-red-400">{errText}</p>}
             <div className="col-span-2 flex justify-end">
               <Button type="submit" disabled={busy}>{busy ? t("saving") : t("offerCreate")}</Button>
             </div>
           </form>
         )}
 
-        {message && <p role={message.kind === "error" ? "alert" : "status"} className={`text-xs ${message.kind === "error" ? "text-red-600" : "text-emerald-700"}`}>{message.text}</p>}
+        {message && <p role={message.kind === "error" ? "alert" : "status"} className={`text-xs ${message.kind === "error" ? "text-red-700 dark:text-red-400" : "text-emerald-700"}`}>{message.text}</p>}
 
         <div className="flex justify-end">
           <Button variant="secondary" onClick={onClose}>{t("close")}</Button>

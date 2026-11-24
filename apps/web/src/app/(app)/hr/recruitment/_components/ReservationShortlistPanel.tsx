@@ -54,14 +54,14 @@ export function ReservationShortlistPanel({ jobOpeningId, candidates }: { jobOpe
   return (
     <section className="mt-4 border-t border-slate-100 dark:border-slate-700 pt-3" aria-label={t("shortlistTitle")}>
       <h3 className="text-xs font-bold text-slate-700 dark:text-slate-300">{t("shortlistTitle")}</h3>
-      <p className="text-[11px] text-slate-500 dark:text-slate-400 mb-2">{t("shortlistIntro")}</p>
+      <p className="text-[11px] text-slate-600 dark:text-slate-400 mb-2">{t("shortlistIntro")}</p>
       {candidates.length === 0 ? (
-        <p className="text-xs text-slate-500 italic">{t("shortlistNoCandidates")}</p>
+        <p className="text-xs text-slate-600 italic">{t("shortlistNoCandidates")}</p>
       ) : (
         <form onSubmit={compute} className="flex flex-col gap-2">
           <table className="w-full text-xs">
             <thead>
-              <tr className="text-start text-slate-500">
+              <tr className="text-start text-slate-600">
                 <th scope="col" className="text-start font-medium py-1">{t("shortlistCandidate")}</th>
                 <th scope="col" className="text-start font-medium py-1">{t("shortlistCategory")}</th>
                 <th scope="col" className="text-start font-medium py-1">{t("shortlistScore")}</th>
@@ -73,7 +73,7 @@ export function ReservationShortlistPanel({ jobOpeningId, candidates }: { jobOpe
                 return (
                   <tr key={r.id} className="border-t border-slate-100 dark:border-slate-800">
                     <td className="py-1 pe-2">{r.label}</td>
-                    <td className="py-1 pe-2">{r.normalised ?? <span className="text-red-600">{problem === "no_category" ? t("shortlistNoCategory") : t("shortlistUnmappedCategory", { category: r.category ?? "" })}</span>}</td>
+                    <td className="py-1 pe-2">{r.normalised ?? <span className="text-red-700 dark:text-red-400">{problem === "no_category" ? t("shortlistNoCategory") : t("shortlistUnmappedCategory", { category: r.category ?? "" })}</span>}</td>
                     <td className="py-1">
                       <input
                         aria-label={t("shortlistScoreFor", { name: r.label })}
@@ -91,7 +91,7 @@ export function ReservationShortlistPanel({ jobOpeningId, candidates }: { jobOpe
           <div><button type="submit" disabled={busy} className="rounded-lg bg-indigo-600 text-white px-3 py-1.5 text-xs font-semibold disabled:opacity-50">{busy ? t("saving") : t("shortlistCompute")}</button></div>
         </form>
       )}
-      {error && <p role="alert" className="mt-2 text-xs text-red-600">{error}</p>}
+      {error && <p role="alert" className="mt-2 text-xs text-red-700 dark:text-red-400">{error}</p>}
       {result && (
         <div className="mt-3 text-xs" role="status">
           <p className="font-semibold">{t("shortlistSelected", { count: result.selected.length })}</p>
@@ -108,7 +108,7 @@ export function ReservationShortlistPanel({ jobOpeningId, candidates }: { jobOpe
               </ol>
             </>
           )}
-          <p className="mt-2 text-slate-500">{t("shortlistAdvisory")}</p>
+          <p className="mt-2 text-slate-600">{t("shortlistAdvisory")}</p>
         </div>
       )}
     </section>

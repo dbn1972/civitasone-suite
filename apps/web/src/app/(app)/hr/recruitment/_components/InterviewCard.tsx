@@ -33,7 +33,7 @@ export function InterviewCard({
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="font-semibold text-slate-800 dark:text-slate-200 text-sm truncate">{candidateName}</p>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 truncate">{roleApplied}</p>
+          <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5 truncate">{roleApplied}</p>
         </div>
         <span className="inline-flex items-center gap-1 shrink-0 rounded-full bg-purple-50 dark:bg-purple-950 border border-purple-200 dark:border-purple-800 px-2.5 py-0.5 text-xs font-semibold text-purple-700 dark:text-purple-300">
           <span aria-hidden="true">📅</span> {t("interview")}
@@ -43,11 +43,11 @@ export function InterviewCard({
       {/* Slot + interviewer details */}
       <dl className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
         <div>
-          <dt className="text-slate-500 dark:text-slate-400">{t("slot")}</dt>
+          <dt className="text-slate-600 dark:text-slate-400">{t("slot")}</dt>
           <dd className="font-semibold text-slate-800 dark:text-slate-200 mt-0.5">{slotLabel}</dd>
         </div>
         <div>
-          <dt className="text-slate-500 dark:text-slate-400">{t("interviewer")}</dt>
+          <dt className="text-slate-600 dark:text-slate-400">{t("interviewer")}</dt>
           <dd className="font-medium text-slate-800 dark:text-slate-200 mt-0.5">{interviewerName}</dd>
         </div>
       </dl>
@@ -64,7 +64,7 @@ export function InterviewCard({
             <span aria-hidden="true">🎥</span> {t("joinMeet")}
           </a>
         ) : (
-          <span className="inline-flex items-center gap-1.5 rounded-md bg-slate-100 dark:bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-400 dark:text-slate-500 cursor-not-allowed">
+          <span className="inline-flex items-center gap-1.5 rounded-md bg-slate-100 dark:bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-400 cursor-not-allowed">
             <span aria-hidden="true">🎥</span> {t("noLinkYet")}
           </span>
         )}
@@ -81,7 +81,7 @@ export function InterviewCard({
           <button
             type="button"
             onClick={onCancel}
-            className="inline-flex items-center gap-1 rounded-md border border-red-100 dark:border-red-900 bg-red-50 dark:bg-red-950 px-3 py-1.5 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900 transition-colors"
+            className="inline-flex items-center gap-1 rounded-md border border-red-100 dark:border-red-900 bg-red-50 dark:bg-red-950 px-3 py-1.5 text-xs font-medium text-red-700 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900 transition-colors"
           >
             {t("cancel")}
           </button>

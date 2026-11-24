@@ -132,9 +132,9 @@ export default async function Page() {
                     <div className="flex-1 min-w-0">
                       <div className="flex flex-wrap items-center justify-between gap-3">
                         <p className="font-medium text-slate-900">
-                          <span className="text-slate-500">Step {step.stepNo}:</span> {step.title}
+                          <span className="text-slate-600">Step {step.stepNo}:</span> {step.title}
                           {step.isRequired ? null : (
-                            <span className="ms-2 rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-500">
+                            <span className="ms-2 rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600">
                               Optional
                             </span>
                           )}
@@ -145,7 +145,7 @@ export default async function Page() {
                         <p className="mt-1 text-sm text-slate-600">{step.description}</p>
                       ) : null}
                       {step.completedAt ? (
-                        <p className="mt-1 text-xs text-slate-500">
+                        <p className="mt-1 text-xs text-slate-600">
                           Completed: {formatIndianDate(step.completedAt)}
                         </p>
                       ) : null}
@@ -163,7 +163,7 @@ export default async function Page() {
                           );
                         }
                         return (
-                          <p className="mt-1 text-xs text-red-600" role="alert">
+                          <p className="mt-1 text-xs text-red-700 dark:text-red-400" role="alert">
                             Error: {notice.text}
                           </p>
                         );
