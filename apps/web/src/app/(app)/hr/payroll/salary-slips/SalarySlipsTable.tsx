@@ -24,11 +24,10 @@ export function SalarySlipsTable({ slips }: { slips: SalarySlipSummary[] }) {
     {
       key: "employeeName",
       label: t("colEmployee"),
-      render: (r) => (
-        <Link href={`/hr/employees/${r.employeeId}`} style={{ color: "var(--primary-d)", fontWeight: 600 }} tabIndex={-1}>
-          {r.employeeName?.trim() || tFallback("unknownEmployee")}
-        </Link>
-      ),
+      // DataTable already wraps the first column in its own row-link <a>
+      // (rowLinkPrefix below). A <Link> here nested <a> inside <a>, which the
+      // HTML parser reparents -> React hydration error #418. Plain text only.
+      render: (r) => <>{r.employeeName?.trim() || tFallback("unknownEmployee")}</>,
     },
     { key: "department", label: t("colDept") },
     // GAP-PAYROLL-SALARY-SLIPS-03: payPeriod printed the raw backend string
