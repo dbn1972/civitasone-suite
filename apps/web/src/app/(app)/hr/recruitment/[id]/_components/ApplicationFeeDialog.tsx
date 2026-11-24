@@ -42,8 +42,9 @@ export function ApplicationFeeDialog({ applicationId, applicantName, onClose }: 
       const res = await fetch(`/api/proxy/v1/hrms/applications/${applicationId}/fee`);
       if (res.status === 404) { if (mounted.current) setLoad({ kind: "none" }); return; }
       if (!res.ok) { if (mounted.current) setLoad({ kind: "error" }); return; }
-      const j = (await res.json()) as { data?: Fee };
-      if (mounted.current) setLoad(j.data ? { kind: "ready", fee: j.data } : { kind: "error" });
+      // 200 { data: null } = no fee assessed yet (same empty state the old 404 produced).
+      const j = (await res.json()) as { data?: Fee | null };
+      if (mounted.current) setLoad(j.data ? { kind: "ready", fee: j.data } : j.data === null ? { kind: "none" } : { kind: "error" });
     } catch {
       if (mounted.current) setLoad({ kind: "error" });
     }

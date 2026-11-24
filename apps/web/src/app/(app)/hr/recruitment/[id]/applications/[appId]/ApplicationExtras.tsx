@@ -62,7 +62,7 @@ export function ApplicationExtras({ appId }: { appId: string }) {
   const loadFee = useCallback(async () => {
     setFee({ state: "loading" });
     const r = await loadJson<{ data?: Fee }>(`${base}/fee`);
-    // 404 = no fee has been assessed for this application: a real, empty answer, not a failure.
+    // 200 { data: null } (legacy: 404) = no fee assessed for this application: a real, empty answer, not a failure.
     if (!r.ok) return setFee(r.status === 404 ? { state: "none" } : { state: "error" });
     setFee(r.body.data ? { state: "ready", data: r.body.data } : { state: "none" });
   }, [base]);

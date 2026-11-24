@@ -41,7 +41,7 @@ type Routes = Record<string, (init?: RequestInit) => Response | Promise<Response
 function stubFetch(routes: Routes) {
   const calls: string[] = [];
   const base: Routes = {
-    "/api/proxy/v1/hrms/applications/app-2/fee": () => json({ message: "none" }, 404),
+    "/api/proxy/v1/hrms/applications/app-2/fee": () => json({ data: null }),
     "/api/proxy/v1/hrms/applications/app-2/offers": () => json({ data: [] }),
     "/api/proxy/v1/hrms/applications/app-2/scorecards": () => json({ data: [] }),
     ...routes,

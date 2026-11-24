@@ -18,7 +18,7 @@ const CARD: Scorecard = {
 function mockApi(scorecards: () => Response) {
   vi.stubGlobal("fetch", vi.fn(async (url: string) => {
     if (url.endsWith("/scorecards")) return scorecards();
-    if (url.endsWith("/fee")) return new Response("{}", { status: 404 });
+    if (url.endsWith("/fee")) return new Response(JSON.stringify({ data: null }), { status: 200 });
     if (url.endsWith("/offers")) return new Response(JSON.stringify({ data: [] }));
     throw new Error(`unexpected fetch ${url}`);
   }));

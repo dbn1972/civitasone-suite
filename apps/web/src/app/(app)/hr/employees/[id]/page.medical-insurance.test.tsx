@@ -41,7 +41,7 @@ function toWire(r: typeof RECORD) {
   };
 }
 
-/** insurance: a record -> 200; null -> 404 (no record on file); "error" -> 500. */
+/** insurance: a record -> 200; null -> 200 { data: null } (no record on file); "legacy404" -> old 404; "error" -> 500. */
 async function renderPage(roles: string[], insurance: unknown = RECORD) {
   mockRoles = roles;
   getEmployeeByIdMock.mockResolvedValue({ data: EMP, source: "api" });
@@ -49,7 +49,8 @@ async function renderPage(roles: string[], insurance: unknown = RECORD) {
   browserFetch.mockImplementation(async (u: string) => {
     if (!String(u).startsWith(INSURANCE_PROXY)) return json({ data: [] });
     if (insurance === "error") return json({ code: "INTERNAL" }, 500);
-    return insurance === null ? json({ code: "NOT_FOUND" }, 404) : json({ data: toWire(insurance as typeof RECORD) });
+    if (insurance === "legacy404") return json({ code: "NOT_FOUND" }, 404);
+    return insurance === null ? json({ data: null }) : json({ data: toWire(insurance as typeof RECORD) });
   });
   const ui = await EmployeeDetailPage({ params: Promise.resolve({ id: EMP_ID }) });
   render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
@@ -83,6 +84,12 @@ describe("EmployeeDetailPage medical insurance card", () => {
 
   it("HR with no record on file gets 'add' instead of 'edit'", async () => {
     await renderPage(["hr_admin"], null);
+    expect(await screen.findByText(m.noRecord)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: m.addButton })).toBeInTheDocument();
+  });
+
+  it("a legacy 404 from an older backend still reads as no record on file", async () => {
+    await renderPage(["hr_admin"], "legacy404");
     expect(await screen.findByText(m.noRecord)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: m.addButton })).toBeInTheDocument();
   });
