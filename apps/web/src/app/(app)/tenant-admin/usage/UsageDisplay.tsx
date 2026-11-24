@@ -22,8 +22,8 @@ type EnrichedResource = {
 function getColor(percent: number): string {
   const band = usageBand(percent);
   if (band === "critical") return "var(--bad)";
-  if (band === "warning") return "var(--amber)";
-  return "#10b981";
+  if (band === "warning") return "var(--warn)";
+  return "var(--good)";
 }
 
 function getBarBg(percent: number): string {

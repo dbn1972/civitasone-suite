@@ -83,7 +83,7 @@ export function StageColumn({
       <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
         <div>
           <h3 className="text-sm font-semibold text-slate-900">{stageName}</h3>
-          <p className="text-xs text-slate-500">
+          <p className="text-xs text-slate-600">
             {t("summary", { count: dealCount, probability })}
           </p>
         </div>
@@ -96,7 +96,7 @@ export function StageColumn({
       <div className="flex flex-1 flex-col gap-2 overflow-y-auto p-3" style={{ minHeight: 120, maxHeight: 520 }}>
         {children}
         {dealCount === 0 && (
-          <div className="flex flex-1 items-center justify-center text-center text-xs text-slate-400">
+          <div className="flex flex-1 items-center justify-center text-center text-xs text-slate-600">
             {t("dropHere")}
           </div>
         )}

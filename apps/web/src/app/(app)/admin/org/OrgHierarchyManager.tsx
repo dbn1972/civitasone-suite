@@ -262,7 +262,7 @@ function OrgTreeNode({
             aria-label={`Rename ${node.name}`}
           />
         ) : (
-          <span style={{ flex: 1, fontSize: 13.5, opacity: inactive ? 0.65 : 1 }}>
+          <span style={{ flex: 1, fontSize: 13.5, color: inactive ? "var(--ink2)" : undefined }}>
             {node.name}{node.code ? <span style={{ color: "var(--mut)", fontSize: 12 }}> · {node.code}</span> : null}
             {headName ? <span style={{ color: "var(--mut)", fontSize: 12 }}> · Head: {headName}</span> : null}
           </span>
