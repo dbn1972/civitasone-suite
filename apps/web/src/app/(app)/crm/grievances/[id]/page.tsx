@@ -99,7 +99,6 @@ function TimelineItem({
         gap: 12,
         alignItems: "flex-start",
         paddingBottom: 16,
-        opacity: done ? 1 : 0.4,
       }}
     >
       <div
@@ -110,20 +109,20 @@ function TimelineItem({
           borderRadius: "50%",
           flexShrink: 0,
           marginTop: 2,
-          background: done ? "var(--good)" : "var(--line)",
+          background: done ? "var(--good)" : "var(--mut)",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
           fontSize: 11,
-          color: "var(--bg)",
+          color: done ? "var(--bg)" : "var(--panel)",
           fontWeight: 700,
         }}
       >
         {done ? "✓" : "○"}
       </div>
       <div>
-        <div style={{ fontWeight: 600, fontSize: 14, color: "var(--ink)" }}>{label}</div>
-        {ts && <div style={{ fontSize: 12, color: "var(--ink2)", marginTop: 2 }}>{fmt(ts)}</div>}
+        <div style={{ fontWeight: 600, fontSize: 14, color: done ? "var(--ink)" : "var(--ink2)" }}>{label}</div>
+        {ts && <div style={{ fontSize: 12, color: done ? "var(--ink2)" : "var(--mut)", marginTop: 2 }}>{fmt(ts)}</div>}
       </div>
     </li>
   );

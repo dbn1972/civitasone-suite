@@ -95,14 +95,14 @@ export default function VacancyResultsPage() {
     <div className="page-main" aria-labelledby="res-heading">
       <Link href={`/hr/recruitment/${id}`} className="text-sm text-indigo-600 dark:text-indigo-400 hover:underline">{t("backToVacancy")}</Link>
       <h1 id="res-heading" className="text-2xl font-bold text-slate-800 dark:text-slate-100 mt-1">{t("resHeading")}</h1>
-      <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">{t("resIntro")}</p>
+      <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">{t("resIntro")}</p>
 
-      {message && <p role={message.kind === "error" ? "alert" : "status"} className={`mb-3 text-sm ${message.kind === "error" ? "text-red-600" : "text-emerald-700"}`}>{message.text}</p>}
+      {message && <p role={message.kind === "error" ? "alert" : "status"} className={`mb-3 text-sm ${message.kind === "error" ? "text-red-700 dark:text-red-400" : "text-emerald-700"}`}>{message.text}</p>}
 
       {loadFailed ? (
-        <p role="alert" className="text-sm text-red-600">{t("resLoadFailed")} <button type="button" className="underline" onClick={() => { setLoadFailed(false); void load(); }}>{t("retry")}</button></p>
+        <p role="alert" className="text-sm text-red-700 dark:text-red-400">{t("resLoadFailed")} <button type="button" className="underline" onClick={() => { setLoadFailed(false); void load(); }}>{t("retry")}</button></p>
       ) : schedules === null ? (
-        <p role="status" className="text-sm text-slate-500">{t("resLoading")}</p>
+        <p role="status" className="text-sm text-slate-600 dark:text-slate-400">{t("resLoading")}</p>
       ) : (
         <>
           <div className="mb-4">
@@ -114,12 +114,12 @@ export default function VacancyResultsPage() {
           </div>
 
           {scheduleId && (attemptsFailed ? (
-            <p role="alert" className="text-sm text-red-600">{t("resAttemptsFailed")}</p>
+            <p role="alert" className="text-sm text-red-700 dark:text-red-400">{t("resAttemptsFailed")}</p>
           ) : hasNoAttempts(rows) ? (
-            <p className="text-sm text-slate-500">{t("resNoAttempts")}</p>
+            <p className="text-sm text-slate-600 dark:text-slate-400">{t("resNoAttempts")}</p>
           ) : (
             <table className="w-full text-sm" aria-label={t("resHeading")}>
-              <thead><tr className="text-start text-xs text-slate-500">
+              <thead><tr className="text-start text-xs text-slate-600 dark:text-slate-400">
                 <th scope="col" className="text-start font-medium py-1">{t("resCandidate")}</th>
                 <th scope="col" className="text-start font-medium py-1">{t("resStatus")}</th>
                 <th scope="col" className="text-start font-medium py-1">{t("resResult")}</th>

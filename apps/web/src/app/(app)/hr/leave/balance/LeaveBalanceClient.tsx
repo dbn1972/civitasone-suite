@@ -264,7 +264,14 @@ export default function LeaveBalanceClient({ roles, myEmployeeId, initialEmploye
                         <span style={{ fontSize: 14, fontWeight: 400, color: "var(--mut)" }}>{t("ofTotalDays", { total })}</span>
                       </p>
                     </div>
-                    <div style={{ height: 8, borderRadius: 4, background: "var(--bg2)", overflow: "hidden" }}>
+                    <div
+                      role="progressbar"
+                      aria-valuemin={0}
+                      aria-valuemax={100}
+                      aria-valuenow={p}
+                      aria-label={t("usedPercentAria", { percent: p })}
+                      style={{ height: 8, borderRadius: 4, background: "var(--bg2)", overflow: "hidden" }}
+                    >
                       <div
                         style={{
                           height: "100%",
@@ -273,7 +280,6 @@ export default function LeaveBalanceClient({ roles, myEmployeeId, initialEmploye
                           background: p >= 90 ? "var(--bad)" : p >= 60 ? "var(--warn)" : "var(--good)",
                           transition: "width 0.4s ease",
                         }}
-                        aria-label={t("usedPercentAria", { percent: p })}
                       />
                     </div>
                     <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4 }}>

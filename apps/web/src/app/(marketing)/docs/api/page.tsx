@@ -130,7 +130,7 @@ export default function ApiDocsPage() {
           >
             <h3 className="font-semibold text-gray-900">{svc.name}</h3>
             <p className="mt-1 text-sm text-gray-500">{svc.description}</p>
-            <p className="mt-3 text-xs text-gray-400">{svc.endpoints} endpoints</p>
+            <p className="mt-3 text-xs text-gray-500">{svc.endpoints} endpoints</p>
           </div>
         ))}
       </div>

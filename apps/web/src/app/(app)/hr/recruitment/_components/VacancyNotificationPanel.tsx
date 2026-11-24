@@ -203,7 +203,7 @@ export function VacancyNotificationPanel({ jobOpeningId, published, onChanged }:
 
   const open = (kind: typeof corrigendumKind) => { setCorrigendumKind(kind); setNewDeadline(""); notice.trigger(); };
 
-  if (loading) return <p className="text-sm text-slate-500 dark:text-slate-400 py-4">{t("loading")}</p>;
+  if (loading) return <p className="text-sm text-slate-600 dark:text-slate-400 py-4">{t("loading")}</p>;
   if (loadFailed || !ad) {
     return <ErrorState error={toHumanError("load", { area: "advertisement" })} onRetry={() => { setLoading(true); void load({ hydrateForm: true }); }} />;
   }
@@ -226,7 +226,7 @@ export function VacancyNotificationPanel({ jobOpeningId, published, onChanged }:
         <div className="grid sm:grid-cols-2 gap-3">
           <Field id={`${uid}-advt`} label={t("advertisementNoLabel")}>
             <Input type="text" className={inputCls} value={advtNo} maxLength={64} disabled={readOnly} onChange={(e) => setAdvtNo(e.target.value)} placeholder={t("advertisementNoPlaceholder")} aria-describedby={`${uid}-advt-help`} />
-            <p id={`${uid}-advt-help`} className="mt-1 text-xs text-slate-500 dark:text-slate-400">{t("advertisementNoHelp")}</p>
+            <p id={`${uid}-advt-help`} className="mt-1 text-xs text-slate-600 dark:text-slate-400">{t("advertisementNoHelp")}</p>
           </Field>
           <Field id={`${uid}-fee`} label={t("feeLabel")}>
             <Input
@@ -264,7 +264,7 @@ export function VacancyNotificationPanel({ jobOpeningId, published, onChanged }:
         </Field>
         <Field id={`${uid}-docs`} label={t("docsLabel")}>
           <Textarea rows={3} className={inputCls} value={docs} disabled={readOnly} onChange={(e) => setDocs(e.target.value)} aria-describedby={`${uid}-docs-help`} />
-          <p id={`${uid}-docs-help`} className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">{t("docsHelp")}</p>
+          <p id={`${uid}-docs-help`} className="text-[11px] text-slate-600 dark:text-slate-400 mt-1">{t("docsHelp")}</p>
         </Field>
         <Field id={`${uid}-selection`} label={t("selectionLabel")}>
           <Textarea
@@ -282,19 +282,19 @@ export function VacancyNotificationPanel({ jobOpeningId, published, onChanged }:
             <div key={r.key} className="grid grid-cols-[1fr_1fr_auto] gap-2">
               <Input aria-label={t("dateName", { n: i + 1 })} className={inputCls} maxLength={64} value={r.label} onChange={(e) => setDates((d) => d.map((x) => x.key === r.key ? { ...x, label: e.target.value } : x))} placeholder={t("dateNamePlaceholder")} />
               <Input aria-label={t("dateValue", { n: i + 1 })} className={inputCls} maxLength={64} value={r.value} onChange={(e) => setDates((d) => d.map((x) => x.key === r.key ? { ...x, value: e.target.value } : x))} placeholder={t("dateValuePlaceholder")} />
-              <button type="button" onClick={() => setDates((d) => d.filter((x) => x.key !== r.key))} className="text-xs text-red-600 dark:text-red-400 underline" aria-label={t("removeDate", { n: i + 1 })}>{t("remove")}</button>
+              <button type="button" onClick={() => setDates((d) => d.filter((x) => x.key !== r.key))} className="text-xs text-red-700 dark:text-red-400 underline" aria-label={t("removeDate", { n: i + 1 })}>{t("remove")}</button>
             </div>
           ))}
           <div><button type="button" onClick={() => setDates((d) => [...d, { key: `d${nextRowKey.current++}`, label: "", value: "" }])} className="text-xs text-indigo-600 dark:text-indigo-400 underline">{t("addDate")}</button></div>
         </fieldset>
-        {saveState === "error" && <p role="alert" className="text-xs text-red-600 dark:text-red-400">{saveMessage}</p>}
+        {saveState === "error" && <p role="alert" className="text-xs text-red-700 dark:text-red-400">{saveMessage}</p>}
         {saveState === "saved" && <p role="status" className="text-xs text-emerald-700 dark:text-emerald-300">{t("saved")}</p>}
         <div><Button type="submit" disabled={readOnly || saveState === "saving"}>{saveState === "saving" ? t("saving") : t("save")}</Button></div>
       </form>
 
       <section className="grid gap-3" aria-label={t("corrigendaHeading")}>
         <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100">{t("corrigendaHeading")}</h3>
-        <p className="text-xs text-slate-500 dark:text-slate-400">
+        <p className="text-xs text-slate-600 dark:text-slate-400">
           {t("currentDeadline")}: {ad.applicationDeadline ? formatIndianDateTime(ad.applicationDeadline) : t("noDeadline")}
         </p>
         {!cancelled && (
@@ -305,15 +305,15 @@ export function VacancyNotificationPanel({ jobOpeningId, published, onChanged }:
           </div>
         )}
         {corrigenda.length === 0 ? (
-          <p className="text-sm text-slate-500 dark:text-slate-400">{t("noCorrigenda")}</p>
+          <p className="text-sm text-slate-600 dark:text-slate-400">{t("noCorrigenda")}</p>
         ) : (
           <ol className="grid gap-2">
             {corrigenda.map((c) => (
               <li key={c.id} className="rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-2 text-sm">
-                <p className="font-medium text-slate-800 dark:text-slate-100">#{c.seq} · {t(`action_${c.action}`)} · <span className="font-normal text-slate-500 dark:text-slate-400">{formatIndianDateTime(c.createdAt)}</span></p>
+                <p className="font-medium text-slate-800 dark:text-slate-100">#{c.seq} · {t(`action_${c.action}`)} · <span className="font-normal text-slate-600 dark:text-slate-400">{formatIndianDateTime(c.createdAt)}</span></p>
                 <p className="text-slate-700 dark:text-slate-200">{c.changes}</p>
                 {c.action === "extension" && c.newDeadline && (
-                  <p className="text-xs text-slate-500 dark:text-slate-400">{c.oldDeadline ? formatIndianDateTime(c.oldDeadline) : t("noDeadline")} → {formatIndianDateTime(c.newDeadline)}</p>
+                  <p className="text-xs text-slate-600 dark:text-slate-400">{c.oldDeadline ? formatIndianDateTime(c.oldDeadline) : t("noDeadline")} → {formatIndianDateTime(c.newDeadline)}</p>
                 )}
               </li>
             ))}

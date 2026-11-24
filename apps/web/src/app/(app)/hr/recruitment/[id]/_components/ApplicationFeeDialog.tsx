@@ -78,9 +78,9 @@ export function ApplicationFeeDialog({ applicationId, applicantName, onClose }: 
   return (
     <Modal open onClose={onClose} title={t("feeTitle", { name: applicantName })} size="md">
       <div className="flex flex-col gap-3">
-        {load.kind === "loading" && <p role="status" className="text-sm text-slate-500">{t("feeLoading")}</p>}
+        {load.kind === "loading" && <p role="status" className="text-sm text-slate-600 dark:text-slate-400">{t("feeLoading")}</p>}
         {load.kind === "error" && (
-          <p role="alert" className="text-sm text-red-600">
+          <p role="alert" className="text-sm text-red-700 dark:text-red-400">
             {t("feeLoadFailed")} <button type="button" className="underline" onClick={() => { setLoad({ kind: "loading" }); void read(); }}>{t("retry")}</button>
           </p>
         )}
@@ -105,8 +105,8 @@ export function ApplicationFeeDialog({ applicationId, applicantName, onClose }: 
                 <span className="font-semibold text-slate-800 dark:text-slate-100">{formatMoney(load.fee.amountMinor)}</span>
                 <StatusPill status={load.fee.status} />
               </div>
-              {load.fee.exemptionReason && <p className="mt-1 text-xs text-slate-500">{t("feeExemptReason", { reason: load.fee.exemptionReason })}</p>}
-              {load.fee.paymentRef && <p className="mt-1 text-xs text-slate-500">{t("feePaidRef", { ref: load.fee.paymentRef })}{load.fee.paidAt ? ` · ${formatIndianDateTime(load.fee.paidAt)}` : ""}</p>}
+              {load.fee.exemptionReason && <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">{t("feeExemptReason", { reason: load.fee.exemptionReason })}</p>}
+              {load.fee.paymentRef && <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">{t("feePaidRef", { ref: load.fee.paymentRef })}{load.fee.paidAt ? ` · ${formatIndianDateTime(load.fee.paidAt)}` : ""}</p>}
             </div>
             {load.fee.status === "pending" && (
               <form
@@ -117,7 +117,7 @@ export function ApplicationFeeDialog({ applicationId, applicantName, onClose }: 
                 <Field id={`${uid}-ref`} label={t("feePaymentRef")} required>
                   <Input maxLength={128} value={paymentRef} onChange={(e) => setPaymentRef(e.target.value)} placeholder={t("feePaymentRefPlaceholder")} />
                 </Field>
-                <p className="text-[11px] text-slate-500">{t("feeOfflineNote")}</p>
+                <p className="text-[11px] text-slate-600 dark:text-slate-400">{t("feeOfflineNote")}</p>
                 <div className="flex justify-end">
                   <Button type="submit" disabled={busy || paymentRef.trim() === ""}>{t("feeRecordPayment")}</Button>
                 </div>
@@ -126,7 +126,7 @@ export function ApplicationFeeDialog({ applicationId, applicantName, onClose }: 
           </div>
         )}
 
-        {message && <p role={message.kind === "error" ? "alert" : "status"} className={`text-xs ${message.kind === "error" ? "text-red-600" : "text-emerald-700"}`}>{message.text}</p>}
+        {message && <p role={message.kind === "error" ? "alert" : "status"} className={`text-xs ${message.kind === "error" ? "text-red-700 dark:text-red-400" : "text-emerald-700"}`}>{message.text}</p>}
         <div className="flex justify-end"><Button variant="secondary" onClick={onClose}>{t("close")}</Button></div>
       </div>
     </Modal>

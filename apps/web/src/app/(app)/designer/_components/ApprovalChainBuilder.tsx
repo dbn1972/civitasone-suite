@@ -243,13 +243,15 @@ export function ApprovalChainBuilder({
           </div>
           <p style={{ margin: "16px 0 0", fontSize: 13, color: "var(--ink2)", fontStyle: "italic" }}>{narration}</p>
           {chainWarnings.length > 0 ? (
-            <ul role="status" style={{ margin: "8px 0 0", padding: "0 0 0 18px", fontSize: 13 }}>
-              {chainWarnings.map((w) => (
-                <li key={w.laneId + w.kind} style={{ color: "var(--warn)", marginBottom: 4 }}>
-                  {w.message}
-                </li>
-              ))}
-            </ul>
+            <div role="status">
+              <ul style={{ margin: "8px 0 0", padding: "0 0 0 18px", fontSize: 13 }}>
+                {chainWarnings.map((w) => (
+                  <li key={w.laneId + w.kind} style={{ color: "var(--warn)", marginBottom: 4 }}>
+                    {w.message}
+                  </li>
+                ))}
+              </ul>
+            </div>
           ) : null}
           {positionsFetchFailed ? (
             <p role="alert" style={{ margin: "8px 0 0", fontSize: 13, color: "var(--bad)" }}>

@@ -184,21 +184,21 @@ export function GOIReservationCard({ jobOpeningId, totalVacancies, hiredByCatego
         <span className="flex items-center gap-2">
           <span aria-hidden="true" className="text-base">🏛️</span>
           {t("reservationStatus")}
-          <span className="text-xs font-normal text-slate-400 dark:text-slate-500 ms-0.5">{t("gfr2017")}</span>
+          <span className="text-xs font-normal text-slate-600 dark:text-slate-400 ms-0.5">{t("gfr2017")}</span>
           {sanctioned && (
             <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${roster!.status === "approved" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
               {roster!.status === "approved" ? t("statusApproved") : t("statusDraft")}
             </span>
           )}
         </span>
-        <span aria-hidden="true" className={["text-slate-400 dark:text-slate-500 transition-transform duration-200 text-sm", open ? "rotate-180" : ""].join(" ")}>▾</span>
+        <span aria-hidden="true" className={["text-slate-600 dark:text-slate-400 transition-transform duration-200 text-sm", open ? "rotate-180" : ""].join(" ")}>▾</span>
       </button>
 
       {open && (
         <div className="px-5 pb-5 pt-3 border-t border-slate-100 dark:border-slate-700">
-          {loadState === "loading" && <p className="text-xs text-slate-500" role="status">{t("loadingRoster")}</p>}
+          {loadState === "loading" && <p className="text-xs text-slate-600 dark:text-slate-400" role="status">{t("loadingRoster")}</p>}
           {loadState === "error" && (
-            <p className="text-xs text-red-600" role="alert">
+            <p className="text-xs text-red-700 dark:text-red-400" role="alert">
               {t("rosterLoadError")}{" "}
               <button type="button" className="underline" onClick={() => void loadRoster()}>{t("retry")}</button>
             </p>
@@ -206,7 +206,7 @@ export function GOIReservationCard({ jobOpeningId, totalVacancies, hiredByCatego
 
           {(loadState === "none" || loadState === "ready") && (
             <>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
+              <p className="text-xs text-slate-600 dark:text-slate-400 mb-4">
                 {sanctioned
                   ? t("sanctionedRosterFor", { count: totalVacancies })
                   : t("noRosterGuidance", { count: totalVacancies })}
@@ -222,11 +222,11 @@ export function GOIReservationCard({ jobOpeningId, totalVacancies, hiredByCatego
                       <div key={key}>
                         <div className="flex items-center justify-between mb-1.5">
                           <span className="text-xs font-bold text-slate-700 dark:text-slate-300" title={t(`note${key.charAt(0)}${key.slice(1).toLowerCase()}`)}>{key}</span>
-                          <span className="text-xs text-slate-500 dark:text-slate-400">
-                            {sanctioned ? null : <>{guidancePct}%<span className="ms-1 text-slate-400">·</span></>}
+                          <span className="text-xs text-slate-600 dark:text-slate-400">
+                            {sanctioned ? null : <>{guidancePct}%<span className="ms-1 text-slate-600 dark:text-slate-400">·</span></>}
                             <span className="ms-1">{t("postsCount", { count: total })}</span>
                             {categoryDataAvailable && hired > 0 && (
-                              <span className="ms-1 text-emerald-600 dark:text-emerald-400 font-medium">· {t("filledCount", { count: hired })}</span>
+                              <span className="ms-1 text-emerald-700 dark:text-emerald-400 font-medium">· {t("filledCount", { count: hired })}</span>
                             )}
                           </span>
                         </div>
@@ -239,13 +239,13 @@ export function GOIReservationCard({ jobOpeningId, totalVacancies, hiredByCatego
                   })}
                 </div>
               ) : (
-                <p className="text-xs text-slate-500 dark:text-slate-400 italic" role="status">{t("noCategoryData")}</p>
+                <p className="text-xs text-slate-600 dark:text-slate-400 italic" role="status">{t("noCategoryData")}</p>
               )}
 
               {!sanctioned && <p className="text-[11px] text-amber-700 dark:text-amber-400 mt-3" role="status">{t("guidanceOnly")}</p>}
 
               {message && (
-                <p role={message.kind === "error" ? "alert" : "status"} className={`mt-3 text-xs ${message.kind === "error" ? "text-red-600" : "text-emerald-700"}`}>{message.text}</p>
+                <p role={message.kind === "error" ? "alert" : "status"} className={`mt-3 text-xs ${message.kind === "error" ? "text-red-700 dark:text-red-400" : "text-emerald-700"}`}>{message.text}</p>
               )}
 
               {editing ? (
@@ -281,9 +281,9 @@ export function GOIReservationCard({ jobOpeningId, totalVacancies, hiredByCatego
                         />
                       </Field>
                     ))}
-                    <p className="col-span-3 text-[11px] text-slate-500">{t("horizontalHelp")}</p>
+                    <p className="col-span-3 text-[11px] text-slate-600 dark:text-slate-400">{t("horizontalHelp")}</p>
                   </fieldset>
-                  <p className={`text-xs ${draftMatchesTotal ? "text-slate-500" : "text-red-600"}`} role="status">
+                  <p className={`text-xs ${draftMatchesTotal ? "text-slate-600 dark:text-slate-400" : "text-red-700 dark:text-red-400"}`} role="status">
                     {t("rosterSum", { sum: draftSum, total: totalVacancies })}
                   </p>
                   <div className="flex gap-2">
@@ -318,7 +318,7 @@ export function GOIReservationCard({ jobOpeningId, totalVacancies, hiredByCatego
                 <ReservationShortlistPanel jobOpeningId={jobOpeningId} candidates={candidates} />
               )}
 
-              <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-4 border-t border-slate-100 dark:border-slate-700 pt-3">{t("footnote")}</p>
+              <p className="text-[10px] text-slate-600 dark:text-slate-400 mt-4 border-t border-slate-100 dark:border-slate-700 pt-3">{t("footnote")}</p>
             </>
           )}
         </div>

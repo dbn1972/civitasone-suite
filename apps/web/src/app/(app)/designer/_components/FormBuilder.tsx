@@ -361,20 +361,15 @@ export function FormBuilder({
             const isActive = activeSection?.id === section.id;
 
             return (
+              // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions
               <div
                 key={section.id}
-                role="button"
-                tabIndex={0}
                 onDragOver={(e) => onSectionDragOver(e, section.id)}
                 onDragLeave={() => setDropTargetSectionId((cur) => (cur === section.id ? null : cur))}
                 onDrop={(e) => onSectionDrop(e, section.id)}
+                // Not role=button: the section contains its own controls (nested-interactive).
+                // Keyboard users activate a section via its title input (onFocus) and controls.
                 onClick={() => setActiveSectionId(section.id)}
-                onKeyDown={(e) => {
-                  if ((e.key === "Enter" || e.key === " ") && e.target === e.currentTarget) {
-                    e.preventDefault();
-                    setActiveSectionId(section.id);
-                  }
-                }}
                 style={{
                   marginBottom: 16,
                   padding: 12,
