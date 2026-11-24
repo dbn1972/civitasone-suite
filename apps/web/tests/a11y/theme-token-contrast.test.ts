@@ -74,6 +74,7 @@ const PAIRS: [string, string, number][] = [
   ...(["ink", "ink2", "mut", "muted"] as const).flatMap((fg) => [[fg, "panel", TEXT], [fg, "bg", TEXT]] as [string, string, number][]),
   // links / brand text, status text on surfaces and on their own tints
   ["primary", "panel", TEXT], ["primary", "bg", TEXT],
+  ["violet", "panel", TEXT], ["violet", "bg", TEXT],
   ["info", "panel", TEXT], ["warn", "panel", TEXT], ["bad", "panel", TEXT], ["good", "panel", TEXT],
   ["good", "goodbg", TEXT], ["warn", "warnbg", TEXT], ["bad", "badbg", TEXT], ["info", "infobg", TEXT],
   ["ink", "infobg", TEXT], ["mut", "infobg", TEXT],
