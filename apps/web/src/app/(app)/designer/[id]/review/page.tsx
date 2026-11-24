@@ -53,13 +53,22 @@ export default function DesignerReviewPage() {
   }, []);
 
   useEffect(() => {
-    if (!wizard.def?.serviceKey) return;
+    const serviceKey = wizard.def?.serviceKey;
+    const version = wizard.def?.version;
+    if (!serviceKey) return;
+    // A first version (v1) has never had a published predecessor — a published
+    // definition is immutable and each edit creates a new version — so the
+    // published/lookup read is a guaranteed 404 on a first-publish review and
+    // only produces a browser console 404. Skip it and treat it as "nothing
+    // published yet" (null), which is exactly what fetchPublishedByKey returns
+    // on a 404; the version diff already renders that state.
+    if (!(typeof version === "number" && version > 1)) { setPublished(null); return; }
     let live = true;
-    void fetchPublishedByKey(wizard.def.serviceKey).then((data) => {
+    void fetchPublishedByKey(serviceKey).then((data) => {
       if (live) setPublished(data);
     });
     return () => { live = false; };
-  }, [wizard.def?.serviceKey]);
+  }, [wizard.def?.serviceKey, wizard.def?.version]);
 
   const isSubmitter = Boolean(
     session?.userId && wizard.meta.submittedBy && session.userId === wizard.meta.submittedBy,
