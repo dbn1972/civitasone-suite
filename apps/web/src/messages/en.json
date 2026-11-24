@@ -20428,5 +20428,40 @@
       "LEAVE_TYPE_INACTIVE": "Reactivate the leave type before editing it."
     }
   },
-  "designer": {"runTestWaiting":"Run Test is waiting on: {blocks}","runTestFallback":"Complete blocks 1 to 7 first","gateBlocksNext":"Blocks Next","gateWarning":"Warning","issueHoaMissing":"Head of Account is missing — payments cannot post without it.","issueFeeMissing":"The fee is not saved for the chosen fee model.","issueSignatoryMissing":"No signatory chosen — an issued document needs a named authority.","issueDocNoLane":"{count} mandatory document(s) have no verifying step.","reviewIssuesTitle":"Pre-submit check","reviewIssuesNone":"No blocking issues or warnings.","helpB5":"Set how much applicants pay, which account receives it, and when the demand is raised. Blocks Next: Head of Account and the fee amount are required before you can continue.","helpB6":"List what applicants must upload and which approval step verifies each document. Warning: a mandatory document without a verifying step does not block Next, and is listed on the review page.","helpB7":"Design what citizens receive (certificate, licence, closure note or receipt): template, numbering, signatory and validity. Blocks Next: a signatory is required for everything except a receipt.","feeBlockMessage":"Define the fee before you continue — a fee model needs an amount.","railBlocks":"Blocks Next {count}","railWarning":"Warning {count}","docCategoryLabel":"Document category","docCategoryOther":"Other (type a name)","docSensitivitySensitive":"Sensitive","docSensitivityPersonal":"Personal","docSensitivityStandard":"Standard","docDpoToConfirm":"DPO to confirm","docRetentionYears":"Keep for {years} years after the application closes","docRetentionAfterVerification":"Delete the copy once it is verified; keep only the verification record","docSensitiveNote":"Sensitive: ask only for what is needed and never show the full number on screen.","sigMethodLabel":"Signature method","sigMethodNone":"No signature","sigMethodDsc":"DSC token (Digital Signature Certificate)","sigMethodEsign":"Aadhaar eSign","sigMethodNote":"Both DSC and Aadhaar eSign are valid under the IT Act, 2000. Court orders always use a DSC token; this setting does not change that.","paperSizeLabel":"A4 — {orientation}, {width} × {height} mm","orientationPortrait":"portrait","orientationLandscape":"landscape"}
+  "designer": {"runTestWaiting":"Run Test is waiting on: {blocks}","runTestFallback":"Complete blocks 1 to 7 first","gateBlocksNext":"Blocks Next","gateWarning":"Warning","issueHoaMissing":"Head of Account is missing — payments cannot post without it.","issueFeeMissing":"The fee is not saved for the chosen fee model.","issueSignatoryMissing":"No signatory chosen — an issued document needs a named authority.","issueDocNoLane":"{count} mandatory document(s) have no verifying step.","reviewIssuesTitle":"Pre-submit check","reviewIssuesNone":"No blocking issues or warnings.","helpB5":"Set how much applicants pay, which account receives it, and when the demand is raised. Blocks Next: Head of Account and the fee amount are required before you can continue.","helpB6":"List what applicants must upload and which approval step verifies each document. Warning: a mandatory document without a verifying step does not block Next, and is listed on the review page.","helpB7":"Design what citizens receive (certificate, licence, closure note or receipt): template, numbering, signatory and validity. Blocks Next: a signatory is required for everything except a receipt.","feeBlockMessage":"Define the fee before you continue — a fee model needs an amount.","railBlocks":"Blocks Next {count}","railWarning":"Warning {count}","docCategoryLabel":"Document category","docCategoryOther":"Other (type a name)","docSensitivitySensitive":"Sensitive","docSensitivityPersonal":"Personal","docSensitivityStandard":"Standard","docDpoToConfirm":"DPO to confirm","docRetentionYears":"Keep for {years} years after the application closes","docRetentionAfterVerification":"Delete the copy once it is verified; keep only the verification record","docSensitiveNote":"Sensitive: ask only for what is needed and never show the full number on screen.","sigMethodLabel":"Signature method","sigMethodNone":"No signature","sigMethodDsc":"DSC token (Digital Signature Certificate)","sigMethodEsign":"Aadhaar eSign","sigMethodNote":"Both DSC and Aadhaar eSign are valid under the IT Act, 2000. Court orders always use a DSC token; this setting does not change that.","paperSizeLabel":"A4 — {orientation}, {width} × {height} mm","orientationPortrait":"portrait","orientationLandscape":"landscape"},
+
+  "courtCaseIntake": {
+    "registerCase": "Register case",
+    "registerTitle": "Register a new case",
+    "cnr": "CNR number (16 characters)",
+    "caseType": "Case type",
+    "title": "Case title",
+    "filingNumber": "Filing number (optional)",
+    "filingDate": "Filing date",
+    "court": "Court",
+    "bench": "Bench (optional)",
+    "noBench": "No bench",
+    "selectCourt": "Select a court…",
+    "noCourts": "No court is registered yet. Ask a court administrator to create a court before registering cases.",
+    "firstParty": "First party",
+    "partyRole": "Party role",
+    "partyName": "Party name",
+    "advocateName": "Advocate name (optional)",
+    "advocateBarId": "Advocate Bar ID (optional)",
+    "submit": "Register case",
+    "submitting": "Registering…",
+    "cancel": "Cancel",
+    "required": "Fill in all required fields.",
+    "cnrInvalid": "The CNR must be 16 letters or digits.",
+    "success": "Case submitted for registration. It will appear in the registry shortly.",
+    "openCaseDelayed": "Open case (may take a moment to appear)", "nothingChanged": "Enter the advocate name or Bar ID you want to change.", "openCase": "Open case",
+    "addParty": "Add party",
+    "addPartyTitle": "Add a party",
+    "addPartySubmit": "Add party",
+    "partyAdded": "Party submitted. It will appear on the case shortly.",
+    "editAdvocate": "Edit advocate",
+    "saveAdvocate": "Save advocate",
+    "advocateSaved": "Advocate update submitted.",
+    "actions": "Actions"
+  }
 }

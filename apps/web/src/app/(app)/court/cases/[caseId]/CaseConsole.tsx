@@ -27,6 +27,7 @@ import {
 import { formatShortId } from "@/lib/formatters";
 import { ApproveIssueDialog, RecallDialog, SendBackPanel } from "../../_components/OrderActionDialogs";
 import { AdjournDialog, OutcomeDialog } from "../../_components/HearingActionDialogs";
+import { AddPartyForm, EditAdvocateForm } from "../../_components/CaseIntake";
 
 const mono: React.CSSProperties = {
   fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
@@ -163,7 +164,13 @@ export function CaseConsole({
               }}
               onError={fail}
             />
-            <PartiesPanel caseDetail={caseDetail} />
+            <PartiesPanel
+              caseDetail={caseDetail}
+              onDone={(msg) => {
+                flash(msg);
+                router.refresh();
+              }}
+            />
           </>
         )}
         {tab === "Hearings" && (
@@ -373,10 +380,18 @@ function LifecyclePanel({
 
 // ─── Parties ─────────────────────────────────────────────────────────────────
 
-function PartiesPanel({ caseDetail }: { caseDetail: CourtCaseDetail }) {
+function PartiesPanel({
+  caseDetail,
+  onDone,
+}: {
+  caseDetail: CourtCaseDetail;
+  onDone: (msg: string) => Promise<void> | void;
+}) {
   const t = useTranslations("courtPartyIdentity");
+  const ti = useTranslations("courtCaseIntake");
   return (
     <Card title={`Parties (${caseDetail.parties.length})`} padding>
+      <AddPartyForm caseId={caseDetail.id} parties={caseDetail.parties} onDone={onDone} />
       {caseDetail.parties.length === 0 ? (
         <EmptyState icon="👥" title="No parties recorded" message="No parties are on this case." />
       ) : (
@@ -391,6 +406,7 @@ function PartiesPanel({ caseDetail }: { caseDetail: CourtCaseDetail }) {
                 <th style={labelStyle}>Name</th>
                 <th style={labelStyle}>Advocate</th>
                 <th style={labelStyle}>Bar ID</th>
+                <th style={labelStyle}>{ti("actions")}</th>
               </tr>
             </thead>
             <tbody>
@@ -401,6 +417,9 @@ function PartiesPanel({ caseDetail }: { caseDetail: CourtCaseDetail }) {
                   <td>{p.advocateName ?? "—"}</td>
                   {/* The server decides what this role may see (full vs masked) and audits every reveal. */}
                   <td style={mono}>{p.advocateBarId ?? "—"}</td>
+                  <td>
+                    <EditAdvocateForm party={p} onDone={onDone} />
+                  </td>
                 </tr>
               ))}
             </tbody>

@@ -33,6 +33,10 @@ vi.mock("../../_data/client", () => ({
   scheduleHearing: (...a: unknown[]) => scheduleHearingMock(...a),
   fetchCaseOrders: (...a: unknown[]) => fetchCaseOrdersMock(...a),
   fetchCaseHearings: (...a: unknown[]) => fetchCaseHearingsMock(...a),
+  // CaseIntake (add-party / edit-advocate) loads configured party roles:
+  fetchConfigNamespace: vi.fn().mockResolvedValue([]),
+  addParty: vi.fn(),
+  updatePartyAdvocate: vi.fn(),
   // CertifiedCopiesPanel also imports from this module:
   requestCertifiedCopy: vi.fn(),
   transitionCertifiedCopy: vi.fn(),

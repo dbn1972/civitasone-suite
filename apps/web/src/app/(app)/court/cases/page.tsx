@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { PageHeader, Card, EmptyState, StatusPill, RefreshErrorState } from "@/app/_components/ds";
 import { toHumanError } from "@/lib/messages";
-import { getCasesPage } from "../_data/loaders";
+import { getCasesPage, getCourts } from "../_data/loaders";
+import { RegisterCasePanel } from "../_components/CaseIntake";
 import { CASE_STATUSES } from "../_data/types";
 import { casePillStatus, fmtDate, humanize, isOverdue } from "../_data/format";
 
@@ -54,7 +55,10 @@ export default async function CasesListPage(
   const page = Math.max(toPositiveInt(searchParams.page, 1), 1);
   const offset = (page - 1) * PAGE_SIZE;
 
-  const result = await getCasesPage({ status: statusParam, q: query || undefined, limit: PAGE_SIZE, offset });
+  const [result, courts] = await Promise.all([
+    getCasesPage({ status: statusParam, q: query || undefined, limit: PAGE_SIZE, offset }),
+    getCourts(),
+  ]);
   const source = result.source;
   const { cases, total } = result.data;
 
@@ -84,6 +88,8 @@ export default async function CasesListPage(
         back="/court"
         backLabel="Court"
       />
+
+      <RegisterCasePanel courts={courts.data} />
 
       <Card title={`All cases (${countLabel})`} padding>
         {source === "error" ? (

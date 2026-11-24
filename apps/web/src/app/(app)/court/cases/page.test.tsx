@@ -1,9 +1,22 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, within } from "@testing-library/react";
+import { render as rtlRender, screen, within } from "@testing-library/react";
+import type { ReactElement } from "react";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
+
+// The Register-case panel translates client-side, so every render needs an intl provider.
+const render = (ui: ReactElement) =>
+  rtlRender(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
 import type { CourtCase, CasesPage } from "../_data/types";
 
 vi.mock("../_data/loaders", () => ({
   getCasesPage: vi.fn(),
+  getCourts: vi.fn().mockResolvedValue({ data: [], source: "api" }),
+}));
+vi.mock("../_data/client", () => ({
+  fetchConfigNamespace: vi.fn().mockResolvedValue([]),
+  fetchCourtBenches: vi.fn().mockResolvedValue([]),
+  createCase: vi.fn(),
 }));
 // RefreshErrorState uses next/navigation client hooks.
 vi.mock("next/navigation", () => ({

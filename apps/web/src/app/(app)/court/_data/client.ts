@@ -127,6 +127,63 @@ export async function fetchConfigNamespace(namespace: string): Promise<ConfigEnt
   return out.items ?? [];
 }
 
+/** Benches of one court (for the register-case form). Empty on a court with none. */
+export async function fetchCourtBenches(courtId: string): Promise<Array<{ id: string; name: string }>> {
+  const out = await get<{ items?: Array<{ id: string; name: string }> }>(
+    `v1/court/courts/${encodeURIComponent(courtId)}/benches`,
+  );
+  return out.items ?? [];
+}
+
+// ─── Case intake (register case + parties) ───────────────────────────────────
+
+export interface NewCaseParty {
+  partyRole: string;
+  name: string;
+  address?: string;
+  phone?: string;
+  email?: string;
+  advocateName?: string;
+  advocateBarId?: string;
+}
+
+/**
+ * Register a new case (POST /v1/court/cases — registrar/court_admin/super_admin).
+ * The body mirrors the service's registerCaseBody: at least one party is
+ * required. Answers 202 { accepted, caseId }; the case row materialises
+ * asynchronously via the command bus.
+ */
+export async function createCase(input: {
+  cnrNumber: string;
+  caseType: string;
+  filingNumber?: string;
+  filingDate: string;
+  title: string;
+  courtId: string;
+  benchId?: string;
+  parties: NewCaseParty[];
+}): Promise<{ caseId: string }> {
+  const out = await send<{ caseId?: string }>("POST", "v1/court/cases", { body: input });
+  if (!out.caseId) throw new Error(readError("save"));
+  return { caseId: out.caseId };
+}
+
+/** Add a party / advocate to an existing case (POST /v1/court/cases/:id/parties). */
+export async function addParty(
+  caseId: string,
+  input: NewCaseParty & { partyIndex?: number },
+): Promise<void> {
+  await send("POST", `v1/court/cases/${encodeURIComponent(caseId)}/parties`, { body: input });
+}
+
+/** Update a party's advocate (PATCH /v1/court/parties/:id/advocate), optimistic-locked. */
+export async function updatePartyAdvocate(
+  partyId: string,
+  input: { advocateName?: string; advocateBarId?: string; expectedVersion: number },
+): Promise<void> {
+  await send("PATCH", `v1/court/parties/${encodeURIComponent(partyId)}/advocate`, { body: input });
+}
+
 // ─── Case lifecycle ──────────────────────────────────────────────────────────
 
 /** Move a case to a new lifecycle status (registrar/court_admin/judge). */
