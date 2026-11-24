@@ -33,7 +33,7 @@ export async function planRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/plans", async (req, reply) => {
     const ctx = resolveContext(req); // auth required
     requireRole(ctx, PLAN_READ);
-    const plans = await repo.findAll();
+    const plans = await repo.findAllScoped(ctx.tenantId);
     return reply.send(jsonSafe(plans));
   });
 
