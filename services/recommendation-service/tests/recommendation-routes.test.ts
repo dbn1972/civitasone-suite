@@ -1183,7 +1183,7 @@ describe("POST /v1/recommendations/health/:accountId/recompute", () => {
       url: `/v1/recommendations/health/${ACCOUNT_ID}/recompute`,
       headers: auth(),
       payload: {
-        factors: { recency: 100, frequency: 100, monetary: 100, supportTickets: 100, engagement: 100 },
+        factors: { productUsage: 100, paymentTimeliness: 100, relationshipDepth: 100, supportBurden: 100, engagement: 100 },
       },
     });
     expect(r.statusCode).toBe(202);
@@ -1197,7 +1197,7 @@ describe("POST /v1/recommendations/health/:accountId/recompute", () => {
       method: "POST",
       url: `/v1/recommendations/health/${ACCOUNT_ID}/recompute`,
       headers: auth(),
-      payload: { factors: { recency: 100 } },
+      payload: { factors: { productUsage: 100 } },
     });
     expect(r.statusCode).toBe(202);
     await app.close();
@@ -1222,7 +1222,7 @@ describe("POST /v1/recommendations/health/:accountId/recompute", () => {
       method: "POST",
       url: `/v1/recommendations/health/${ACCOUNT_ID}/recompute`,
       headers: auth(),
-      payload: { factors: { recency: 500 } },
+      payload: { factors: { productUsage: 500 } },
     });
     expect(r.statusCode).toBe(400);
     await app.close();
@@ -1257,7 +1257,7 @@ describe("POST /v1/recommendations/health/:accountId/recompute", () => {
     const r = await app.inject({
       method: "POST",
       url: `/v1/recommendations/health/${ACCOUNT_ID}/recompute`,
-      payload: { factors: { recency: 50 } },
+      payload: { factors: { productUsage: 50 } },
     });
     expect(r.statusCode).toBe(401);
     await app.close();
@@ -1269,7 +1269,7 @@ describe("POST /v1/recommendations/health/:accountId/recompute", () => {
       method: "POST",
       url: `/v1/recommendations/health/${ACCOUNT_ID}/recompute`,
       headers: readerAuth(),
-      payload: { factors: { recency: 50 } },
+      payload: { factors: { productUsage: 50 } },
     });
     expect(r.statusCode).toBe(403);
     await app.close();

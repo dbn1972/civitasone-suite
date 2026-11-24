@@ -547,13 +547,13 @@ describe("detectDuplicate", () => {
 describe("computeHealthScore", () => {
   it("returns 100 when every factor is perfect", () => {
     expect(
-      computeHealthScore({ recency: 100, frequency: 100, monetary: 100, supportTickets: 100, engagement: 100 }),
+      computeHealthScore({ productUsage: 100, paymentTimeliness: 100, relationshipDepth: 100, supportBurden: 100, engagement: 100 }),
     ).toBe(100);
   });
 
   it("returns 0 when every factor is zero", () => {
     expect(
-      computeHealthScore({ recency: 0, frequency: 0, monetary: 0, supportTickets: 0, engagement: 0 }),
+      computeHealthScore({ productUsage: 0, paymentTimeliness: 0, relationshipDepth: 0, supportBurden: 0, engagement: 0 }),
     ).toBe(0);
   });
 
@@ -574,36 +574,36 @@ describe("computeHealthScore", () => {
   });
 
   it("clamps factors above 100", () => {
-    expect(computeHealthScore({ recency: 5_000 })).toBe(Math.round(100 * HEALTH_WEIGHTS.recency));
+    expect(computeHealthScore({ productUsage: 5_000 })).toBe(Math.round(100 * HEALTH_WEIGHTS.productUsage));
   });
 
   it("clamps negative factors to zero", () => {
-    expect(computeHealthScore({ recency: -50, engagement: -1 })).toBe(0);
+    expect(computeHealthScore({ productUsage: -50, engagement: -1 })).toBe(0);
   });
 
   it("treats NaN factors as zero", () => {
-    expect(computeHealthScore({ recency: NaN })).toBe(0);
+    expect(computeHealthScore({ productUsage: NaN })).toBe(0);
   });
 
   it("returns an integer", () => {
-    const score = computeHealthScore({ recency: 50, frequency: 33, monetary: 17 });
+    const score = computeHealthScore({ productUsage: 50, paymentTimeliness: 33, relationshipDepth: 17 });
     expect(Number.isInteger(score)).toBe(true);
   });
 
   it("stays within 0..100 for extreme input", () => {
     const score = computeHealthScore({
-      recency: 1e9,
-      frequency: 1e9,
-      monetary: 1e9,
-      supportTickets: 1e9,
+      productUsage: 1e9,
+      paymentTimeliness: 1e9,
+      relationshipDepth: 1e9,
+      supportBurden: 1e9,
       engagement: 1e9,
     });
     expect(score).toBe(100);
   });
 
   it("ignores explicitly undefined factors", () => {
-    expect(computeHealthScore({ recency: 100, frequency: undefined })).toBe(
-      Math.round(100 * HEALTH_WEIGHTS.recency),
+    expect(computeHealthScore({ productUsage: 100, paymentTimeliness: undefined })).toBe(
+      Math.round(100 * HEALTH_WEIGHTS.productUsage),
     );
   });
 });
@@ -660,12 +660,12 @@ describe("classifyHealth", () => {
 
 describe("validateFactors", () => {
   it("accepts a single valid factor", () => {
-    expect(validateFactors({ recency: 50 })).toBeNull();
+    expect(validateFactors({ productUsage: 50 })).toBeNull();
   });
 
   it("accepts all factors at their bounds", () => {
     expect(
-      validateFactors({ recency: 0, frequency: 100, monetary: 50, supportTickets: 0, engagement: 100 }),
+      validateFactors({ productUsage: 0, paymentTimeliness: 100, relationshipDepth: 50, supportBurden: 0, engagement: 100 }),
     ).toBeNull();
   });
 
@@ -674,11 +674,11 @@ describe("validateFactors", () => {
   });
 
   it("rejects a bundle where every factor is undefined", () => {
-    expect(validateFactors({ recency: undefined })).toBe("at least one factor is required");
+    expect(validateFactors({ productUsage: undefined })).toBe("at least one factor is required");
   });
 
   it("rejects a negative factor", () => {
-    expect(validateFactors({ recency: -1 })).toBe("recency must be between 0 and 100");
+    expect(validateFactors({ productUsage: -1 })).toBe("productUsage must be between 0 and 100");
   });
 
   it("rejects a factor above 100", () => {
@@ -686,16 +686,16 @@ describe("validateFactors", () => {
   });
 
   it("rejects a NaN factor", () => {
-    expect(validateFactors({ monetary: NaN })).toBe("monetary must be a finite number");
+    expect(validateFactors({ relationshipDepth: NaN })).toBe("relationshipDepth must be a finite number");
   });
 
   it("rejects an Infinity factor", () => {
-    expect(validateFactors({ monetary: Infinity })).toBe("monetary must be a finite number");
+    expect(validateFactors({ relationshipDepth: Infinity })).toBe("relationshipDepth must be a finite number");
   });
 
   it("rejects a non-numeric factor", () => {
-    expect(validateFactors({ frequency: "high" } as unknown as HealthFactors)).toBe(
-      "frequency must be a finite number",
+    expect(validateFactors({ paymentTimeliness: "high" } as unknown as HealthFactors)).toBe(
+      "paymentTimeliness must be a finite number",
     );
   });
 

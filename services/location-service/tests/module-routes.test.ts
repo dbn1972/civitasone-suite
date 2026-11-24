@@ -278,7 +278,7 @@ describe("GET /v1/jurisdictions", () => {
 });
 
 describe("POST /v1/jurisdictions", () => {
-  it("→ 202 assigns jurisdiction", async () => {
+  it("→ 422 for an office missing from hierarchy.offices (FK target)", async () => {
     const res = await app.inject({
       method: "POST", url: "/v1/jurisdictions", headers: authHeader(),
       payload: {
@@ -288,9 +288,8 @@ describe("POST /v1/jurisdictions", () => {
         isPrimary: true,
       },
     });
-    expect(res.statusCode).toBe(202);
-    expect(res.json().id).toBeDefined();
-    expect(res.json().status).toBe("accepted");
+    expect(res.statusCode).toBe(422);
+    expect(res.json().code).toBe("INVALID_OFFICE");
   });
 
   it("→ 400/500 invalid body", async () => {

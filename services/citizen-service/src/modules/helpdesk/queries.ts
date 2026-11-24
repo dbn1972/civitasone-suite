@@ -169,14 +169,24 @@ export async function getTicketAnalytics(tenantId: string, period?: ReportPeriod
   const resolved = counts.find((c) => c.status === "resolved")?.count ?? 0;
   const closed = counts.find((c) => c.status === "closed")?.count ?? 0;
   const slaBreachedCount = await repo.countBreachedTickets(tenantId, since);
+  const [priorityRows, channelRows, avgHours] = await Promise.all([
+    repo.countTicketsByDimension(tenantId, "priority", since),
+    repo.countTicketsByDimension(tenantId, "channel", since),
+    repo.avgResolutionHours(tenantId, since),
+  ]);
+  const pct = (n: number) => (total > 0 ? Math.round((n / total) * 1000) / 10 : 0);
   return {
     totalTickets: total,
     openTickets: open,
     resolvedThisMonth: resolved + closed,
     slaBreachedCount,
-    avgResolutionHours: 0,
-    byPriority: [],
-    byChannel: [],
+    avgResolutionHours: Math.round(avgHours * 10) / 10,
+    byPriority: priorityRows
+      .map((r) => ({ priority: r.key, count: r.count, pct: pct(r.count) }))
+      .sort((a, b) => b.count - a.count),
+    byChannel: channelRows
+      .map((r) => ({ channel: r.key, count: r.count, pct: pct(r.count) }))
+      .sort((a, b) => b.count - a.count),
   };
 }
 

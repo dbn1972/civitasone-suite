@@ -1,37 +1,82 @@
 import Link from "next/link";
-import { EmptyState, PageHeader } from "@/app/_components/ds";
+import { EmptyState, LoadErrorState, PageHeader } from "@/app/_components/ds";
+import { getCustomDomains } from "@/app/_data/loaders";
+import { formatIndianDate } from "@/lib/formatters";
+
+const STATUS_LABEL: Record<string, string> = {
+  pending_verification: "Pending verification",
+  verified: "Verified",
+  active: "Active",
+  failed: "Failed",
+  revoked: "Revoked",
+};
+const STATUS_TONE: Record<string, string> = {
+  pending_verification: "warn",
+  verified: "good",
+  active: "good",
+  failed: "bad",
+  revoked: "mut",
+};
 
 /**
- * GAP-DOMAINS-NEW-01: /domains index.
- *
- * domains/new/page.tsx linked back to /domains and routed here on a
- * successful registration, but no /domains index route existed, so a
- * successful registration landed on a 404.
- *
- * The backing domain-service / `GET /api/v1/domains` listing endpoint is
- * absent from this snapshot (see HUMAN REVIEW), so this page does NOT
- * fabricate a domain list. It is an honest landing page that confirms the
- * registration destination and routes on to the form; it should be replaced
- * with a real registry table once the listing endpoint exists.
+ * /domains index -- the registry listing, backed by admin-service
+ * GET /v1/admin/custom-domains (via the gateway proxy, scoped to the caller's
+ * tenant and gated to platform_admin / super_admin server-side). Registration
+ * stays on /domains/new; DNS verification is managed under Tenant admin, Domain.
  */
-export default function DomainsPage() {
+export default async function DomainsPage() {
+  const result = await getCustomDomains();
+  const domains = result.data;
+
+  const registerAction = (
+    <Link href="/domains/new" className="btn primary">
+      Register New Domain
+    </Link>
+  );
+
   return (
     <div className="page-main wrap">
       <PageHeader
         title="Domains"
         subtitle="Government domains registered for GovUX audit and WCAG compliance tracking."
+        actions={registerAction}
       />
 
       <div className="card" style={{ marginTop: 18 }}>
-        <EmptyState
-          title="No domain registry listing yet"
-          message="The registry listing is not available on this page. Domain registration uses the admin custom-domains service; registered domains and their DNS verification are managed under Tenant admin, Domain. Use the button below to register a domain."
-          action={
-            <Link href="/domains/new" className="btn primary">
-              Register New Domain
-            </Link>
-          }
-        />
+        {result.source === "error" ? (
+          <LoadErrorState result={result} area="domains" module="the domain registry" backHref="/dashboard" backLabel="Back to dashboard" />
+        ) : domains.length === 0 ? (
+          <EmptyState
+            title="No domains registered yet"
+            message="Register a custom domain to start DNS verification. Verification status is managed under Tenant admin, Domain."
+            action={registerAction}
+          />
+        ) : (
+          <table className="table" aria-label="Registered domains">
+            <thead>
+              <tr>
+                <th scope="col">Domain</th>
+                <th scope="col">Status</th>
+                <th scope="col">Verification</th>
+                <th scope="col">SSL</th>
+                <th scope="col">Registered</th>
+              </tr>
+            </thead>
+            <tbody>
+              {domains.map((d) => (
+                <tr key={d.id}>
+                  <td>{d.domain}</td>
+                  <td>
+                    <span className={`pill ${STATUS_TONE[d.status] ?? "mut"}`}>{STATUS_LABEL[d.status] ?? d.status}</span>
+                  </td>
+                  <td>{d.verificationMethod === "dns_cname" ? "DNS CNAME" : "DNS TXT"}</td>
+                  <td>{d.sslStatus}</td>
+                  <td>{formatIndianDate(d.createdAt)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
     </div>
   );

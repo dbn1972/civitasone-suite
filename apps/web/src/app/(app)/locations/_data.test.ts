@@ -22,7 +22,7 @@ describe("getLocationJurisdictionsTyped: parent and LGD code (GAP-LOCATIONS-JURI
         { id: "j1", officeId: OFFICE, unitId: BLOCK, level: "block", isPrimary: true },
         { id: "j2", officeId: OFFICE, unitId: ORPHAN, level: "ward", isPrimary: false },
       ] },
-      "/api/v1/locations?limit=500": { data: [{ id: OFFICE, name: "DM Office" }] },
+      "/api/v1/hierarchy/offices": { data: [{ id: OFFICE, name: "DM Office" }] },
       "/api/v1/hierarchy": { data: [
         { id: DISTRICT, name: "Patna", lgdCode: "212", children: [
           { id: BLOCK, name: "Sadar Block", parentId: DISTRICT, lgdCode: "2121" },

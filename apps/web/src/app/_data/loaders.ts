@@ -7162,6 +7162,19 @@ export async function getAdminTenantModules(id: string): Promise<LoaderResult<Ad
     telemetryKey: "admin.tenant.modules",
     mapResponse: (p) => {
       if (!isRecord(p)) return null;
+      // admin-service GET /v1/admin/tenants/:id/config answers
+      // { tenantId, edition, modules: { [moduleKey]: boolean }, featureFlags } -- `modules` is a MAP
+      // (config/repo.ts getTenantConfig), not an array. Flatten it; keep the array form for any
+      // legacy / array-shaped payload.
+      if (isRecord(p.modules) && !Array.isArray(p.modules)) {
+        return Object.entries(p.modules).map(([key, enabled]) => ({
+          module: key.replace(/[_-]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
+          enabled: enabled === true ? "Yes" : "No",
+          users: null,
+          lastActivity: "—",
+          usage: "—",
+        }));
+      }
       const modules = getArrayPayload(p.modules ?? p.data ?? p);
       if (!modules) return [];
       return modules.filter(isRecord).map((m) => ({
