@@ -14229,7 +14229,8 @@
   "financeVendorExport": {
     "button": "⬇ Export CSV",
     "exporting": "Exporting…",
-    "failed": "The export could not be completed. Nothing was downloaded; try again."
+    "failed": "The export could not be completed. Nothing was downloaded; try again.",
+    "staleBanner": "Couldn't refresh the vendor list — showing cached data. It may be out of date."
   },
   "financeScannedDocuments": {
     "area": "scanned documents",
