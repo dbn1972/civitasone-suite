@@ -185,11 +185,11 @@ export function getAwardsForWork(workId: string): Promise<LoaderResult<AwardOpti
 /**
  * Display-ready shape mapTenderRow() produces for TendersTable.
  *
- * NOTE (verified against services/works-service/src/modules/tender/repo.ts
- * listTenders()): the tenders list response has NO status field at all —
- * `tenders` carries no status column (only `pre_tenders.status` does, and
- * that table isn't joined here). So `status` below is always derived from
- * the openingDate-vs-now heuristic, never from a backend value.
+ * NOTE: the tenders list response (works-service listTenders()) is the register of
+ * works.tenders UNION works.pre_tenders - works.tenders has no producer, so the pre-tenders
+ * are the tenders that exist. Pre-tender rows carry their own status (draft/finalized/...),
+ * which mapTenderRow prefers; true tenders carry none and fall back to the
+ * openingDate-vs-now heuristic. Amount/authority are absent (null) on pre-tenders.
  */
 export interface TenderRow extends Record<string, unknown> {
   id: string;
