@@ -301,7 +301,7 @@ export async function getLocationJurisdictionsTyped(): Promise<LoaderResult<Juri
       telemetryKey: "locations.jurisdictions.units",
       mapResponse: (p) => indexNames(p),
     }),
-    fetchJson<unknown, NameIndex>("/api/v1/locations?limit=500", new Map(), {
+    fetchJson<unknown, NameIndex>("/api/v1/hierarchy/offices", new Map(), {
       revalidateSeconds: 60,
       telemetryKey: "locations.jurisdictions.offices",
       mapResponse: (p) => indexNames(p),
@@ -371,7 +371,7 @@ function flattenNames(payload: unknown, out: NameOption[] = []): NameOption[] {
  */
 export async function getJurisdictionFormOptions(): Promise<LoaderResult<{ offices: NameOption[]; units: NameOption[] }>> {
   const [offices, units] = await Promise.all([
-    fetchJson<unknown, NameOption[]>("/api/v1/locations?limit=500", [], {
+    fetchJson<unknown, NameOption[]>("/api/v1/hierarchy/offices", [], {
       revalidateSeconds: 30,
       telemetryKey: "locations.jurisdictions.formOffices",
       mapResponse: (p) => flattenNames(p),

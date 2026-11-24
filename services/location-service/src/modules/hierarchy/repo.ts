@@ -1,5 +1,6 @@
 import { and, eq } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
+import { offices } from "./org-schema.js";
 import { administrativeUnits, type AdministrativeUnitRow, type AdministrativeUnitInsert, type AdministrativeUnitView } from "./schema.js";
 
 function toView(r: AdministrativeUnitRow): AdministrativeUnitView {
@@ -104,3 +105,24 @@ export async function update(tx: Writer, id: string, tenantId: string, data: Par
 }
 
 export { toView };
+
+/**
+ * Offices register (hierarchy.offices) - the table jurisdiction.jurisdictions.office_id references (FK,
+ * migrations/0005a_org_model.sql). Tenant-scoped, active only, by name.
+ */
+export async function listOfficesByTenant(tenantId: string) {
+  return scopedRead((tx) => tx.select({
+    id: offices.id,
+    code: offices.code,
+    name: offices.name,
+    officeType: offices.officeType,
+    adminUnitId: offices.adminUnitId,
+    parentOfficeId: offices.parentOfficeId,
+  }).from(offices).where(and(eq(offices.tenantId, tenantId), eq(offices.isActive, true))).orderBy(offices.name));
+}
+
+export async function officeExists(officeId: string, tenantId: string): Promise<boolean> {
+  const rows = await scopedRead((tx) => tx.select({ id: offices.id }).from(offices)
+    .where(and(eq(offices.id, officeId), eq(offices.tenantId, tenantId))).limit(1));
+  return rows.length > 0;
+}

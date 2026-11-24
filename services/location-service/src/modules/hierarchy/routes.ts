@@ -44,6 +44,15 @@ export async function hierarchyRoutes(app: FastifyInstance): Promise<void> {
     sendValidated(reply, hierarchyTreeSchema, { data: roots });
   });
 
+  // Offices register (hierarchy.offices) - the FK target of jurisdiction.office_id. Feeds the
+  // jurisdiction assign form and the office-name lookup (these used to read location.locations,
+  // a different table, so a selected id violated the FK).
+  app.get("/v1/hierarchy/offices", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, HIERARCHY_ROLES);
+    return reply.send({ data: await repo.listOfficesByTenant(ctx.tenantId) });
+  });
+
   app.get("/v1/hierarchy/:id", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, HIERARCHY_ROLES);
