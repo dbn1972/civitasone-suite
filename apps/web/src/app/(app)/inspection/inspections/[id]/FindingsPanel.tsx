@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useTranslations } from "next-intl";
-import { AcceptedNotice, ActionButton, Button, EntityPicker, Field, Input, Textarea } from "@/app/_components/ds";
+import { AcceptedNotice, ActionButton, Button, DataTable, EntityPicker, Field, Input, Textarea } from "@/app/_components/ds";
 import { UserFacingError } from "@/lib/userFacingError";
 import { useAcceptedWrite } from "@/lib/useAcceptedWrite";
 import { useFormError } from "@/lib/useFormError";
@@ -19,6 +19,8 @@ export type FindingRow = {
   state?: string | null;
   description?: string | null;
 };
+
+type FindingTableRow = { id: string; number: string; severity: string; state: string; description: string; actions: string; raw: FindingRow } & Record<string, unknown>;
 
 /**
  * Observation -> finding -> notice / verify -> CAPA on one inspection (inspection-service findings + capa routes):
@@ -85,6 +87,57 @@ export function FindingsPanel({
     }
   }
 
+  function renderActions(f: FindingRow) {
+    const state = f.state ?? "";
+    return (
+<div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+      {canNotice && state === FINDING_OPEN_STATE ? (
+        <ActionButton
+          label={t("noticeLabel")}
+          className="btn ghost"
+          confirmTitle={t("noticeTitle")}
+          confirmDescription={t("noticeDescription")}
+          confirmLabel={t("noticeSubmit")}
+          blockConfirm={noticeIncomplete}
+          onConfirm={() => post(`/${f.id}/compliance-notice`, { dueDate, requiredAction: requiredAction.trim(), responsibleParty: responsibleParty.trim() })}
+          onSuccess={() => {
+            setDueDate("");
+            setRequiredAction("");
+            setResponsibleParty("");
+            accepted.accept();
+            router.refresh();
+          }}
+        >
+          <label style={lbl} htmlFor={`notice-due-${f.id}`}>{t("noticeDueLabel")}</label>
+          <Input id={`notice-due-${f.id}`} type="date" min={todayIST()} value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+          <label style={lbl} htmlFor={`notice-action-${f.id}`}>{t("noticeActionLabel")}</label>
+          <Textarea id={`notice-action-${f.id}`} rows={3} value={requiredAction} onChange={(e) => setRequiredAction(e.target.value)} />
+          <label style={lbl} htmlFor={`notice-party-${f.id}`}>{t("noticePartyLabel")}</label>
+          <Input id={`notice-party-${f.id}`} value={responsibleParty} onChange={(e) => setResponsibleParty(e.target.value)} />
+        </ActionButton>
+      ) : null}
+      {canWrite && state !== FINDING_CLOSED_STATE ? (
+        <ActionButton
+          label={t("verifyLabel")}
+          className="btn ghost"
+          confirmTitle={t("verifyTitle")}
+          confirmDescription={t("verifyDescription")}
+          confirmLabel={t("verifySubmit")}
+          optionalReason
+          reasonLabel={t("verifyNotesLabel")}
+          maxReasonLength={2000}
+          onConfirm={(notes) => post(`/${f.id}/verify`, notes && notes.trim() ? { verifierNotes: notes.trim() } : {})}
+          onSuccess={() => {
+            accepted.accept();
+            router.refresh();
+          }}
+        />
+      ) : null}
+      {canCapa ? <CreateCapaButton findingId={f.id} /> : null}
+                    </div>
+    );
+  }
+
   const noticeIncomplete = !/^\d{4}-\d{2}-\d{2}$/.test(dueDate) || requiredAction.trim() === "" || responsibleParty.trim() === "";
   const lbl = { display: "block", fontSize: 13, margin: "8px 0 2px" } as const;
 
@@ -94,77 +147,16 @@ export function FindingsPanel({
       {findings.length === 0 ? (
         <p style={{ margin: "0 0 12px", fontSize: 14, color: "var(--ink2)" }}>{t("findingsEmpty")}</p>
       ) : (
-        <table className="tbl" style={{ marginBottom: 12 }}>
-          <thead>
-            <tr>
-              <th scope="col">{t("colFinding")}</th>
-              <th scope="col">{t("colSeverity")}</th>
-              <th scope="col">{t("colState")}</th>
-              <th scope="col">{t("colDescription")}</th>
-              <th scope="col">{t("colActions")}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {findings.map((f) => {
-              const state = f.state ?? "";
-              return (
-                <tr key={f.id}>
-                  <td>{f.findingNumber || formatShortId(f.id)}</td>
-                  <td>{f.severity ?? "—"}</td>
-                  <td>{state.replace(/_/g, " ") || "—"}</td>
-                  <td>{f.description ?? "—"}</td>
-                  <td>
-                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                      {canNotice && state === FINDING_OPEN_STATE ? (
-                        <ActionButton
-                          label={t("noticeLabel")}
-                          className="btn ghost"
-                          confirmTitle={t("noticeTitle")}
-                          confirmDescription={t("noticeDescription")}
-                          confirmLabel={t("noticeSubmit")}
-                          blockConfirm={noticeIncomplete}
-                          onConfirm={() => post(`/${f.id}/compliance-notice`, { dueDate, requiredAction: requiredAction.trim(), responsibleParty: responsibleParty.trim() })}
-                          onSuccess={() => {
-                            setDueDate("");
-                            setRequiredAction("");
-                            setResponsibleParty("");
-                            accepted.accept();
-                            router.refresh();
-                          }}
-                        >
-                          <label style={lbl} htmlFor={`notice-due-${f.id}`}>{t("noticeDueLabel")}</label>
-                          <Input id={`notice-due-${f.id}`} type="date" min={todayIST()} value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
-                          <label style={lbl} htmlFor={`notice-action-${f.id}`}>{t("noticeActionLabel")}</label>
-                          <Textarea id={`notice-action-${f.id}`} rows={3} value={requiredAction} onChange={(e) => setRequiredAction(e.target.value)} />
-                          <label style={lbl} htmlFor={`notice-party-${f.id}`}>{t("noticePartyLabel")}</label>
-                          <Input id={`notice-party-${f.id}`} value={responsibleParty} onChange={(e) => setResponsibleParty(e.target.value)} />
-                        </ActionButton>
-                      ) : null}
-                      {canWrite && state !== FINDING_CLOSED_STATE ? (
-                        <ActionButton
-                          label={t("verifyLabel")}
-                          className="btn ghost"
-                          confirmTitle={t("verifyTitle")}
-                          confirmDescription={t("verifyDescription")}
-                          confirmLabel={t("verifySubmit")}
-                          optionalReason
-                          reasonLabel={t("verifyNotesLabel")}
-                          maxReasonLength={2000}
-                          onConfirm={(notes) => post(`/${f.id}/verify`, notes && notes.trim() ? { verifierNotes: notes.trim() } : {})}
-                          onSuccess={() => {
-                            accepted.accept();
-                            router.refresh();
-                          }}
-                        />
-                      ) : null}
-                      {canCapa ? <CreateCapaButton findingId={f.id} /> : null}
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+        <DataTable<FindingTableRow>
+          rows={findings.map((f) => ({ id: f.id, number: f.findingNumber || formatShortId(f.id), severity: f.severity ?? "—", state: (f.state ?? "").replace(/_/g, " ") || "—", description: f.description ?? "—", actions: "", raw: f }))}
+          columns={[
+            { key: "number", label: t("colFinding") },
+            { key: "severity", label: t("colSeverity") },
+            { key: "state", label: t("colState") },
+            { key: "description", label: t("colDescription") },
+            { key: "actions", label: t("colActions"), render: (row) => renderActions(row.raw) },
+          ]}
+        />
       )}
       {canWrite ? (
         <form className="card pad" onSubmit={(e) => void createFinding(e)} noValidate aria-label={t("findingNewTitle")}>
