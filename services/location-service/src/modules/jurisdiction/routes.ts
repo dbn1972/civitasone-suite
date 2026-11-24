@@ -5,6 +5,7 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import { assignJurisdictionBody, jurisdictionQueryParams, idParam } from "./validators.js";
 import * as commands from "./commands.js";
 import * as repo from "./repo.js";
+import { officeExists } from "../hierarchy/repo.js";
 
 const JURISDICTION_ROLES = ["location_admin", "super_admin", "admin"];
 
@@ -29,6 +30,10 @@ export async function jurisdictionRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, JURISDICTION_ROLES);
     const body = assignJurisdictionBody.parse(req.body);
+    // office_id FKs hierarchy.offices; reject up front (422) rather than failing asynchronously in the consumer.
+    if (!(await officeExists(body.officeId, ctx.tenantId))) {
+      throw new HttpError(422, "INVALID_OFFICE", "The selected office does not exist in this organisation.");
+    }
     sendAccepted(reply, acceptedResponseSchema, await commands.jurisdictionAssign(ctx, body));
   });
 
