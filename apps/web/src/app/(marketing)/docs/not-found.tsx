@@ -9,7 +9,7 @@ import { chapters, chapterNumber } from "./_content/chapters";
 export default function DocsNotFound() {
   return (
     <section className="mx-auto max-w-3xl px-4 py-20 sm:px-6 lg:px-8">
-      <p className="text-sm font-semibold uppercase tracking-wider text-gray-400">
+      <p className="text-sm font-semibold uppercase tracking-wider text-gray-500">
         404 — Documentation
       </p>
       <h1 className="mt-2 text-3xl font-bold text-gray-900">
@@ -30,7 +30,7 @@ export default function DocsNotFound() {
       </div>
 
       <nav aria-label="All chapters" className="mt-10">
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-gray-400">
+        <h2 className="text-sm font-semibold uppercase tracking-wider text-gray-500">
           All chapters
         </h2>
         <ul className="mt-4 grid gap-2 sm:grid-cols-2">

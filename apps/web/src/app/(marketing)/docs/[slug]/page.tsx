@@ -49,7 +49,7 @@ export default async function ChapterPage(props: Props) {
           <nav className="sticky top-24 space-y-1">
             <Link
               href="/docs"
-              className="mb-4 block text-xs font-semibold uppercase tracking-wider text-gray-400 hover:text-gray-600"
+              className="mb-4 block text-xs font-semibold uppercase tracking-wider text-gray-500 hover:text-gray-600"
             >
               ← All Chapters
             </Link>
@@ -77,7 +77,7 @@ export default async function ChapterPage(props: Props) {
             <summary className="cursor-pointer list-none px-4 py-3 text-sm font-medium text-gray-700">
               <span className="inline-flex w-full items-center justify-between">
                 <span>Chapters</span>
-                <span aria-hidden="true" className="text-gray-400">▾</span>
+                <span aria-hidden="true" className="text-gray-500">▾</span>
               </span>
             </summary>
             <nav aria-label="Chapters" className="border-t border-gray-200 p-2">
@@ -132,7 +132,7 @@ export default async function ChapterPage(props: Props) {
               >
                 <span>←</span>
                 <span>
-                  <span className="block text-xs text-gray-400">Previous</span>
+                  <span className="block text-xs text-gray-500">Previous</span>
                   <span className="font-medium group-hover:underline">{prev.title}</span>
                 </span>
               </Link>
@@ -143,7 +143,7 @@ export default async function ChapterPage(props: Props) {
                 className="group flex items-center gap-2 text-end text-sm text-gray-500 hover:text-gray-900"
               >
                 <span>
-                  <span className="block text-xs text-gray-400">Next</span>
+                  <span className="block text-xs text-gray-500">Next</span>
                   <span className="font-medium group-hover:underline">{next.title}</span>
                 </span>
                 <span>→</span>
@@ -156,7 +156,7 @@ export default async function ChapterPage(props: Props) {
         <aside className="hidden xl:block">
           {toc.length > 0 ? (
             <nav aria-label="On this page" className="sticky top-24 space-y-1">
-              <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-400">
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500">
                 On this page
               </p>
               {toc.map((t) => (
