@@ -338,8 +338,10 @@ describe("upsert -> read round trip, encryption at rest, masking, audit", () => 
     expect(r.json().data.card_number).toBe(CARD);
   });
 
-  it("another tenant's HR cannot read it (404)", async () => {
-    expect((await get(EMP_R, HR_OTHER_TENANT)).statusCode).toBe(404);
+  it("another tenant's HR cannot read it (200, data:null — indistinguishable from none on file)", async () => {
+    const r = await get(EMP_R, HR_OTHER_TENANT);
+    expect(r.statusCode).toBe(200);
+    expect(r.json()).toEqual({ data: null });
   });
 
   it("the write is audited, and no audit payload carries the card number, scheme id or dependant PII", async () => {
@@ -489,12 +491,14 @@ describe("decrypt failure and delete", () => {
     expect(rv.json().code).toBe("PII_DECRYPT_FAILED");
   });
 
-  it("HR delete is 202, removes the record (then 404), and is audited", async () => {
+  it("HR delete is 202, removes the record (then GET is 200 data:null, a second DELETE 404), and is audited", async () => {
     const r = await del(EMP_R);
     expect(r.statusCode).toBe(202);
     await drain();
     expect(await storedRow(EMP_R)).toBeUndefined();
-    expect((await get(EMP_R, HR)).statusCode).toBe(404);
+    const afterDelete = await get(EMP_R, HR);
+    expect(afterDelete.statusCode).toBe(200);
+    expect(afterDelete.json()).toEqual({ data: null });
     expect((await del(EMP_R)).statusCode).toBe(404);
     const deletes = (await insuranceAudits()).filter((a) => a.payload.action === "delete");
     expect(deletes).toHaveLength(1);

@@ -26,8 +26,14 @@ function stub(fee: { status: number; body?: unknown }, post?: (url: string, body
 }
 
 describe("ApplicationFeeDialog", () => {
-  it("offers to assess a fee that was never assessed, passing whether the category certificate was verified", async () => {
-    const calls = stub({ status: 404 });
+  it("legacy 404 (older backend) still reads as 'no fee assessed'", async () => {
+    stub({ status: 404 });
+    renderIt();
+    expect(await screen.findByText(/no fee has been assessed/i)).toBeInTheDocument();
+  });
+
+  it("offers to assess a fee that was never assessed (200 data:null), passing whether the category certificate was verified", async () => {
+    const calls = stub({ status: 200, body: { data: null } });
     renderIt();
     expect(await screen.findByText(/no fee has been assessed/i)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("checkbox"));

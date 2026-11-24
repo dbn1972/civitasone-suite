@@ -14,7 +14,7 @@ import { hrScannedDocumentsPath, mapHrScannedDocuments, type HrScannedDocument }
 import { ScannedDocumentsSection } from "./ScannedDocumentsSection";
 import { MedicalInsuranceCard } from "../../medical/_components/MedicalInsuranceCard";
 import { MedicalInsuranceForm } from "../../medical/_components/MedicalInsuranceForm";
-import { mapInsuranceResponse, type MedicalInsurance } from "../../medical/_components/insuranceTypes";
+import { mapInsuranceOrNoRecord, resolveNoInsuranceRecord, type MedicalInsurance } from "../../medical/_components/insuranceTypes";
 
 const NO_DOCS: HrScannedDocument[] = [];
 
@@ -46,8 +46,9 @@ export function insurancePath(employeeId: string): string {
 
 export function DeferredMedicalInsurance({ employeeId, canReveal, canEdit }: { employeeId: string; canReveal: boolean; canEdit: boolean }) {
   const t = useTranslations("medicalInsurance");
-  // 404 is a real answer ("no record on file"), exactly like the server loader (insuranceData.ts).
-  const result = useDeferredResource<MedicalInsurance | null>(insurancePath(employeeId), null, mapInsuranceResponse, { notFoundAs: null });
+  // "No record on file" is a real answer (200 { data: null }; a legacy 404 is still honoured), exactly like the server loader (insuranceData.ts).
+  const raw = useDeferredResource<MedicalInsurance | null>(insurancePath(employeeId), null, mapInsuranceOrNoRecord, { notFoundAs: null });
+  const result = raw && resolveNoInsuranceRecord(raw);
   if (!result) {
     return (
       <Card title={t("title")} padding>

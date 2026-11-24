@@ -747,12 +747,12 @@ describe("GET /v1/hrms/medical/insurance — insurance details", () => {
     await app.close();
   });
 
-  it("returns 404 when no insurance record found", async () => {
+  it("returns 200 with data:null when no insurance record is on file (not a 404)", async () => {
     H.sqlClientQuery.mockReturnValue([]);
     const app = await buildApp();
     const r = await app.inject({ method: "GET", url: `/v1/hrms/medical/insurance?employeeId=${EMP}`, headers: auth() });
-    expect(r.statusCode).toBe(404);
-    expect(r.json().code).toBe("NOT_FOUND");
+    expect(r.statusCode).toBe(200);
+    expect(r.json()).toEqual({ data: null });
     await app.close();
   });
 
@@ -779,12 +779,12 @@ describe("GET /v1/hrms/medical/insurance — insurance details", () => {
     await app.close();
   });
 
-  it("employees with no linked employee record get 404, never someone else's insurance (fails closed)", async () => {
+  it("employees with no linked employee record get 200 data:null, never someone else's insurance (fails closed)", async () => {
     H.selectFrom.mockResolvedValueOnce([]); // resolveEmployeeForActor finds nothing
     const app = await buildApp();
     const r = await app.inject({ method: "GET", url: `/v1/hrms/medical/insurance?employeeId=${EMP}`, headers: auth(USER, ["employee"]) });
-    expect(r.statusCode).toBe(404);
-    expect(r.json().code).toBe("NOT_FOUND");
+    expect(r.statusCode).toBe(200);
+    expect(r.json()).toEqual({ data: null });
     await app.close();
   });
 

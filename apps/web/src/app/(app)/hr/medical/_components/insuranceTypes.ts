@@ -67,3 +67,21 @@ export function mapInsuranceResponse(p: unknown): MedicalInsurance | null {
     annualLimitMinor: str(d.annual_limit_minor),
   };
 }
+
+/**
+ * GET /v1/hrms/medical/insurance answers 200 `{ data: null }` when no record is
+ * on file (it used to be a 404 that logged a console error). A null from
+ * `mapInsuranceResponse` means "malformed payload" to the loaders, so the
+ * mapper used with them returns this sentinel for the legitimate empty answer
+ * and `resolveNoInsuranceRecord` turns it back into `data: null`.
+ */
+export const NO_INSURANCE_RECORD = Object.freeze({ employeeId: "" }) as unknown as MedicalInsurance;
+
+export function mapInsuranceOrNoRecord(p: unknown): MedicalInsurance | null {
+  if (p && typeof p === "object" && "data" in p && (p as { data: unknown }).data === null) return NO_INSURANCE_RECORD;
+  return mapInsuranceResponse(p);
+}
+
+export function resolveNoInsuranceRecord<R extends { data: MedicalInsurance | null }>(result: R): R {
+  return result.data === NO_INSURANCE_RECORD ? { ...result, data: null } : result;
+}
