@@ -46,7 +46,7 @@ export function VendorsTable({ vendors, source = "api", canExport = false, error
     <>
       {provenance === "cached" ? (
         <div role="alert" style={{ margin: "0 0 8px", padding: "8px 12px", border: "1px solid var(--warn, #b54708)", borderRadius: 6, fontSize: 13 }}>
-          Couldn&apos;t refresh the vendor list &mdash; showing cached data. It may be out of date.
+          {t("staleBanner")}
         </div>
       ) : null}
       {/* UX-002: single source of truth — reads the same useSeededResource
