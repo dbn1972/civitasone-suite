@@ -181,8 +181,8 @@ export default async function AccountHealthDetailPage(props: PageProps) {
               inside the card, and say who brings the stored value back in line.
               Decision: no inline "Recompute" button is added — the recommendation-
               service recompute endpoint (POST /v1/recommendations/health/:id/
-              recompute) requires an explicit factors payload (recency/frequency/
-              monetary/support/engagement), so it is not a one-click "recompute
+              recompute) requires an explicit factors payload (productUsage/
+              engagement/supportBurden/paymentTimeliness/relationshipDepth), so it is not a one-click "recompute
               from the signals already shown" action and is run by the scoring
               pipeline, not from this read-only screen. */}
           <p style={{ padding: "6px 16px 12px", margin: 0, color: "var(--ink2)", fontSize: 12 }}>

@@ -7,41 +7,28 @@
  * free of data access and of tenant-specific thresholds.
  */
 
+import {
+  SIGNAL_WEIGHTS,
+  HEALTH_SIGNAL_NAMES,
+  computeHealthScore as computeSignalScore,
+  type HealthSignals,
+  type HealthSignalName,
+} from "./scoring-domain.js";
+
 /**
- * Declared as a type alias (not an interface) so it keeps an implicit index
- * signature and can be persisted directly into the `factors` jsonb column.
+ * Factors are the KA-004 signals (productUsage, engagement, supportBurden,
+ * paymentTimeliness, relationshipDepth). The recompute WRITE path and the
+ * breakdown READ path (scoring-routes.ts) must share one key set, otherwise the
+ * stored factors read back as all-zero. Single source of truth: scoring-domain.ts.
  */
-export type HealthFactors = {
-  /** How recently the account transacted (100 = today). */
-  recency?: number | undefined;
-  /** How often the account transacts (100 = most frequent cohort). */
-  frequency?: number | undefined;
-  /** Relative revenue contribution (100 = top cohort). */
-  monetary?: number | undefined;
-  /** Support-load health (100 = no open/escalated tickets). */
-  supportTickets?: number | undefined;
-  /** Product/portal engagement (100 = highly engaged). */
-  engagement?: number | undefined;
-};
+export type HealthFactors = HealthSignals;
 
 /** Relative weights — sum to 1 so the composite stays inside 0..100. */
-export const HEALTH_WEIGHTS = {
-  recency: 0.25,
-  frequency: 0.2,
-  monetary: 0.25,
-  supportTickets: 0.15,
-  engagement: 0.15,
-} as const;
+export const HEALTH_WEIGHTS = SIGNAL_WEIGHTS;
 
-export type HealthFactorName = keyof typeof HEALTH_WEIGHTS;
+export type HealthFactorName = HealthSignalName;
 
-export const HEALTH_FACTOR_NAMES: readonly HealthFactorName[] = [
-  "recency",
-  "frequency",
-  "monetary",
-  "supportTickets",
-  "engagement",
-];
+export const HEALTH_FACTOR_NAMES: readonly HealthFactorName[] = HEALTH_SIGNAL_NAMES;
 
 export type HealthClassification = "critical" | "at_risk" | "healthy" | "excellent";
 
@@ -60,17 +47,12 @@ function clamp(value: number, min: number, max: number): number {
 }
 
 /**
- * Weighted 0..100 health score. Missing factors contribute zero, which is
- * deliberate: an account with no engagement signal is not a healthy account.
+ * Weighted 0..100 health score (same weights/clamping as the breakdown read
+ * path). Missing factors contribute zero, which is deliberate: an account with
+ * no signal is not a healthy account.
  */
 export function computeHealthScore(factors: HealthFactors): number {
-  let total = 0;
-  for (const name of HEALTH_FACTOR_NAMES) {
-    const raw = factors[name];
-    const value = raw === undefined ? 0 : clamp(raw, 0, 100);
-    total += value * HEALTH_WEIGHTS[name];
-  }
-  return Math.round(clamp(total, 0, 100));
+  return computeSignalScore(factors).score;
 }
 
 /** Map a 0..100 score onto a relationship-health band. */
