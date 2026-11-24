@@ -81,8 +81,7 @@ export async function applicationFeeRoutes(app: FastifyInstance): Promise<void> 
     }).parse(req.body ?? {});
 
     const fee = await repo.findFee(ctx.tenantId, id);
-    // No fee assessed yet is a normal state: 200 with a null payload (not a 404).
-    if (!fee) return reply.send({ data: null });
+    if (!fee) throw new HttpError(404, "NOT_FOUND", "no fee has been assessed for this application");
     if (fee.status === "exempt") throw new HttpError(409, "FEE_EXEMPT", "this application is fee-exempt; there is nothing to pay");
     // Only a PENDING fee is payable (guards paid AND refunded — allow-list, not
     // a deny-list, per adversarial review M2).
