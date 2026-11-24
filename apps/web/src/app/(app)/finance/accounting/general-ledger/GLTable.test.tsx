@@ -185,14 +185,30 @@ describe("GLTable account columns", () => {
 });
 
 describe("GLTable: Reverse voucher (maker-checker correction of posted money)", () => {
-  const two = [ENTRY({ id: "j1:1000" }), ENTRY({ id: "j1:1100", accountCode: "1100", debit: "0", credit: "50000" })];
-  it("offers one Reverse per voucher to a role the server admits", () => {
-    render(<ToastProvider><GLTable entries={two as never} pagination={pag(2)} totals={totals() as never} view={view()} canReverse /></ToastProvider>);
+  const rev = (entries: unknown[], props: Record<string, unknown> = { canReverse: true }) =>
+    render(<ToastProvider><GLTable entries={entries as never} pagination={pag(entries.length)} totals={totals() as never} view={view()} {...props} /></ToastProvider>);
+  const posted = (id: string, over: Record<string, unknown> = {}) => ENTRY({ id, status: "posted", createdBy: "maker-1", ...over });
+
+  it("offers one Reverse per posted voucher to a role the server admits", () => {
+    rev([posted("j1:1000"), posted("j1:1100", { accountCode: "1100" })]);
     expect(screen.getAllByRole("button", { name: "Reverse voucher" })).toHaveLength(1);
   });
   it("offers no Reverse to a role the server 403s", () => {
-    render(<ToastProvider><GLTable entries={two as never} pagination={pag(2)} totals={totals() as never} view={view()} /></ToastProvider>);
+    rev([posted("j1:1000")], {});
     expect(screen.queryByRole("button", { name: "Reverse voucher" })).not.toBeInTheDocument();
   });
+  it("offers no Reverse on a non-posted, already-reversed or contra (reversing) journal, nor when status is unknown", () => {
+    rev([
+      posted("d1:1000", { status: "draft" }),
+      posted("p1:1000", { status: "pending_approval" }),
+      posted("r1:1000", { status: "reversed" }),
+      posted("c1:1000", { type: "contra", reversesId: "r1" }),
+      ENTRY({ id: "u1:1000" }),
+    ]);
+    expect(screen.queryByRole("button", { name: "Reverse voucher" })).not.toBeInTheDocument();
+  });
+  it("offers no Reverse on a journal the viewer made (maker cannot be checker), but does on another officer's", () => {
+    rev([posted("m1:1000", { createdBy: "me" }), posted("o1:1000", { createdBy: "other" })], { canReverse: true, viewerId: "me" });
+    expect(screen.getAllByRole("button", { name: "Reverse voucher" })).toHaveLength(1);
+  });
 });
-

@@ -66,7 +66,7 @@ async function patchJson(url: string, body: unknown, area = "request"): Promise<
 }
 
 async function postJson(url: string, area = "request"): Promise<void> {
-  const res = await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
+  const res = await fetch(url, { method: "POST" });
   if (!(res.ok || res.status === 202)) {
     throw new Error(financeActionError(area));
   }

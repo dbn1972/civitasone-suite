@@ -277,6 +277,8 @@ export type JournalLinePageFilter = {
 export type JournalLineRow = {
   journal_id: string; voucher_no: string; type: string; posting_date: string;
   account_code: string; narration: string | null; debit: string; credit: string;
+  /** Additive (web gates Reverse on these): journal status, the journal it reverses (contra entries), and its maker. */
+  status: string; reverses_id: string | null; created_by: string | null;
 };
 
 /**
@@ -345,6 +347,7 @@ export async function pageJournalLines(f: JournalLinePageFilter) {
     }
     const rows = await tx.execute(sql`
       SELECT j.id AS journal_id, j.voucher_no, j.type, j.posting_date::text AS posting_date,
+             j.status, j.reverses_id::text AS reverses_id, j.created_by::text AS created_by,
              coalesce(ln.elem->>'accountCode', ln.elem->>'account') AS account_code,
              ln.elem->>'narration' AS narration,
              coalesce(nullif(ln.elem->>'debitMinor', ''), nullif(ln.elem->>'debit', ''), '0')::numeric(40,0)::text AS debit,

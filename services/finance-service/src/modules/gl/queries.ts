@@ -232,6 +232,9 @@ export async function pageGeneralLedger(
       credit: r.credit,
       referenceNo: r.voucher_no,
       type: r.type as "payment" | "receipt" | "journal" | "budget",
+      status: r.status,
+      ...(r.reverses_id ? { reversesId: r.reverses_id } : {}),
+      ...(r.created_by ? { createdBy: r.created_by } : {}),
     })),
     pagination: { limit: p.limit, offset: p.offset, total: totals.entryLines, hasMore: p.offset + rows.length < totals.entryLines },
     // `totals` covers the FILTERED set (fiscal year + type tab + search); `ledgerTotals` is the same fiscal year with no

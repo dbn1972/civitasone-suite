@@ -864,6 +864,10 @@ export const GLEntrySummarySchema = z.object({
   // equality filter, no exhaustive switch), so widening it carries no
   // authorization or correctness risk on the read side.
   type: z.string().optional(),
+  // Additive: lets the ledger gate Reverse (posted, not itself a reversal, not the viewer's own journal).
+  status: z.string().optional(),
+  reversesId: z.string().optional(),
+  createdBy: z.string().optional(),
 });
 export const GLEntrySummaryListSchema = z.array(GLEntrySummarySchema);
 
