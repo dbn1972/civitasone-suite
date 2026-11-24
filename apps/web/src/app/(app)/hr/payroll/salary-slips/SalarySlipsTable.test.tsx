@@ -1,9 +1,16 @@
-import { describe, it, expect } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { render, screen, fireEvent } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import enMessages from "@/messages/en.json";
 import type { SalarySlipSummary } from "@civitasone/types";
 import { SalarySlipsTable } from "./SalarySlipsTable";
+
+const push = vi.fn();
+vi.mock("next/navigation", async (orig) => ({
+  ...(await orig<typeof import("next/navigation")>()),
+  useRouter: () => ({ push, replace: vi.fn(), back: vi.fn(), refresh: vi.fn(), prefetch: vi.fn() }),
+}));
+beforeEach(() => push.mockClear());
 
 function makeSlip(overrides: Partial<SalarySlipSummary> = {}): SalarySlipSummary {
   return {
@@ -49,5 +56,19 @@ describe("SalarySlipsTable", () => {
     expect(container.querySelectorAll("a a")).toHaveLength(0);
     expect(screen.getByText("Asha Verma").closest("a")).toHaveAttribute("href", "/hr/payroll/salary-slips/s1");
     expect(screen.getByText("View employee").closest("a")).toHaveAttribute("href", "/hr/employees/e1");
+  });
+
+  // The <tr> has onClick -> router.push(slip detail). Clicking the Profile link
+  // must not bubble to it, or the user lands on the slip instead of the employee.
+  it("clicking View employee does not trigger the row's slip-detail navigation", () => {
+    renderTable([makeSlip()]);
+    fireEvent.click(screen.getByText("View employee"));
+    expect(push).not.toHaveBeenCalledWith("/hr/payroll/salary-slips/s1");
+  });
+
+  it("clicking the row name still navigates to the slip detail", () => {
+    renderTable([makeSlip()]);
+    fireEvent.click(screen.getByText("Asha Verma"));
+    expect(push).toHaveBeenCalledWith("/hr/payroll/salary-slips/s1");
   });
 });
