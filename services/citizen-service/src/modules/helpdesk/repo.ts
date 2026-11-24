@@ -120,6 +120,41 @@ export async function countTicketsByStatus(tenantId: string, since?: Date): Prom
   return rows;
 }
 
+/** Ticket counts grouped by priority or channel (tenant-scoped, optional period start). */
+export async function countTicketsByDimension(
+  tenantId: string,
+  dimension: "priority" | "channel",
+  since?: Date,
+): Promise<Array<{ key: string; count: number }>> {
+  const col = dimension === "priority" ? citizenTickets.priority : citizenTickets.channel;
+  const rows = await db.transaction((tx) => tx.select({
+    key: col,
+    count: sql<number>`count(*)::int`,
+  }).from(citizenTickets)
+    .where(since ? and(eq(citizenTickets.tenantId, tenantId), gte(citizenTickets.createdAt, since)) : eq(citizenTickets.tenantId, tenantId))
+    .groupBy(col));
+  return rows;
+}
+
+/**
+ * Average hours from creation to resolution over resolved/closed tickets.
+ * Uses resolved_at, falling back to updated_at when the status flip did not
+ * stamp resolved_at. Returns 0 when there are no resolved tickets.
+ */
+export async function avgResolutionHours(tenantId: string, since?: Date): Promise<number> {
+  const [row] = await db.transaction((tx) => tx
+    .select({
+      hours: sql<number>`coalesce(avg(extract(epoch from (coalesce(${citizenTickets.resolvedAt}, ${citizenTickets.updatedAt}) - ${citizenTickets.createdAt})) / 3600.0), 0)::float8`,
+    })
+    .from(citizenTickets)
+    .where(and(
+      eq(citizenTickets.tenantId, tenantId),
+      or(eq(citizenTickets.status, "resolved"), eq(citizenTickets.status, "closed")),
+      ...(since ? [gte(citizenTickets.createdAt, since)] : []),
+    )));
+  return Number(row?.hours ?? 0);
+}
+
 export async function countEscalationsByTenant(tenantId: string): Promise<number> {
   // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
   // before this read — a bare db.select() runs with no RLS GUC set.
