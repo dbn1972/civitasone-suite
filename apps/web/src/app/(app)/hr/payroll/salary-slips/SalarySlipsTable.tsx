@@ -24,9 +24,26 @@ export function SalarySlipsTable({ slips }: { slips: SalarySlipSummary[] }) {
     {
       key: "employeeName",
       label: t("colEmployee"),
+      // DataTable already wraps the first column in its own row-link <a>
+      // (rowLinkPrefix below). A <Link> here nested <a> inside <a>, which the
+      // HTML parser reparents -> React hydration error #418. Plain text only.
+      render: (r) => <>{r.employeeName?.trim() || tFallback("unknownEmployee")}</>,
+    },
+    // The employee-profile link lives in its own non-first column: DataTable
+    // wraps only the FIRST column in the row-link <a>, so a <Link> here cannot
+    // nest inside another anchor.
+    {
+      key: "employeeId",
+      label: t("colProfile"),
+      sortable: false,
       render: (r) => (
-        <Link href={`/hr/employees/${r.employeeId}`} style={{ color: "var(--primary-d)", fontWeight: 600 }} tabIndex={-1}>
-          {r.employeeName?.trim() || tFallback("unknownEmployee")}
+        <Link
+          href={`/hr/employees/${r.employeeId}`}
+          // <tr> has onClick -> router.push(slip); without this the row wins.
+          onClick={(e) => e.stopPropagation()}
+          style={{ color: "var(--primary-d)", fontWeight: 600 }}
+        >
+          {t("viewEmployeeLink")}
         </Link>
       ),
     },

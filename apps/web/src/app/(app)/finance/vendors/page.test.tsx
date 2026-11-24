@@ -47,4 +47,32 @@ describe("VendorsPage (GAP-FINANCE-VENDORS-02 / review MEDIUM-3)", () => {
     render(await VendorsPage());
     expect((tableProps.last as { canExport: boolean }).canExport).toBe(true);
   });
+
+  it("403 renders LoadErrorState and no table", async () => {
+    tableProps.last = null;
+    getFinanceVendors.mockResolvedValue({ data: [], source: "error", status: 403 });
+    render(await VendorsPage());
+    expect(screen.queryByText("vendors-table")).not.toBeInTheDocument();
+    expect(screen.queryByText("Total Vendors")).not.toBeInTheDocument();
+    expect(tableProps.last).toBeNull();
+  });
+
+  it("a non-403 failure keeps the table (offline fallback) and hands it the error state", async () => {
+    getFinanceVendors.mockResolvedValue({ data: [], source: "error", status: 500 });
+    render(await VendorsPage());
+    expect(screen.getByText("vendors-table")).toBeInTheDocument();
+    const p = tableProps.last as { source: string; errorState: unknown };
+    expect(p.source).toBe("error");
+    expect(p.errorState).toBeTruthy();
+  });
+
+  it("source api (0 rows or rows) renders the table with no error state", async () => {
+    for (const data of [[], [{ id: "v1", name: "Acme", category: "Goods", pan: null, gstin: null, status: "active", ratingDisplay: "x" }]]) {
+      getFinanceVendors.mockResolvedValue({ data, source: "api" });
+      render(await VendorsPage());
+      const p = tableProps.last as { source: string; errorState: unknown };
+      expect(p.source).toBe("api");
+      expect(p.errorState).toBeUndefined();
+    }
+  });
 });
