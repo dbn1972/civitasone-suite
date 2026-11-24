@@ -36,7 +36,7 @@ export function ApplicationPipeline({
 
   return (
     <div className="mb-5" aria-label={t("ariaLabel")}>
-      <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">
+      <p className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-2">
         {t("heading")}
       </p>
       <div className="flex rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-sm overflow-hidden">
@@ -70,7 +70,7 @@ export function ApplicationPipeline({
               <span
                 className={[
                   "text-[11px] font-medium whitespace-nowrap",
-                  isActive ? "text-indigo-100" : "text-slate-500 dark:text-slate-400",
+                  isActive ? "text-indigo-100" : "text-slate-600 dark:text-slate-400",
                 ].join(" ")}
               >
                 {label}
@@ -84,7 +84,7 @@ export function ApplicationPipeline({
                     "w-4 h-4 rounded-full border text-[9px] font-bold",
                     isActive
                       ? "border-indigo-600 bg-indigo-600 text-white"
-                      : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-300 dark:text-slate-500",
+                      : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-300 dark:text-slate-400",
                   ].join(" ")}
                 >
                   ›

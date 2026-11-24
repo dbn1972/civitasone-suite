@@ -62,17 +62,17 @@ export default function RecruitmentSettingsPage() {
     <div className="page-main" aria-labelledby="set-heading">
       <Link href="/hr/recruitment" className="text-sm text-indigo-600 dark:text-indigo-400 hover:underline">{t("setBack")}</Link>
       <h1 id="set-heading" className="text-2xl font-bold text-slate-800 dark:text-slate-100 mt-1">{t("setHeading")}</h1>
-      <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">{t("setIntro")}</p>
+      <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">{t("setIntro")}</p>
 
       {loadFailed ? (
-        <p role="alert" className="text-sm text-red-600">{t("setLoadFailed")} <button type="button" className="underline" onClick={() => { setLoadFailed(false); void load(); }}>{t("retry")}</button></p>
+        <p role="alert" className="text-sm text-red-700 dark:text-red-400">{t("setLoadFailed")} <button type="button" className="underline" onClick={() => { setLoadFailed(false); void load(); }}>{t("retry")}</button></p>
       ) : form === null ? (
-        <p role="status" className="text-sm text-slate-500">{t("setLoading")}</p>
+        <p role="status" className="text-sm text-slate-600">{t("setLoading")}</p>
       ) : (
         <form onSubmit={save} className="flex max-w-xl flex-col gap-4">
           <fieldset className="flex flex-col gap-3 rounded-xl border border-slate-200 dark:border-slate-700 p-4">
             <legend className="px-1 text-sm font-semibold">{t("setIdentity")}</legend>
-            <p className="text-xs text-slate-500">{t("setIdentityHelp")}</p>
+            <p className="text-xs text-slate-600">{t("setIdentityHelp")}</p>
             <Field id={`${uid}-org`} label={t("setOrgName")} error={err("organisationName") ?? undefined} announce>
               <Input maxLength={200} value={form.organisationName} onChange={(e) => set("organisationName", e.target.value)} />
             </Field>
@@ -90,18 +90,18 @@ export default function RecruitmentSettingsPage() {
               <input type="checkbox" checked={form.offerWorkflowRequired} onChange={(e) => set("offerWorkflowRequired", e.target.checked)} className="mt-1" />
               <span>{t("setOfferWorkflow")}</span>
             </label>
-            <p className="text-xs text-slate-500">{t("setOfferWorkflowHelp")}</p>
+            <p className="text-xs text-slate-600">{t("setOfferWorkflowHelp")}</p>
           </fieldset>
 
           <fieldset className="flex flex-col gap-2 rounded-xl border border-slate-200 dark:border-slate-700 p-4">
             <legend className="px-1 text-sm font-semibold">{t("setPrivacy")}</legend>
             <Field id={`${uid}-note`} label={t("setPurposeNote")} error={err("applicantPurposeNote") ?? undefined} announce>
               <Textarea rows={4} maxLength={2000} value={form.applicantPurposeNote} onChange={(e) => set("applicantPurposeNote", e.target.value)} />
-              <p className="text-xs text-slate-500">{t("setPurposeNoteHelp")}</p>
+              <p className="text-xs text-slate-600">{t("setPurposeNoteHelp")}</p>
             </Field>
           </fieldset>
 
-          {message && <p role={message.kind === "error" ? "alert" : "status"} className={`text-sm ${message.kind === "error" ? "text-red-600" : "text-emerald-700"}`}>{message.text}</p>}
+          {message && <p role={message.kind === "error" ? "alert" : "status"} className={`text-sm ${message.kind === "error" ? "text-red-700 dark:text-red-400" : "text-emerald-700"}`}>{message.text}</p>}
           <div><Button type="submit" disabled={busy}>{busy ? t("saving") : t("setSave")}</Button></div>
         </form>
       )}
