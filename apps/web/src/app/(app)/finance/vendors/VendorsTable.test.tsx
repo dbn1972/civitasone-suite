@@ -3,9 +3,10 @@ import { render as rtlRender, screen, fireEvent, waitFor } from "@testing-librar
 import { NextIntlClientProvider } from "next-intl";
 import enMessages from "@/messages/en.json";
 
+const seeded = vi.hoisted(() => ({ rows: undefined as unknown, prov: undefined as undefined | "live" | "cached" | "error-no-data" }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }) }));
 vi.mock("@/lib/sync/resource", () => ({
-  useSeededResource: (_k: string, initial: unknown) => ({ data: initial, fromCache: false, offline: false, cachedAt: null }),
+  useSeededResource: (_k: string, initial: unknown) => ({ data: seeded.rows ?? initial, fromCache: false, offline: false, cachedAt: null, provenance: seeded.prov }),
 }));
 
 import { VendorsTable } from "./VendorsTable";
@@ -81,5 +82,34 @@ describe("VendorsTable export (GAP-FINANCE-VENDORS-02)", () => {
     fireEvent.click(screen.getByRole("button", { name: /Export CSV/ }));
     expect(await screen.findByRole("alert")).toHaveTextContent(/could not be completed/i);
     expect(createObjectURL).not.toHaveBeenCalled();
+  });
+});
+
+describe("VendorsTable load failure (never a false empty register)", () => {
+  const row = [{ id: "v1", name: "Acme", category: "Goods", pan: "ABCDE****F", gstin: null, status: "active", ratingDisplay: "x" }] as never;
+  beforeEach(() => { seeded.rows = undefined; seeded.prov = undefined; });
+  it("error + nothing cached shows the error state, not the empty message", () => {
+    seeded.prov = "error-no-data";
+    render(<VendorsTable vendors={[]} source="error" errorState={<div>load-error-state</div>} />);
+    expect(screen.getByText("load-error-state")).toBeInTheDocument();
+    expect(screen.queryByText("No vendors registered yet.")).not.toBeInTheDocument();
+  });
+  it("non-403 error with cached rows shows the table under a prominent stale banner", () => {
+    seeded.prov = "cached"; seeded.rows = row;
+    render(<VendorsTable vendors={[]} source="error" errorState={<div>load-error-state</div>} />);
+    expect(screen.getByRole("alert")).toHaveTextContent(/showing cached data/i);
+    expect(screen.getByText("Acme")).toBeInTheDocument();
+    expect(screen.queryByText("load-error-state")).not.toBeInTheDocument();
+  });
+  it("live empty result keeps the normal empty state and no banner", () => {
+    seeded.prov = "live";
+    render(<VendorsTable vendors={[]} source="api" />);
+    expect(screen.getByText("No vendors registered yet.")).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+  it("live rows show the table", () => {
+    seeded.prov = "live";
+    render(<VendorsTable vendors={row} source="api" />);
+    expect(screen.getByText("Acme")).toBeInTheDocument();
   });
 });

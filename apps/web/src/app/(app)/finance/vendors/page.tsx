@@ -31,9 +31,8 @@ export default async function VendorsPage() {
         back="/finance"
         actions={canCreate ? <Link href="/finance/vendors/new" className="btn primary">New vendor</Link> : null}
       />
-      {source === "error" ? (
-        // A failed load (invalid payload / 403 / 5xx / timeout) is NOT an empty register: say so instead of
-        // rendering "No vendors registered yet." over an empty list.
+      {source === "error" && result.status === 403 ? (
+        // A 403 is a permanent authorization decision: never a table, never an offline copy.
         <LoadErrorState result={result} area="vendors" backHref="/finance" />
       ) : (
       <>
@@ -46,7 +45,11 @@ export default async function VendorsPage() {
       <Card title="Vendors">
         {/* PAN is masked HERE, on the server, so the full PAN never reaches the client table
             (or its offline cache / CSV export). */}
-        <VendorsTable vendors={vendors.map((v) => ({ ...v, pan: v.pan ? maskPan(String(v.pan)) : v.pan }))} source="api" canExport={canExport} />
+        <VendorsTable vendors={vendors.map((v) => ({ ...v, pan: v.pan ? maskPan(String(v.pan)) : v.pan }))} source={source === "error" ? "error" : "api"} canExport={canExport}
+          // A non-403 failure keeps the offline fallback: VendorsTable (which alone knows whether a cached copy exists)
+          // shows the cached rows under a prominent stale banner, or this error state when there is nothing to show --
+          // never "No vendors registered yet." for a failed load.
+          errorState={source === "error" ? <LoadErrorState result={result} area="vendors" backHref="/finance" /> : undefined} />
       </Card>
       </>
       )}

@@ -17,7 +17,7 @@ import { downloadCsvFile } from "@/lib/export/csvExport";
 // away real field names/types.
 type Row = FinanceVendorSummary & Record<string, unknown>;
 
-export function VendorsTable({ vendors, source = "api", canExport = false }: { vendors: FinanceVendorSummary[]; source?: "api" | "error"; canExport?: boolean }) {
+export function VendorsTable({ vendors, source = "api", canExport = false, errorState }: { vendors: FinanceVendorSummary[]; source?: "api" | "error"; canExport?: boolean; errorState?: React.ReactNode }) {
   const t = useTranslations("financeVendorExport");
   const te = useTranslations("financeWorkflowErrors");
   const [exporting, setExporting] = useState(false);
@@ -40,8 +40,15 @@ export function VendorsTable({ vendors, source = "api", canExport = false }: { v
     }
   }
   const { data: rows, provenance, offline, cachedAt } = useSeededResource<Row[]>("finance.vendors", vendors as Row[], source, (d) => d.length === 0);
+  // A failed load with nothing cached to show is an error, never an empty register.
+  if (source === "error" && provenance === "error-no-data" && rows.length === 0 && errorState) return <>{errorState}</>;
   return (
     <>
+      {provenance === "cached" ? (
+        <div role="alert" style={{ margin: "0 0 8px", padding: "8px 12px", border: "1px solid var(--warn, #b54708)", borderRadius: 6, fontSize: 13 }}>
+          Couldn&apos;t refresh the vendor list &mdash; showing cached data. It may be out of date.
+        </div>
+      ) : null}
       {/* UX-002: single source of truth — reads the same useSeededResource
           call as `rows`, so it can never contradict this table. */}
       <DataSourceBadge provenance={provenance ?? "live"} cachedAt={cachedAt} offline={offline} />
