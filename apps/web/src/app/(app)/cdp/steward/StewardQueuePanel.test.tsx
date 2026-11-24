@@ -85,6 +85,42 @@ describe("StewardQueuePanel", () => {
     expect(screen.getByText("A. Kumar")).toBeInTheDocument();
   });
 
+  // UAT L1 console-404 cleanup: an approved merge has already folded the target
+  // profile into the source (winner = source, loser = target), so the target's
+  // GET /v1/cdp/profiles/:id/summary returns 404 by design. The panel must NOT
+  // request the merged-away target (no console 404 on a decided history row); it
+  // still fetches the surviving source and renders the target as unavailable.
+  it("skips the merged-away target summary fetch for an approved (decided) row", async () => {
+    const approved = {
+      ...CANDIDATE,
+      id: "aaaaaaaa-0000-0000-0000-00000000000a",
+      status: "approved",
+      decidedBy: "steward-1",
+      decidedAt: "2026-08-21T10:00:00.000Z",
+    };
+    const calls: string[] = [];
+    vi.spyOn(globalThis, "fetch").mockImplementation((input: RequestInfo | URL) => {
+      const url = typeof input === "string" ? input : input.toString();
+      calls.push(url);
+      if (url.endsWith("/v1/cdp/steward/queue")) return Promise.resolve(queueResponse([approved]));
+      if (url.includes(approved.sourceProfileId)) {
+        return Promise.resolve(summaryResponse(approved.sourceProfileId, { name: "Asha Kumar" }));
+      }
+      // The merged-away target summary would 404 — it must never be requested.
+      if (url.includes(approved.targetProfileId)) {
+        return Promise.resolve(new Response(JSON.stringify({ code: "NOT_FOUND" }), { status: 404 }));
+      }
+      return Promise.resolve(new Response("{}", { status: 200 }));
+    });
+
+    render(<StewardQueuePanel canDecide />);
+
+    await waitFor(() => expect(screen.getByText("Asha Kumar")).toBeInTheDocument());
+    expect(calls.some((u) => u.includes(approved.sourceProfileId) && u.includes("/summary"))).toBe(true);
+    expect(calls.some((u) => u.includes(approved.targetProfileId))).toBe(false);
+    expect(screen.getByText("details unavailable")).toBeInTheDocument();
+  });
+
   // GAP-CDP-STEWARD-02: the confirm dialog carries names + masked attributes.
   it("renders a side-by-side comparison with names and masked attributes in the confirm dialog", async () => {
     routedFetch();

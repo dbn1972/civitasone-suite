@@ -171,21 +171,37 @@ export function StewardQueuePanel({ canDecide = false }: { canDecide?: boolean }
 
   // Fetch (once) the display summary for any profile id we don't have yet.
   const loadSummaries = useCallback(async (rows: MergeCandidate[]) => {
-    const ids = new Set<string>();
+    const fetchIds = new Set<string>();
+    // An approved merge folds the target profile into the source (winner =
+    // source, loser = target), so the target's profileType becomes "merged",
+    // for which GET /v1/cdp/profiles/:id/summary returns 404 by design. Fetching
+    // it on a decided history row only emits a console 404 for a profile whose
+    // outcome is already shown. Skip the merged-away target; the cell renders
+    // the same "details unavailable" state from an explicit null summary.
+    const mergedAway = new Set<string>();
     for (const r of rows) {
-      ids.add(r.sourceProfileId);
-      ids.add(r.targetProfileId);
+      fetchIds.add(r.sourceProfileId);
+      if (r.status === "approved") mergedAway.add(r.targetProfileId);
+      else fetchIds.add(r.targetProfileId);
     }
+    // A profile kept as a survivor in one row but merged-away in another is
+    // still fetchable — a real fetch wins over the skip.
+    const skipIds = [...mergedAway].filter((id) => !fetchIds.has(id));
     setSummaries((prev) => {
-      const missing = [...ids].filter((id) => !(id in prev));
-      if (missing.length === 0) return prev;
-      void Promise.all(
-        missing.map(async (id) => {
-          const summary = await getProfileSummary(id);
-          setSummaries((cur) => ({ ...cur, [id]: summary }));
-        }),
-      );
-      return prev;
+      const missing = [...fetchIds].filter((id) => !(id in prev));
+      const skipMissing = skipIds.filter((id) => !(id in prev));
+      if (missing.length === 0 && skipMissing.length === 0) return prev;
+      if (missing.length > 0) {
+        void Promise.all(
+          missing.map(async (id) => {
+            const summary = await getProfileSummary(id);
+            setSummaries((cur) => ({ ...cur, [id]: summary }));
+          }),
+        );
+      }
+      return skipMissing.length > 0
+        ? { ...prev, ...Object.fromEntries(skipMissing.map((id) => [id, null as ProfileSummary | null])) }
+        : prev;
     });
   }, []);
 
