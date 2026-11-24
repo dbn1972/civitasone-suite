@@ -6,6 +6,9 @@ import { InspectionRowAction } from "./InspectionActions";
 import { toResourceState } from "@/app/_data/useResource";
 import { toHumanError } from "@/lib/messages";
 import { formatIndianDate } from "@/lib/formatters";
+import { INSPECTION_CREATE_ROLES } from "../intakeMeta";
+import { sessionRolesOrEmpty } from "../intakeRoles";
+import { NewInspectionForm } from "./NewInspectionForm";
 
 export const dynamic = "force-dynamic";
 
@@ -62,6 +65,7 @@ export default async function Page(
   const pageParam = Number(searchParams?.page ?? "1");
   const page = Number.isFinite(pageParam) && pageParam >= 1 ? Math.floor(pageParam) : 1;
 
+  const canCreate = sessionRolesOrEmpty().some((r) => INSPECTION_CREATE_ROLES.includes(r));
   const result = await getInspectionsPage(page);
   const resource = toResourceState(result);
 
@@ -77,13 +81,14 @@ export default async function Page(
   return (
     <div className="wrap">
       <PageHeader title="Inspections" back="/inspection" />
+      {canCreate ? <NewInspectionForm /> : null}
       {errored ? (
         <RefreshErrorState error={toHumanError("load", { area: "inspections" })} backHref="/inspection" />
       ) : rows.length === 0 ? (
         <EmptyState
           icon="📭"
           title="No inspections yet"
-          message="Inspections appear here once an assignment is scheduled."
+          message="Inspections appear here once one is scheduled."
           action={<Link href="/inspection/assignments" className="btn ghost">Go to assignments</Link>}
         />
       ) : (

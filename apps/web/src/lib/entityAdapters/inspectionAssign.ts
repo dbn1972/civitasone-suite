@@ -151,3 +151,39 @@ export async function resolveInspections(ids: string[]): Promise<EntityOption[]>
   }
   return out;
 }
+
+// ── Legal provisions (findings cite one) ─────────────────────────────────────
+
+function provisionToOption(row: Record<string, unknown>): EntityOption | null {
+  const id = str(row.id);
+  if (!id) return null;
+  const act = str(row.actReference);
+  const section = str(row.sectionNumber);
+  const label = [act, section ? `s. ${section}` : ""].filter(Boolean).join(" ") || id;
+  return { id, label, sublabel: str(row.description).slice(0, 80) || undefined };
+}
+
+async function fetchProvisions(signal?: AbortSignal): Promise<Record<string, unknown>[]> {
+  const res = await fetch(`/api/proxy/v1/inspection/provisions?${PAGE}`, signal ? { signal } : undefined);
+  if (!res.ok) return [];
+  return rowsOf(await res.json());
+}
+
+export async function searchInspectionProvisions(query: string, signal: AbortSignal): Promise<EntityOption[]> {
+  const rows = await fetchProvisions(signal);
+  const q = query.trim().toLowerCase();
+  const filtered = q
+    ? rows.filter((r) => `${str(r.actReference)} ${str(r.sectionNumber)} ${str(r.description)}`.toLowerCase().includes(q))
+    : rows;
+  return filtered.map(provisionToOption).filter((o): o is EntityOption => o !== null);
+}
+
+export async function resolveInspectionProvisions(ids: string[]): Promise<EntityOption[]> {
+  if (ids.length === 0) return [];
+  const idSet = new Set(ids);
+  const rows = await fetchProvisions();
+  return rows
+    .filter((r) => idSet.has(str(r.id)))
+    .map(provisionToOption)
+    .filter((o): o is EntityOption => o !== null);
+}

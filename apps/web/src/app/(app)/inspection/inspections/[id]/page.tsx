@@ -4,7 +4,10 @@ import { getTranslations } from "next-intl/server";
 import { Card, PageHeader, RefreshErrorState, StatusPill } from "@/app/_components/ds";
 import { toHumanError } from "@/lib/messages";
 import { formatIndianDate } from "@/lib/formatters";
-import { getInspectionById } from "../../_data/loaders";
+import { getInspectionById, getInspectionFindings } from "../../_data/loaders";
+import { FINDING_READ_ROLES, FINDING_WRITE_ROLES, FINDING_NOTICE_ROLES, CAPA_WRITE_ROLES } from "../../intakeMeta";
+import { sessionRolesOrEmpty } from "../../intakeRoles";
+import { FindingsPanel, type FindingRow } from "./FindingsPanel";
 
 export const dynamic = "force-dynamic";
 
@@ -32,6 +35,10 @@ export default async function Page(props: { params: Promise<{ id: string }> }) {
   }
   const tr = await getTranslations("inspectionReports");
   const when = (insp.scheduledDate ?? insp.createdAt) as string | null | undefined;
+  const roles = sessionRolesOrEmpty();
+  const has = (allowed: string[]) => roles.some((r) => allowed.includes(r));
+  const showFindings = has(FINDING_READ_ROLES);
+  const findings = showFindings ? await getInspectionFindings(String(insp.id)) : null;
   const inspectors = Array.isArray(insp.assignedInspectors) ? (insp.assignedInspectors as unknown[]).map(String) : [];
   return (
     <div className="wrap">
@@ -62,6 +69,19 @@ export default async function Page(props: { params: Promise<{ id: string }> }) {
           <Link href={`/inspection/reports?inspectionId=${encodeURIComponent(String(insp.id))}`} className="btn ghost">{tr("viewReports")}</Link>
         </div>
       </Card>
+      {findings ? (
+        findings.source === "error" ? (
+          <RefreshErrorState error={toHumanError("load", { area: "findings" })} backHref="/inspection/inspections" />
+        ) : (
+          <FindingsPanel
+            inspectionId={String(insp.id)}
+            findings={findings.data as FindingRow[]}
+            canWrite={has(FINDING_WRITE_ROLES)}
+            canNotice={has(FINDING_NOTICE_ROLES)}
+            canCapa={has(CAPA_WRITE_ROLES)}
+          />
+        )
+      ) : null}
     </div>
   );
 }
