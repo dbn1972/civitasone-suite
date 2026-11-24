@@ -37,7 +37,12 @@ export function SalarySlipsTable({ slips }: { slips: SalarySlipSummary[] }) {
       label: t("colProfile"),
       sortable: false,
       render: (r) => (
-        <Link href={`/hr/employees/${r.employeeId}`} style={{ color: "var(--primary-d)", fontWeight: 600 }}>
+        <Link
+          href={`/hr/employees/${r.employeeId}`}
+          // <tr> has onClick -> router.push(slip); without this the row wins.
+          onClick={(e) => e.stopPropagation()}
+          style={{ color: "var(--primary-d)", fontWeight: 600 }}
+        >
           {t("viewEmployeeLink")}
         </Link>
       ),
