@@ -10,7 +10,7 @@
   /* UAT-P2-D3 (A11Y-07): --indigo was #6366f1 = 4.46:1 on white, just under
      AA for the ID / file links that use it (estab + procurement approvals).
      #4f46e5 is 6.29:1. */
-  --indigo:#4f46e5; --violet:#8b5cf6; --amber:#f59e0b; --rose:#f43f5e; --sky:#0ea5e9; --cyan:#06b6d4;
+  --indigo:#4f46e5; --violet:#6d28d9; --amber:#f59e0b; --rose:#f43f5e; --sky:#0ea5e9; --cyan:#06b6d4;
   /* --mut was #98a2b3, which is 2.58:1 on --panel/#ffffff and fails WCAG 2.2 AA
      (SC 1.4.3 requires 4.5:1 for body text). It is used by the sidebar brand
      subtitle, group headings and role label, which appear on EVERY page, so a

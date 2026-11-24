@@ -13,17 +13,17 @@ interface PageShellProps {
 
 export function PageShell({ title, description, breadcrumb, children, help }: PageShellProps) {
   return (
-    <div className="page-shell min-h-screen bg-slate-50 p-6 md:p-8">
+    <div className="page-shell min-h-screen bg-[color:var(--bg)] p-6 md:p-8">
       <section className="mx-auto max-w-7xl space-y-4">
         {breadcrumb && (
-          <nav aria-label="Breadcrumb" className="text-sm text-slate-600">
+          <nav aria-label="Breadcrumb" className="text-sm text-[color:var(--ink2)]">
             {breadcrumb}
           </nav>
         )}
         <header className="flex items-start justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-semibold text-slate-900">{title}</h1>
-            <p className="mt-1 text-sm text-slate-600">{description}</p>
+            <h1 className="text-3xl font-semibold text-[color:var(--ink)]">{title}</h1>
+            <p className="mt-1 text-sm text-[color:var(--ink2)]">{description}</p>
           </div>
           {help && (
             <Link
