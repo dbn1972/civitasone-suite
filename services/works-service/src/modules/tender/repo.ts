@@ -1,4 +1,5 @@
-import { eq, and, desc, inArray, count } from "drizzle-orm";
+import { eq, and, desc, inArray, count, sql } from "drizzle-orm";
+import { unionAll } from "drizzle-orm/pg-core";
 import { workProposals } from "../proposal/schema.js";
 import { scopedRead } from "../../shared/db.js";
 import { tenders, quotations, awards, preTenders } from "./schema.js";
@@ -120,27 +121,63 @@ export async function finalizedAgreementByWorkIds(
   return result;
 }
 
-/** Tenant-wide tender register (post pre-tender stage), newest first — backs the FE tenders list page. */
+type ReadTx = Parameters<Parameters<typeof scopedRead>[0]>[0];
+
+/**
+ * Tender register rows: works.tenders UNION ALL works.pre_tenders.
+ *
+ * works.tenders has no producer (works.tender.create is declared in topics.ts but never wired - see
+ * tenderOrPreTenderExists above), so the pre-tenders created through POST /v1/works/tenders/pre-tender are the
+ * tenders that actually exist. The register therefore lists both; the FE detail page, quotations and awards already
+ * accept either id. A pre-tender has no amount / authority / class / remarks columns (null) and carries its own
+ * status, which the FE status label prefers. Both branches are tenant-scoped.
+ */
+function tenderRegisterRows(tenantId: string, id?: string) {
+  const fromTenders = (tx: ReadTx) => tx
+    .select({
+      id: tenders.id,
+      tenantId: tenders.tenantId,
+      workId: tenders.workId,
+      tenderTypeId: tenders.tenderTypeId,
+      tenderAmountMinor: tenders.tenderAmountMinor,
+      openingDate: tenders.openingDate,
+      approvingAuthorityId: tenders.approvingAuthorityId,
+      contractorClassId: tenders.contractorClassId,
+      remarks: tenders.remarks,
+      status: sql<string>`NULL::varchar`.as("status"),
+      createdAt: tenders.createdAt,
+      workNumber: workProposals.workNumber,
+    })
+    .from(tenders)
+    .leftJoin(workProposals, eq(workProposals.id, tenders.workId))
+    .where(id ? and(eq(tenders.tenantId, tenantId), eq(tenders.id, id)) : eq(tenders.tenantId, tenantId));
+  const fromPre = (tx: ReadTx) => tx
+    .select({
+      id: preTenders.id,
+      tenantId: preTenders.tenantId,
+      workId: preTenders.workId,
+      tenderTypeId: preTenders.tenderTypeId,
+      tenderAmountMinor: sql<bigint>`NULL::bigint`.as("tender_amount_minor"),
+      openingDate: preTenders.openingDate,
+      approvingAuthorityId: sql<string | null>`NULL::uuid`.as("approving_authority_id"),
+      contractorClassId: sql<string | null>`NULL::uuid`.as("contractor_class_id"),
+      remarks: sql<string | null>`NULL::varchar`.as("remarks"),
+      status: preTenders.status,
+      createdAt: preTenders.createdAt,
+      workNumber: workProposals.workNumber,
+    })
+    .from(preTenders)
+    .leftJoin(workProposals, eq(workProposals.id, preTenders.workId))
+    .where(id ? and(eq(preTenders.tenantId, tenantId), eq(preTenders.id, id)) : eq(preTenders.tenantId, tenantId));
+  return { fromTenders, fromPre };
+}
+
+/** Tenant-wide tender register (tenders + pre-tenders), newest first - backs the FE tenders list page. */
 export async function listTenders(tenantId: string, page: number, pageSize: number) {
   return scopedRead(async (tx) => {
-    return tx
-      .select({
-        id: tenders.id,
-        tenantId: tenders.tenantId,
-        workId: tenders.workId,
-        tenderTypeId: tenders.tenderTypeId,
-        tenderAmountMinor: tenders.tenderAmountMinor,
-        openingDate: tenders.openingDate,
-        approvingAuthorityId: tenders.approvingAuthorityId,
-        contractorClassId: tenders.contractorClassId,
-        remarks: tenders.remarks,
-        createdAt: tenders.createdAt,
-        workNumber: workProposals.workNumber,
-      })
-      .from(tenders)
-      .leftJoin(workProposals, eq(workProposals.id, tenders.workId))
-      .where(eq(tenders.tenantId, tenantId))
-      .orderBy(desc(tenders.createdAt))
+    const { fromTenders, fromPre } = tenderRegisterRows(tenantId);
+    return unionAll(fromTenders(tx), fromPre(tx))
+      .orderBy(desc(sql`created_at`), sql`id`)
       .limit(pageSize)
       .offset((page - 1) * pageSize);
   });
@@ -148,47 +185,30 @@ export async function listTenders(tenantId: string, page: number, pageSize: numb
 
 /**
  * GAP-WORKS-TENDERS-DETAIL-03: a single tender read by id, so the detail page
- * can resolve a tender directly instead of scanning the capped list (tenders
- * ranked beyond the list cap were previously unreachable by URL). Same
- * leftJoin to work_proposals as listTenders so the shape matches. Null when
- * the id does not exist in this tenant.
+ * can resolve a tender directly instead of scanning the capped list. Resolves
+ * a tenders row first, else a pre-tender (the list now surfaces both, so every
+ * listed id must open). Same shape as listTenders. Null when the id does not
+ * exist in this tenant.
  */
 export async function getTenderById(tenantId: string, id: string) {
   return scopedRead(async (tx) => {
-    const rows = await tx
-      .select({
-        id: tenders.id,
-        tenantId: tenders.tenantId,
-        workId: tenders.workId,
-        tenderTypeId: tenders.tenderTypeId,
-        tenderAmountMinor: tenders.tenderAmountMinor,
-        openingDate: tenders.openingDate,
-        approvingAuthorityId: tenders.approvingAuthorityId,
-        contractorClassId: tenders.contractorClassId,
-        remarks: tenders.remarks,
-        createdAt: tenders.createdAt,
-        workNumber: workProposals.workNumber,
-      })
-      .from(tenders)
-      .leftJoin(workProposals, eq(workProposals.id, tenders.workId))
-      .where(and(eq(tenders.tenantId, tenantId), eq(tenders.id, id)))
-      .limit(1);
-    return rows[0] ?? null;
+    const { fromTenders, fromPre } = tenderRegisterRows(tenantId, id);
+    const t = await fromTenders(tx).limit(1);
+    if (t[0]) return t[0];
+    const p = await fromPre(tx).limit(1);
+    return p[0] ?? null;
   });
 }
 
 /**
- * GAP-WORKS-TENDERS-06: exact tenant tender count, so the list meta can report
- * a real total (not `data.length`, which caps at the page size and makes the
- * list and the stat cards undercount in large tenants).
+ * GAP-WORKS-TENDERS-06: exact tenant tender count (tenders + pre-tenders), so the list meta can report
+ * a real total (not data.length, which caps at the page size).
  */
 export async function countTenders(tenantId: string): Promise<number> {
   return scopedRead(async (tx) => {
-    const rows = await tx
-      .select({ value: count() })
-      .from(tenders)
-      .where(eq(tenders.tenantId, tenantId));
-    return Number(rows[0]?.value ?? 0);
+    const [a] = await tx.select({ value: count() }).from(tenders).where(eq(tenders.tenantId, tenantId));
+    const [b] = await tx.select({ value: count() }).from(preTenders).where(eq(preTenders.tenantId, tenantId));
+    return Number(a?.value ?? 0) + Number(b?.value ?? 0);
   });
 }
 
