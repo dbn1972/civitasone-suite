@@ -77,7 +77,7 @@ export function DealCard({ deal, isMoving, isDragging, onDragStart, onKeyboardMo
           type="button"
           onKeyDown={handleKeyDown}
           aria-label={t("moveHandle", { name: deal.name })}
-          className="mt-0.5 cursor-grab rounded px-0.5 text-slate-400 hover:text-slate-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+          className="mt-0.5 cursor-grab rounded px-0.5 text-slate-600 hover:text-slate-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
         >
           <span aria-hidden="true">⠿</span>
         </button>
@@ -115,14 +115,14 @@ export function DealCard({ deal, isMoving, isDragging, onDragStart, onKeyboardMo
 
       {/* Contact / assignee */}
       {deal.contactName && (
-        <p className="mt-1 truncate text-xs text-slate-500">
+        <p className="mt-1 truncate text-xs text-slate-600">
           {deal.contactName}
         </p>
       )}
 
       {/* Moving indicator */}
       {isMoving && (
-        <p className="mt-1 text-[10px] text-amber-600" role="status" aria-live="polite">
+        <p className="mt-1 text-[10px] text-amber-800" role="status" aria-live="polite">
           {t("updating")}
         </p>
       )}
