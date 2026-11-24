@@ -7,6 +7,7 @@ import enMessages from "@/messages/en.json";
 const pushMock = vi.fn();
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: pushMock, refresh: vi.fn() }) }));
 
+import { ToastProvider } from "@/app/_components/ds";
 import { GLTable } from "./GLTable";
 import { GL_PAGE_SIZE, parseGlView, type GlView } from "./glPage";
 
@@ -180,5 +181,34 @@ describe("GLTable account columns", () => {
     );
     expect(screen.getByText("Unknown head")).toBeInTheDocument();
     expect(screen.queryByText("c0f46ca3-0339-422e-842f-8d0eb882b378")).not.toBeInTheDocument();
+  });
+});
+
+describe("GLTable: Reverse voucher (maker-checker correction of posted money)", () => {
+  const rev = (entries: unknown[], props: Record<string, unknown> = { canReverse: true }) =>
+    render(<ToastProvider><GLTable entries={entries as never} pagination={pag(entries.length)} totals={totals() as never} view={view()} {...props} /></ToastProvider>);
+  const posted = (id: string, over: Record<string, unknown> = {}) => ENTRY({ id, status: "posted", createdBy: "maker-1", ...over });
+
+  it("offers one Reverse per posted voucher to a role the server admits", () => {
+    rev([posted("j1:1000"), posted("j1:1100", { accountCode: "1100" })]);
+    expect(screen.getAllByRole("button", { name: "Reverse voucher" })).toHaveLength(1);
+  });
+  it("offers no Reverse to a role the server 403s", () => {
+    rev([posted("j1:1000")], {});
+    expect(screen.queryByRole("button", { name: "Reverse voucher" })).not.toBeInTheDocument();
+  });
+  it("offers no Reverse on a non-posted, already-reversed or contra (reversing) journal, nor when status is unknown", () => {
+    rev([
+      posted("d1:1000", { status: "draft" }),
+      posted("p1:1000", { status: "pending_approval" }),
+      posted("r1:1000", { status: "reversed" }),
+      posted("c1:1000", { type: "contra", reversesId: "r1" }),
+      ENTRY({ id: "u1:1000" }),
+    ]);
+    expect(screen.queryByRole("button", { name: "Reverse voucher" })).not.toBeInTheDocument();
+  });
+  it("offers no Reverse on a journal the viewer made (maker cannot be checker), but does on another officer's", () => {
+    rev([posted("m1:1000", { createdBy: "me" }), posted("o1:1000", { createdBy: "other" })], { canReverse: true, viewerId: "me" });
+    expect(screen.getAllByRole("button", { name: "Reverse voucher" })).toHaveLength(1);
   });
 });

@@ -24,6 +24,7 @@ import { formatIndianDate, formatMoney } from "@/lib/formatters";
 import type { GlLinesPagination, GlLinesTotals } from "@/lib/finance/workflowTypes";
 import { GL_PAGE_SIZE, GL_TABS, glQuery, glRange, type GlTab, type GlView } from "./glPage";
 import { resolveHead, type HeadLookup } from "../../_components/headLookup";
+import { JournalReverseAction } from "../../_components/FinanceActions";
 
 type GLRow = GLEntrySummary & Record<string, unknown>;
 
@@ -37,6 +38,10 @@ export interface GLTableProps {
   view: GlView;
   /** Chart-of-accounts lookup (id and code -> code/name); see accountColumns(). */
   heads?: HeadLookup;
+  /** JOURNAL_APPROVE_ROLES (POST journals/:id/reverse); false hides Reverse for roles the server 403s. */
+  canReverse?: boolean;
+  /** The signed-in officer; a journal they made is not offered Reverse (the consumer refuses maker = checker). */
+  viewerId?: string | null;
 }
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -54,7 +59,7 @@ function accountColumns(heads: HeadLookup, accountCode: string, accountName: str
   return { accountCode: UUID_RE.test(accountCode) ? "Unknown head" : accountCode, accountName: name };
 }
 
-export function GLTable({ entries, pagination, totals, ledgerTotals, view, heads = {} }: GLTableProps) {
+export function GLTable({ entries, pagination, totals, ledgerTotals, view, heads = {}, canReverse = false, viewerId = null }: GLTableProps) {
   const t = useTranslations("financeGeneralLedger");
   const router = useRouter();
   const [query, setQuery] = useState(view.q);
@@ -75,6 +80,17 @@ export function GLTable({ entries, pagination, totals, ledgerTotals, view, heads
   // Footer = the filtered set.
   const filteredDebit = totals ? BigInt(totals.debitMinor) : null;
   const filteredCredit = totals ? BigInt(totals.creditMinor) : null;
+  // Reverse acts on the whole voucher, not a line: offer it once per journal on the page (its first line), and only
+  // where the consumer can actually succeed -- a posted journal that is not itself a reversal (reversesId) and was not
+  // made by the viewer. An unknown status (older payload) is never offered: a silent no-op after "submitted" is worse.
+  const reverseRowIds = new Set<string>();
+  const seenJournals = new Set<string>();
+  for (const e of entries) {
+    const jid = journalIdOf(e.id);
+    if (seenJournals.has(jid)) continue;
+    seenJournals.add(jid);
+    if (e.status === "posted" && !e.reversesId && !(viewerId && e.createdBy === viewerId)) reverseRowIds.add(e.id);
+  }
 
   return (
     <>
@@ -152,6 +168,14 @@ export function GLTable({ entries, pagination, totals, ledgerTotals, view, heads
                   key: "id", label: "Print", sortable: false,
                   render: (e) => <PrintDocumentLink href={`/api/proxy/v1/finance/journals/${journalIdOf(e.id as string)}/pdf`} label="Voucher" />,
                 },
+                ...(canReverse
+                  ? [{
+                      key: "reverse", label: t("reverseColumn"), sortable: false,
+                      render: (e: GLRow) => reverseRowIds.has(e.id as string)
+                        ? <JournalReverseAction journalId={journalIdOf(e.id as string)} voucherNo={e.voucherNo as string} />
+                        : null,
+                    }]
+                  : []),
               ]}
               rows={entries.map((e) => ({ ...e, ...accountColumns(heads, e.accountCode, e.accountName) })) as GLRow[]}
               pageSize={GL_PAGE_SIZE}

@@ -908,6 +908,9 @@ export type GLEntrySummary = {
   // the full incident. GLTable.tsx only ever does a plain equality filter on
   // this field (no exhaustive switch), so widening it is display-safe.
   type?: string;
+  status?: string;
+  reversesId?: string;
+  createdBy?: string;
 };
 
 export type FinancialStatementSummary = {
