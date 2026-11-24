@@ -45,7 +45,7 @@ export function VendorsTable({ vendors, source = "api", canExport = false, error
   return (
     <>
       {provenance === "cached" ? (
-        <div role="alert" style={{ margin: "0 0 8px", padding: "8px 12px", border: "1px solid var(--warn, #b54708)", borderRadius: 6, fontSize: 13 }}>
+        <div role="alert" style={{ margin: "0 0 8px", padding: "8px 12px", border: "1px solid var(--warn)", borderRadius: 6, fontSize: 13 }}>
           {t("staleBanner")}
         </div>
       ) : null}

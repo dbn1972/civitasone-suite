@@ -24,13 +24,14 @@ export function SalarySlipsTable({ slips }: { slips: SalarySlipSummary[] }) {
     {
       key: "employeeName",
       label: t("colEmployee"),
-      // DataTable already wraps the first column in its own row-link <a>
-      // (rowLinkPrefix below). A <Link> here nested <a> inside <a>, which the
-      // HTML parser reparents -> React hydration error #418. Plain text only.
+      // DataTable already wraps the first column in its own row-link anchor
+      // (rowLinkPrefix below). A Link here would nest an anchor inside an
+      // anchor, which the HTML parser reparents -> React hydration error #418.
+      // Plain text only.
       render: (r) => <>{r.employeeName?.trim() || tFallback("unknownEmployee")}</>,
     },
     // The employee-profile link lives in its own non-first column: DataTable
-    // wraps only the FIRST column in the row-link <a>, so a <Link> here cannot
+    // wraps only the FIRST column in the row-link anchor, so a Link here cannot
     // nest inside another anchor.
     {
       key: "employeeId",
