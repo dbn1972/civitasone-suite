@@ -107,7 +107,7 @@ export function RegisterCasePanel({ courts }: { courts: Court[] }) {
     setBusy(true);
     try {
       const { caseId } = await createCase({
-        cnrNumber: cnr.trim(),
+        cnrNumber: cnr.replace(/[^A-Za-z0-9]/g, "").toUpperCase(),
         caseType,
         title: title.trim(),
         filingDate,
@@ -144,7 +144,7 @@ export function RegisterCasePanel({ courts }: { courts: Court[] }) {
       {createdId && (
         <div className="alert" role="status" style={{ borderColor: "var(--primary)", marginBottom: 8 }}>
           ✓ {t("success")}{" "}
-          <Link href={`/court/cases/${createdId}`}>{t("openCase")} →</Link>
+          <Link href={`/court/cases/${createdId}`}>{t("openCaseDelayed")} →</Link>
         </div>
       )}
       {!open ? (
@@ -381,19 +381,28 @@ export function EditAdvocateForm({
 }) {
   const t = useTranslations("courtCaseIntake");
   const [open, setOpen] = useState(false);
-  const [advocateName, setAdvocateName] = useState(party.advocateName ?? "");
-  const [advocateBarId, setAdvocateBarId] = useState(party.advocateBarId ?? "");
+  // Inputs start EMPTY and only fields the user actually typed are sent: the
+  // values on `party` may be role-masked placeholders (e.g. "R*** K***") and
+  // writing those back would silently overwrite the real advocate identity.
+  const [advocateName, setAdvocateName] = useState("");
+  const [advocateBarId, setAdvocateBarId] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | undefined>();
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setError(undefined);
+    const name = advocateName.trim();
+    const barId = advocateBarId.trim();
+    if (!name && !barId) {
+      setError(t("nothingChanged"));
+      return;
+    }
     setBusy(true);
     try {
       await updatePartyAdvocate(party.id, {
-        advocateName: advocateName.trim(),
-        advocateBarId: advocateBarId.trim(),
+        ...(name ? { advocateName: name } : {}),
+        ...(barId ? { advocateBarId: barId } : {}),
         expectedVersion: party.version,
       });
       setOpen(false);
@@ -416,6 +425,7 @@ export function EditAdvocateForm({
     <form onSubmit={(e) => void submit(e)} aria-label={t("editAdvocate")} style={{ display: "grid", gap: 6 }}>
       <input
         aria-label={t("advocateName")}
+        placeholder={party.advocateName ?? ""}
         value={advocateName}
         maxLength={200}
         onChange={(e) => setAdvocateName(e.target.value)}
@@ -423,6 +433,7 @@ export function EditAdvocateForm({
       />
       <input
         aria-label={t("advocateBarId")}
+        placeholder={party.advocateBarId ?? ""}
         value={advocateBarId}
         maxLength={64}
         onChange={(e) => setAdvocateBarId(e.target.value)}

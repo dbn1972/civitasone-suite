@@ -43,7 +43,7 @@ describe("RegisterCasePanel", () => {
     render(<RegisterCasePanel courts={courts} />);
     fireEvent.click(screen.getByRole("button", { name: "Register case" }));
 
-    fireEvent.change(screen.getByLabelText("CNR number (16 characters)"), { target: { value: "MHPU010012342026" } });
+    fireEvent.change(screen.getByLabelText("CNR number (16 characters)"), { target: { value: "mh-pu-0100-1234-2026" } });
     fireEvent.change(screen.getByLabelText("Case type"), { target: { value: "civil" } });
     fireEvent.change(screen.getByLabelText("Case title"), { target: { value: "Sharma v. State" } });
     fireEvent.change(screen.getByLabelText("Filing date"), { target: { value: "2026-11-01" } });
@@ -108,7 +108,7 @@ describe("AddPartyForm", () => {
 });
 
 describe("EditAdvocateForm", () => {
-  it("PATCHes the advocate with the party's expectedVersion", async () => {
+  it("PATCHes only the changed field with the party's expectedVersion", async () => {
     updatePartyAdvocateMock.mockResolvedValue(undefined);
     const party = { id: "p1", caseId: "c", partyRole: "petitioner", name: "A", advocateName: "Old", advocateBarId: "B/1", version: 3 };
     render(<EditAdvocateForm party={party} onDone={vi.fn()} />);
@@ -116,11 +116,28 @@ describe("EditAdvocateForm", () => {
     fireEvent.change(screen.getByLabelText("Advocate name (optional)"), { target: { value: "New Adv" } });
     fireEvent.click(screen.getByRole("button", { name: "Save advocate" }));
     await waitFor(() =>
-      expect(updatePartyAdvocateMock).toHaveBeenCalledWith("p1", {
-        advocateName: "New Adv",
-        advocateBarId: "B/1",
-        expectedVersion: 3,
-      }),
+      expect(updatePartyAdvocateMock).toHaveBeenCalledWith("p1", { advocateName: "New Adv", expectedVersion: 3 }),
     );
+  });
+
+  it("never writes back masked identity values (role-masked party)", async () => {
+    updatePartyAdvocateMock.mockResolvedValue(undefined);
+    const masked = { id: "p2", caseId: "c", partyRole: "petitioner", name: "R*** K***", advocateName: "R*** K***", advocateBarId: "********2010", version: 2 };
+    render(<EditAdvocateForm party={masked} onDone={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: "Edit advocate" }));
+    // Masked literals are not prefilled as values.
+    expect(screen.getByLabelText("Advocate name (optional)")).toHaveValue("");
+    expect(screen.getByLabelText("Advocate Bar ID (optional)")).toHaveValue("");
+    // Saving untouched is refused.
+    fireEvent.click(screen.getByRole("button", { name: "Save advocate" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Enter the advocate name or Bar ID");
+    expect(updatePartyAdvocateMock).not.toHaveBeenCalled();
+    // Editing one field sends only that field.
+    fireEvent.change(screen.getByLabelText("Advocate Bar ID (optional)"), { target: { value: "D/123/2020" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save advocate" }));
+    await waitFor(() => expect(updatePartyAdvocateMock).toHaveBeenCalledTimes(1));
+    const body = updatePartyAdvocateMock.mock.calls[0]![1] as Record<string, unknown>;
+    expect(body).toEqual({ advocateBarId: "D/123/2020", expectedVersion: 2 });
+    expect(JSON.stringify(body)).not.toContain("***");
   });
 });

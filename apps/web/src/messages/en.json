@@ -20454,7 +20454,7 @@
     "required": "Fill in all required fields.",
     "cnrInvalid": "The CNR must be 16 letters or digits.",
     "success": "Case submitted for registration. It will appear in the registry shortly.",
-    "openCase": "Open case",
+    "openCaseDelayed": "Open case (may take a moment to appear)", "nothingChanged": "Enter the advocate name or Bar ID you want to change.", "openCase": "Open case",
     "addParty": "Add party",
     "addPartyTitle": "Add a party",
     "addPartySubmit": "Add party",
