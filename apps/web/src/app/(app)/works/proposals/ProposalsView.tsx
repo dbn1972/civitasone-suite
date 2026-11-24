@@ -134,7 +134,7 @@ export function ProposalsView({
             after DAO finalisation is discoverable from this register. */}
         <p style={{ margin: "0 0 12px", fontSize: 13, color: "var(--muted)" }}>
           After DAO finalisation, a proposal moves on to{" "}
-          <Link href="/works/approvals" style={{ color: "var(--primary, var(--accent))" }}>
+          <Link href="/works/approvals" style={{ color: "var(--primary, var(--accent))", textDecoration: "underline" }}>
             Technical Sanction &amp; Administrative Approval
           </Link>
           .

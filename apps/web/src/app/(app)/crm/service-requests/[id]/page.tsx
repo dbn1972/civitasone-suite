@@ -323,12 +323,12 @@ export default async function ServiceRequestDetailPage(props: { params: Promise<
                   </a>
                 </Field>
               ) : null}
-              {r.citizenPhone || r.citizenEmail ? (
-                <p style={{ fontSize: 12, color: "var(--ink2)", margin: 0 }}>
-                  {canRevealPii ? t("piiRevealNote") : t("piiMasked")}
-                </p>
-              ) : null}
             </dl>
+            {r.citizenPhone || r.citizenEmail ? (
+              <p style={{ fontSize: 12, color: "var(--ink2)", margin: "12px 0 0" }}>
+                {canRevealPii ? t("piiRevealNote") : t("piiMasked")}
+              </p>
+            ) : null}
           </Card>
           <Card title={t("auditCard")}>
             <dl style={{ display: "flex", flexDirection: "column", gap: 12, margin: 0 }}>

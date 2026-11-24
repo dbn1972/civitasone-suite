@@ -79,4 +79,10 @@ describe("TaskCalendar", () => {
     render(<TaskCalendar tasks={[task({ id: "t1", title: "Late task", dueByDay: 3, status: "overdue" })]} />);
     expect(screen.getByLabelText("has overdue tasks")).toBeInTheDocument();
   });
+
+  // axe scrollable-region-focusable: the horizontally scrolling grid must be keyboard-focusable.
+  it("makes the scrollable day-column region keyboard focusable", () => {
+    render(<TaskCalendar tasks={[task({ id: "t1", title: "Submit ID", dueByDay: 1 })]} />);
+    expect(screen.getByLabelText("Onboarding due-day columns")).toHaveAttribute("tabindex", "0");
+  });
 });
