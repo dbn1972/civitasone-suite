@@ -494,10 +494,6 @@
       "screen": "/domains/new"
     },
     {
-      "module": "domains",
-      "screen": "/domains"
-    },
-    {
       "module": "estab",
       "screen": "/estab/approval-matrix"
     },
