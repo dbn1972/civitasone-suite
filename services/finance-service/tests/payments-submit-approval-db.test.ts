@@ -16,6 +16,7 @@ import * as repo from "../src/modules/payments/repo.js";
 import { PAYMENT_SUBMIT_BLOCKED_LIST } from "../src/modules/payments/domain.js";
 import { registerPaymentsConsumers } from "../src/modules/payments/consumer.js";
 import { COMMANDS } from "../src/topics.js";
+import { listPayments } from "../src/modules/payments/queries.js";
 
 const TENANT = randomUUID();
 const ACTOR = "70000000-0ba1-4000-8000-00000000c601";
@@ -110,6 +111,17 @@ describe("COMMANDS.paymentSubmitApproval consumer (real DB)", () => {
     expect(q.dlq.length).toBe(1);
     expect(q.dlq[0]!.error).toContain("PAYMENT_NOT_SUBMITTABLE");
     expect(await statusOf(id)).toBe("released");
+    await q.stop();
+  });
+
+  it("the cached register LIST reflects the new status after submit-approval (not stuck on Queued)", async () => {
+    const q = queueFor(); registerPaymentsConsumers(q); await q.start();
+    const id = await seed("initiated");
+    const labelOf = async () => (await runWithTenant(TENANT, () => listPayments(TENANT, 500, 0))).data.find((r) => r.id === id)?.status;
+    expect(await labelOf()).toBe("Queued"); // warms the cached list page
+    await q.publish(COMMANDS.paymentSubmitApproval, msg(id)); await q.drain();
+    expect(await statusOf(id)).toBe("pending_approval");
+    expect(await labelOf()).toBe("Pending Approval");
     await q.stop();
   });
 });
