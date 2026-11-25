@@ -108,7 +108,7 @@ function DispositionButton({
           style={{ width: "100%", minHeight: 44 }}
         />
         {trimmed.length > 0 && tooShort ? (
-          <p role="alert" style={{ margin: "4px 0 0", fontSize: "0.875rem", color: "#b42318" }}>
+          <p role="alert" style={{ margin: "4px 0 0", fontSize: "0.875rem", color: "var(--bad)" }}>
             {t("refTooShort", { min: spec.min })}
           </p>
         ) : null}
