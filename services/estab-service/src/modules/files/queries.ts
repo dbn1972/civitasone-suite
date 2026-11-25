@@ -219,6 +219,11 @@ export async function inwardLinkState(
   return row.fileId ? "linked" : "available";
 }
 
+/** One DAK (inward) row by id, tenant-scoped, or null. */
+export async function getInward(tenantId: string, inwardId: string) {
+  return repo.findInwardById(inwardId, tenantId);
+}
+
 /** One noting by id (tenant-scoped, straight from the table), or null. UAT W8-A: sign pre-check. */
 export async function getNoting(tenantId: string, notingId: string) {
   return repo.findNotingById(notingId, tenantId);

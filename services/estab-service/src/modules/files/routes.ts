@@ -8,13 +8,13 @@ import {
   createDispatchBody, registerInwardBody, submitNotingBody, openFileFromInwardBody,
   addAttachmentBody, recallFileBody, reopenFileBody, attachInwardBody, detachInwardBody,
   deliveryUpdateBody, fileSearchQuery, duplicateCheckQuery, registerListQuery,
-  openVolumeBody, openPartFileBody, linkFileBody, setFileTypeBody,
+  openVolumeBody, openPartFileBody, linkFileBody, setFileTypeBody, reclassifyInwardBody,
 } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 import { randomUUID } from "node:crypto";
 import { noteSheetPrintRoutes } from "./note-sheet-print/routes.js";
-import { isTopSecret, isFileReadOnly } from "./domain.js";
+import { isTopSecret, isFileReadOnly, roleMayAccessClassification, isConfidentialOrAbove } from "./domain.js";
 import { queue } from "../../shared/infra.js";
 import {
   isMoveAllowed, isAccessAllowed, isActiveOperator,
@@ -34,9 +34,11 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
  * One adoption lookup + one clearance lookup per request, not one per row.
  */
 async function withinClearance<T extends { classification: string }>(
-  ctx: { tenantId: string; actorId: string },
+  ctx: { tenantId: string; actorId: string; roles: string[] },
   rows: T[],
 ): Promise<T[]> {
+  // D14: Confidential+ rows are visible only to the classified-access roles, adopted or not.
+  if (ctx.roles) rows = rows.filter((r) => roleMayAccessClassification(ctx.roles, r.classification));
   if (!(await tenantHasOperators(ctx.tenantId))) return rows;
   const rank = await clearanceRankFor(ctx.tenantId, ctx.actorId);
   return rows.filter((r) => (CLASSIFICATION_RANK[r.classification] ?? 1) <= Math.max(rank, 1));
@@ -85,6 +87,24 @@ async function publishFileAccessAudit(
   });
 }
 
+/**
+ * D14: viewing or opening a Confidential+ file needs a classified-access role
+ * (knowledge_admin / estab_admin; super_admin as break-glass), IN ADDITION to the desk
+ * clearance check. Denials are audited.
+ */
+async function assertRoleMayAccess(
+  ctx: { tenantId: string; actorId: string; correlationId: string; roles: string[] },
+  classification: string,
+  action: string,
+  resourceId?: string,
+): Promise<void> {
+  if (roleMayAccessClassification(ctx.roles, classification)) return;
+  await publishFileAccessAudit(ctx, {
+    action, resourceType: "file", ...(resourceId ? { resourceId } : {}), outcome: "denied", classification,
+  });
+  throw new HttpError(403, "FORBIDDEN", "Confidential and above files are restricted to knowledge_admin / estab_admin");
+}
+
 const ESTAB_ROLES  = ["estab_officer", "estab_admin", "estab_deputy_secretary", "super_admin"];
 const READER_ROLES = [...ESTAB_ROLES, "audit_officer"];
 
@@ -93,6 +113,7 @@ export async function filesRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ESTAB_ROLES);
     const body = createFileBody.parse(req.body);
+    await assertRoleMayAccess(ctx, body.classification, "create_denied_role");
     // GAP-ESTAB-WORKSPACE-03: a file may only be CREATED at a classification
     // the creating actor is cleared for — client-side option hiding is not a
     // control. Mirrors the GET/move clearance gate (isAccessAllowed): public is
@@ -253,6 +274,27 @@ export async function filesRoutes(app: FastifyInstance): Promise<void> {
     return sendAccepted(reply, acceptedResponseSchema, await commands.attachInward(ctx, body, id));
   });
 
+  // D12: reclassify a DAK. Only the dealing hand (assignedTo) may do so, reason mandatory + audited.
+  // Raising it to Confidential+ additionally needs a classified-access role (D14).
+  app.post("/v1/estab/inward/:id/reclassify", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ESTAB_ROLES);
+    const { id } = idParam.parse(req.params);
+    const body = reclassifyInwardBody.parse(req.body);
+    const inward = await queries.getInward(ctx.tenantId, id);
+    if (!inward) throw new HttpError(404, "NOT_FOUND", "DAK not found");
+    if (!inward.assignedTo) {
+      throw new HttpError(409, "NO_DEALING_HAND", "this DAK has no dealing hand assigned; assign one before reclassifying");
+    }
+    if (inward.assignedTo !== ctx.actorId) {
+      throw new HttpError(403, "FORBIDDEN", "only the dealing hand of this DAK may reclassify it");
+    }
+    if (isConfidentialOrAbove(body.classification)) {
+      await assertRoleMayAccess(ctx, body.classification, "reclassify_denied_role", id);
+    }
+    return sendAccepted(reply, acceptedResponseSchema, await commands.reclassifyInward(ctx, id, body));
+  });
+
   // Detach a wrongly-attached receipt (reason mandatory, audited).
   app.post("/v1/estab/inward/detach", async (req, reply) => {
     const ctx = resolveContext(req);
@@ -295,7 +337,11 @@ export async function filesRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ESTAB_ROLES);
     const { id } = idParam.parse(req.params);
-    const body = openFileFromInwardBody.parse(req.body);
+    const parsed = openFileFromInwardBody.parse(req.body);
+    // D12: omitted classification => inherit the DAK's own (Ordinary unless reclassified).
+    const inwardRow = parsed.classification ? null : await queries.getInward(ctx.tenantId, id);
+    const body = { ...parsed, classification: parsed.classification ?? inwardRow?.classification ?? "public" } as typeof parsed & { classification: string };
+    await assertRoleMayAccess(ctx, body.classification, "open_file_denied_role");
     // GAP-ESTAB-WORKSPACE-03: same clearance gate as direct file creation —
     // opening a file from a receipt must not escalate classification beyond the
     // actor's clearance. Public is always allowed; no-op until operators adopted.
@@ -387,7 +433,8 @@ export async function filesRoutes(app: FastifyInstance): Promise<void> {
     const rank = adopted ? await clearanceRankFor(ctx.tenantId, ctx.actorId) : 4;
     const allowed = Object.entries(CLASSIFICATION_RANK)
       .filter(([, need]) => need <= Math.max(rank, 1))
-      .map(([name]) => name);
+      .map(([name]) => name)
+      .filter((name) => roleMayAccessClassification(ctx.roles, name));
     return reply.send({ allowed, clearanceRank: rank, adopted });
   });
 
@@ -470,6 +517,7 @@ export async function filesRoutes(app: FastifyInstance): Promise<void> {
 
     const file = await queries.getFileDetail(ctx.tenantId, id);
     if (!file) throw new HttpError(404, "NOT_FOUND", "file not found");
+    await assertRoleMayAccess(ctx, file.classification, "attachment_download_denied_role", attId);
     if (!(await isAccessAllowed(ctx.tenantId, ctx.actorId, file.classification))) {
       await publishFileAccessAudit(ctx, {
         action: "attachment_download_denied_clearance",
@@ -513,6 +561,7 @@ export async function filesRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const file = await queries.getFileDetail(ctx.tenantId, id);
     if (!file) throw new HttpError(404, "NOT_FOUND", "file not found");
+    await assertRoleMayAccess(ctx, file.classification, "access_denied_role", id);
     // CSMOP classification-based access control: deny if the officer's clearance
     // is below the file's classification (once the tenant adopts the operator
     // model). The denial itself is audited.

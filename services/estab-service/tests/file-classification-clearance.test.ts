@@ -31,7 +31,8 @@ function freshIds() {
   return { tenant, actor };
 }
 
-function token(tenant: string, actor: string, roles = ["estab_officer"]) {
+// D14: Confidential+ needs a classified-access role, so the clearance cases below act as estab_admin.
+function token(tenant: string, actor: string, roles = ["estab_admin"]) {
   return signToken({ sub: actor, tid: tenant, roles, sid: "sess-c3" }, SECRET);
 }
 

@@ -22,9 +22,10 @@ import { startBoundedPoll } from "@/lib/estab/boundedPoll";
 import { DAK_MODES, EMPTY_DAK_FORM, dakLookupTerm, validateDakForm, type DakFormState } from "@/lib/estab/dakForm";
 
 // GAP-ESTAB-DAK-01: classification is no longer hard-coded; the clerk chooses.
-const CLASSIFICATIONS = ["public", "confidential", "secret", "top_secret"] as const;
+const CLASSIFICATIONS = ["public", "restricted", "confidential", "secret", "top_secret"] as const;
 const CLASS_KEY = Object.fromEntries([
   ["public", "classPublic"],
+  ["restricted", "classRestricted"],
   ["confidential", "classConfidential"],
   ["secret", "classSecret"],
   ["top_secret", "classTopSecret"],

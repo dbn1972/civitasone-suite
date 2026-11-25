@@ -5,7 +5,7 @@ import { COMMANDS } from "../../topics.js";
 import type {
   CreateFileBody, AddNotingBody, MoveFileBody, CloseFileBody,
   CreateDispatchBody, RegisterInwardBody, SubmitNotingBody, OpenFileFromInwardBody,
-  AddAttachmentBody, RecallFileBody, ReopenFileBody, AttachInwardBody, DetachInwardBody,
+  AddAttachmentBody, RecallFileBody, ReopenFileBody, AttachInwardBody, DetachInwardBody, ReclassifyInwardBody,
   DeliveryUpdateBody, OpenVolumeBody, OpenPartFileBody, LinkFileBody, SetFileTypeBody,
 } from "./validators.js";
 
@@ -199,6 +199,18 @@ export async function detachInward(ctx: RequestContext, body: DetachInwardBody):
     payload: { tenantId: ctx.tenantId, inwardId: body.inwardId, reason: body.reason },
   });
   return { id: body.inwardId, status: "accepted", correlationId: ctx.correlationId };
+}
+
+export async function reclassifyInward(
+  ctx: RequestContext, inwardId: string, body: ReclassifyInwardBody,
+): Promise<Accepted> {
+  const id = randomUUID();
+  await queue.publish(COMMANDS.inwardReclassify, {
+    messageId: id, type: COMMANDS.inwardReclassify,
+    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+    payload: { tenantId: ctx.tenantId, inwardId, classification: body.classification, reason: body.reason },
+  });
+  return { id: inwardId, status: "accepted", correlationId: ctx.correlationId };
 }
 
 export async function updateDelivery(ctx: RequestContext, body: DeliveryUpdateBody): Promise<Accepted> {

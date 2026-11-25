@@ -122,11 +122,14 @@ describe("approval-rules routes with the catalogue (GAP-ESTAB-APPROVAL-MATRIX-03
     });
   });
 
-  it("says 'not configured' when the deployment declared no list", async () => {
+  it("B2: with no env list the owner-approved default catalogue is served and enforced", async () => {
     const app = await buildApp();
     const res = await app.inject({ method: "GET", url: "/v1/estab/approval-rules", headers: authHeader(["estab_admin"]) });
     await app.close();
-    expect(res.json().approverRoles).toEqual({ configured: false, roles: [] });
+    expect(res.json().approverRoles).toEqual({
+      configured: true,
+      roles: ["estab_admin", "estab_deputy_secretary", "estab_division_admin"],
+    });
   });
 
   it("does not serve the list to a role that cannot read the matrix", async () => {
@@ -162,14 +165,14 @@ describe("approval-rules routes with the catalogue (GAP-ESTAB-APPROVAL-MATRIX-03
     expect(res.statusCode).toBe(202);
   });
 
-  it("POST: with no list configured nothing changes — any role is accepted", async () => {
+  it("POST: with no env list the default catalogue applies (B2) — a default role is accepted, an unknown one refused", async () => {
     const app = await buildApp();
-    const res = await app.inject({
-      method: "POST", url: "/v1/estab/approval-rules", headers: authHeader(["estab_admin"]),
-      payload: rule(["whatever_role"]),
+    const post = (role: string) => app.inject({
+      method: "POST", url: "/v1/estab/approval-rules", headers: authHeader(["estab_admin"]), payload: rule([role]),
     });
+    expect((await post("estab_deputy_secretary")).statusCode).toBe(202);
+    expect((await post("whatever_role")).statusCode).toBe(422);
     await app.close();
-    expect(res.statusCode).toBe(202);
   });
 
   it("PATCH: refuses an edited chain with an unknown role, but a patch with no chain (activate / deactivate) is unaffected", async () => {

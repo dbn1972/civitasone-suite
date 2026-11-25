@@ -40,8 +40,20 @@ export function parseApproverRoleCatalogue(raw: string | undefined): ApproverRol
   return { configured: roles.length > 0, roles };
 }
 
+/**
+ * B2 (owner-approved): the default catalogue when the deployment sets nothing. Without it the
+ * list shipped empty and nothing constrained a chain. `ESTAB_APPROVER_ROLES`, when set to at
+ * least one valid code, still overrides this list.
+ */
+export const DEFAULT_APPROVER_ROLES: readonly string[] = [
+  "estab_admin",
+  "estab_deputy_secretary",
+  "estab_division_admin",
+];
+
 export function getApproverRoleCatalogue(): ApproverRoleCatalogue {
-  return parseApproverRoleCatalogue(process.env.ESTAB_APPROVER_ROLES);
+  const fromEnv = parseApproverRoleCatalogue(process.env.ESTAB_APPROVER_ROLES);
+  return fromEnv.configured ? fromEnv : { configured: true, roles: [...DEFAULT_APPROVER_ROLES] };
 }
 
 /** The step roles that are not in the catalogue (empty when none is configured). */

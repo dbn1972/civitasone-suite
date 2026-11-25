@@ -32,7 +32,7 @@ export const createFileBody = z.object({
   subject:        z.string().min(1),
   dept:           z.string().min(1),
   priority:       z.enum(["normal", "urgent", "immediate"]).default("normal"),
-  classification: z.enum(["top_secret", "secret", "confidential", "public"]).default("public"),
+  classification: z.enum(["top_secret", "secret", "confidential", "restricted", "public"]).default("public"),
   // SECURITY: optional — the officer a file is routed to at creation must
   // default to the authenticated creator (ctx.actorId), never a client-chosen
   // fallback constant. The server fills this in when omitted (commands.ts).
@@ -97,6 +97,8 @@ export const registerInwardBody = z.object({
   category:      z.string().max(32).optional(),
   receivedDate:  z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   dueDate:       z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  // D12: a DAK is Ordinary (stored `public`) unless the registrar says otherwise.
+  classification: z.enum(["top_secret", "secret", "confidential", "restricted", "public"]).default("public"),
 });
 export type RegisterInwardBody = z.infer<typeof registerInwardBody>;
 
@@ -112,6 +114,13 @@ export const detachInwardBody = z.object({
   reason:   z.string().min(3).max(500),
 });
 export type DetachInwardBody = z.infer<typeof detachInwardBody>;
+
+/** D12: the dealing hand may reclassify a DAK, with a mandatory reason (audited). */
+export const reclassifyInwardBody = z.object({
+  classification: z.enum(["top_secret", "secret", "confidential", "restricted", "public"]),
+  reason:         z.string().trim().min(3).max(500),
+});
+export type ReclassifyInwardBody = z.infer<typeof reclassifyInwardBody>;
 
 export const recallFileBody = z.object({
   remarks: z.string().optional(),
@@ -144,7 +153,8 @@ export const openFileFromInwardBody = z.object({
   // SECURITY: optional — defaults to ctx.actorId server-side when omitted
   // (same rationale as createFileBody.currentWith above).
   currentWith:    z.string().uuid().optional(),
-  classification: z.enum(["top_secret", "secret", "confidential", "public"]).default("public"),
+  // D12: omitted => the file inherits the DAK's own classification (resolved in the route).
+  classification: z.enum(["top_secret", "secret", "confidential", "restricted", "public"]).optional(),
   initialNote:    z.string().optional(),
 });
 export type OpenFileFromInwardBody = z.infer<typeof openFileFromInwardBody>;
