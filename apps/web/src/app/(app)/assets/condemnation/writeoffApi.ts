@@ -29,7 +29,7 @@ async function send(path: string, body?: unknown): Promise<WriteoffResult> {
   });
   if (!res.ok) {
     const code = await errorCodeFromResponse(res);
-    const key = writeoffErrorKey(res.status, code);
+    const key = writeoffErrorKey(res.status, code ?? undefined);
     return { ok: false, key, message: key ? "" : await errorMessageFromResponse(res) };
   }
   const data = (await res.json().catch(() => ({}))) as { id?: string };
