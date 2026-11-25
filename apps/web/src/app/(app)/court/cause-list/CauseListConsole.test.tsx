@@ -7,6 +7,7 @@ const fetchCauseListItemsMock = vi.fn();
 const fetchCauseListByCourtDateMock = vi.fn();
 const fetchCaseMock = vi.fn();
 const fetchConfigNamespaceMock = vi.fn();
+const fetchCaseHearingsMock = vi.fn();
 
 vi.mock("../_data/client", () => ({
   fetchConfigNamespace: (...a: unknown[]) => fetchConfigNamespaceMock(...a),
@@ -15,6 +16,7 @@ vi.mock("../_data/client", () => ({
   fetchCauseListItems: (...a: unknown[]) => fetchCauseListItemsMock(...a),
   fetchCauseListByCourtDate: (...a: unknown[]) => fetchCauseListByCourtDateMock(...a),
   fetchCase: (...a: unknown[]) => fetchCaseMock(...a),
+  fetchCaseHearings: (...a: unknown[]) => fetchCaseHearingsMock(...a),
 }));
 
 import { CauseListConsole } from "./CauseListConsole";
@@ -58,6 +60,7 @@ describe("CauseListConsole", () => {
     fetchCauseListByCourtDateMock.mockResolvedValue(null);
     fetchCauseListItemsMock.mockResolvedValue([]);
     fetchCaseMock.mockResolvedValue(null);
+    fetchCaseHearingsMock.mockResolvedValue([]);
     // Owner decision #33: no per-court config rows -> the console offers the defaults.
     fetchConfigNamespaceMock.mockReset();
     fetchConfigNamespaceMock.mockResolvedValue([]);
@@ -125,6 +128,60 @@ describe("CauseListConsole", () => {
     fireEvent.click(screen.getByRole("button", { name: "List case" }));
     await waitFor(() => expect(addCauseListItemMock).toHaveBeenCalledTimes(1));
     expect(addCauseListItemMock).toHaveBeenCalledWith("list-1", expect.objectContaining({ slot: "AM-2", courtroom: "COURT-1", itemNumber: 2 }));
+  });
+
+  // GAP-COURT-CAUSE-LIST-04: optional exact hearing link.
+  describe("optional linked hearing (GAP-COURT-CAUSE-LIST-04)", () => {
+    const HEARING = "77777777-7777-4777-8777-777777777777";
+
+    async function pickCaseAndFill() {
+      fireEvent.change(screen.getByLabelText("Case"), { target: { value: CASE_A } });
+      await waitFor(() => expect(optionValues("Slot")).toContain("AM-1"));
+      fireEvent.change(screen.getByLabelText("Slot"), { target: { value: "AM-1" } });
+      fireEvent.change(screen.getByLabelText("Courtroom"), { target: { value: "COURT-1" } });
+    }
+
+    it("offers the case's non-cancelled hearings and sends the chosen hearingId", async () => {
+      fetchCaseHearingsMock.mockResolvedValue([
+        { id: HEARING, caseId: CASE_A, benchId: null, scheduledDate: "2026-02-01T05:00:00Z", status: "scheduled", nextDate: null, purpose: "final_hearing", adjournmentReason: null, version: 1 },
+        { id: "gone", caseId: CASE_A, benchId: null, scheduledDate: "2026-02-02T05:00:00Z", status: "cancelled", nextDate: null, purpose: "x", adjournmentReason: null, version: 1 },
+      ]);
+      addCauseListItemMock.mockResolvedValue(undefined);
+      await openListWithItems();
+      await pickCaseAndFill();
+      await waitFor(() => expect(fetchCaseHearingsMock).toHaveBeenCalledWith(CASE_A));
+      await waitFor(() => expect(optionValues("Linked hearing (optional)")).toEqual(["", HEARING]));
+      fireEvent.change(screen.getByLabelText("Linked hearing (optional)"), { target: { value: HEARING } });
+      fireEvent.click(screen.getByRole("button", { name: "List case" }));
+      await waitFor(() => expect(addCauseListItemMock).toHaveBeenCalledTimes(1));
+      expect(addCauseListItemMock).toHaveBeenCalledWith("list-1", expect.objectContaining({ caseId: CASE_A, hearingId: HEARING }));
+    });
+
+    it("the link is optional: no hearing chosen => no hearingId sent", async () => {
+      addCauseListItemMock.mockResolvedValue(undefined);
+      await openListWithItems();
+      await pickCaseAndFill();
+      fireEvent.click(screen.getByRole("button", { name: "List case" }));
+      await waitFor(() => expect(addCauseListItemMock).toHaveBeenCalledTimes(1));
+      expect(addCauseListItemMock.mock.calls[0]![1]).not.toHaveProperty("hearingId");
+    });
+
+    it("a failed hearings read says so but does not block listing", async () => {
+      fetchCaseHearingsMock.mockRejectedValue(new Error("boom"));
+      addCauseListItemMock.mockResolvedValue(undefined);
+      await openListWithItems();
+      await pickCaseAndFill();
+      expect(await screen.findByText(/Could not load this case's hearings/i)).toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: "List case" }));
+      await waitFor(() => expect(addCauseListItemMock).toHaveBeenCalledTimes(1));
+    });
+
+    it("a linked item shows its purpose and a 'Linked hearing' marker", async () => {
+      await openListWithItems([
+        { id: "it1", causeListId: "list-1", caseId: CASE_A, itemNumber: 1, slot: "AM-1", courtroom: "COURT-1", listDate: "2026-02-01", purpose: "evidence", hearingId: HEARING, hearingScheduledDate: "2026-02-01T05:00:00Z", version: 1 },
+      ]);
+      expect(await screen.findByText(/Linked hearing ·/)).toBeInTheDocument();
+    });
   });
 
   // Owner decision #33 (GAP-COURT-CAUSE-LIST-03): slots and courtrooms come from the court's own config namespaces.

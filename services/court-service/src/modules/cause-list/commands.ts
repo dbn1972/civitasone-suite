@@ -2,6 +2,7 @@ import type { RequestContext } from "@civitasone/types";
 import { queue } from "../../shared/infra.js";
 import { HttpError } from "../../shared/context.js";
 import { getCaseById } from "../case-registry/repo.js";
+import { getHearingById } from "../hearing/repo.js";
 import { COMMANDS } from "../../topics.js";
 import { deriveCauseListId, deriveItemId } from "./domain.js";
 import * as repo from "./repo.js";
@@ -86,8 +87,21 @@ export async function listCaseOnCauseList(
     throw new HttpError(404, "CASE_NOT_FOUND", `Case not found: ${body.caseId}`);
   }
 
+  // GAP-COURT-CAUSE-LIST-04: an optional exact hearing link must be a hearing OF THIS CASE
+  // (tenant-scoped read) -- reject a foreign or unknown hearing synchronously.
+  if (body.hearingId) {
+    const hearing = await getHearingById(ctx.tenantId, body.hearingId);
+    if (!hearing) {
+      throw new HttpError(404, "HEARING_NOT_FOUND", `Hearing not found: ${body.hearingId}`);
+    }
+    if (hearing.caseId !== body.caseId) {
+      throw new HttpError(422, "HEARING_CASE_MISMATCH", "The hearing does not belong to the listed case");
+    }
+  }
+
   if (existing) {
     const identical =
+      (body.hearingId === undefined || existing.hearingId === body.hearingId) &&
       existing.slot === body.slot &&
       existing.courtroom === body.courtroom &&
       existing.itemNumber === body.itemNumber;

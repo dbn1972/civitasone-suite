@@ -21,6 +21,8 @@ export type CreateCauseListBody = z.infer<typeof createCauseListBody>;
 /** List a case onto a slot/courtroom of a cause-list (§17). */
 export const listCaseBody = z.object({
   caseId:     z.string().uuid(),
+  /** Optional exact link to one of the case's hearings (GAP-COURT-CAUSE-LIST-04). */
+  hearingId:  z.string().uuid().optional(),
   itemNumber: z.coerce.number().int().min(1),
   slot:       z.string().trim().min(1).max(32),
   courtroom:  z.string().trim().min(1).max(64),

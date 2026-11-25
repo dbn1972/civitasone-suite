@@ -62,9 +62,10 @@ export async function getCauseListTx(
  */
 export async function getItemById(
   tenantId: string, id: string,
-): Promise<{ id: string; slot: string | null; courtroom: string | null; itemNumber: number | null } | undefined> {
-  const rows = await scopedRead<{ id: string; slot: string | null; courtroom: string | null; itemNumber: number | null }[]>((tx) => tx.select({
+): Promise<{ id: string; slot: string | null; courtroom: string | null; itemNumber: number | null; hearingId: string | null } | undefined> {
+  const rows = await scopedRead<{ id: string; slot: string | null; courtroom: string | null; itemNumber: number | null; hearingId: string | null }[]>((tx) => tx.select({
     id: causeListItems.id,
+    hearingId: causeListItems.hearingId,
     slot: causeListItems.slot,
     courtroom: causeListItems.courtroom,
     itemNumber: causeListItems.itemNumber,
@@ -119,11 +120,15 @@ export async function listItems(tenantId: string, causeListId: string): Promise<
     .orderBy(asc(causeListItems.itemNumber)));
 }
 
-export type CauseListItemWithPurpose = CauseListItemRow & { purpose: string | null };
+export type CauseListItemWithPurpose = CauseListItemRow & {
+  purpose: string | null;
+  /** Scheduled date of the LINKED hearing (ISO), null when unlinked (GAP-COURT-CAUSE-LIST-04). */
+  hearingScheduledDate: string | null;
+};
 
 /**
  * Items of a cause-list, each carrying the `purpose` of the (non-cancelled)
- * hearing of that case scheduled on the item's list date (IST calendar day), or
+ * hearing of that case scheduled on the item's list date (IST calendar day) -- or, when the item carries an exact hearing_id link, that hearing's purpose -- or
  * null when none exists, it has no purpose, or several different purposes match. Additive over listItems;
  * tenant-scoped on both reads.
  */
@@ -148,6 +153,22 @@ export async function listItemsWithPurpose(
         inArray(hearings.caseId, caseIds),
         ne(hearings.status, "cancelled"),
       ));
-    return items.map((i) => ({ ...i, purpose: pickItemPurpose(i, hs) }));
+    const linkedIds = [...new Set(items.map((i) => i.hearingId).filter((h): h is string => !!h))];
+    const linked: { id: string; purpose: string | null; scheduledDate: Date | null }[] = linkedIds.length === 0 ? [] : await tx.select({
+      id: hearings.id,
+      purpose: hearings.purpose,
+      scheduledDate: hearings.scheduledDate,
+    }).from(hearings)
+      .where(and(eq(hearings.tenantId, tenantId), inArray(hearings.id, linkedIds)));
+    const byId = new Map(linked.map((h) => [h.id, h]));
+    return items.map((i) => {
+      // An exact link wins over the derived guess; unlinked items keep the derived purpose.
+      const l = i.hearingId ? byId.get(i.hearingId) : undefined;
+      return {
+        ...i,
+        purpose: l ? (l.purpose ?? null) : pickItemPurpose(i, hs),
+        hearingScheduledDate: l?.scheduledDate ? l.scheduledDate.toISOString() : null,
+      };
+    });
   });
 }

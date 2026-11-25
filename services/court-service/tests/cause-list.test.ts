@@ -160,4 +160,18 @@ describe("cause-list consumer", () => {
     expect(topics).toContain("court.causelist.item_added");
     expect(topics).toContain("audit.event.record");
   });
+
+  it("persists the optional hearingId on the item (GAP-COURT-CAUSE-LIST-04), null when absent", async () => {
+    currentList = { id: "l1", listDate: "2026-07-11", courtId: randomUUID() };
+    const { register, deliver } = makeHarness();
+    registerCauseListConsumers(register);
+    const hearingId = randomUUID();
+    const linked = listCaseMsg("l1");
+    (linked.payload as Record<string, unknown>).hearingId = hearingId;
+    await deliver("court.causelist.list_case", linked);
+    await deliver("court.causelist.list_case", listCaseMsg("l1"));
+    const rows = (repo.insertCauseListItem as ReturnType<typeof vi.fn>).mock.calls.map((c) => c[1] as { hearingId: string | null });
+    expect(rows[0]!.hearingId).toBe(hearingId);
+    expect(rows[1]!.hearingId).toBeNull();
+  });
 });

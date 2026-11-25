@@ -310,7 +310,7 @@ describe("cause-list commands", () => {
   it("listCaseOnCauseList rejects re-listing the same case with a different slot/courtroom with 409 CAUSELIST_ITEM_ALREADY_LISTED, without publishing", async () => {
     const { listCaseOnCauseList } = await import("../src/modules/cause-list/commands.js");
     const causeListRepo = await import("../src/modules/cause-list/repo.js");
-    vi.mocked(causeListRepo.getItemById).mockResolvedValueOnce({ id: randomUUID(), slot: "09:00", courtroom: "Court 9", itemNumber: 1 });
+    vi.mocked(causeListRepo.getItemById).mockResolvedValueOnce({ id: randomUUID(), slot: "09:00", courtroom: "Court 9", itemNumber: 1, hearingId: null });
     const causeListId = randomUUID();
     await expect(
       listCaseOnCauseList(ctx(), causeListId, { caseId: CASE_ID, itemNumber: 2, slot: "AM-1", courtroom: "COURT-1" }),
@@ -321,11 +321,52 @@ describe("cause-list commands", () => {
   it("listCaseOnCauseList allows an identical resubmission through as an idempotent no-op", async () => {
     const { listCaseOnCauseList } = await import("../src/modules/cause-list/commands.js");
     const causeListRepo = await import("../src/modules/cause-list/repo.js");
-    vi.mocked(causeListRepo.getItemById).mockResolvedValueOnce({ id: randomUUID(), slot: "AM-1", courtroom: "COURT-1", itemNumber: 2 });
+    vi.mocked(causeListRepo.getItemById).mockResolvedValueOnce({ id: randomUUID(), slot: "AM-1", courtroom: "COURT-1", itemNumber: 2, hearingId: null });
     const causeListId = randomUUID();
     const result = await listCaseOnCauseList(ctx(), causeListId, { caseId: CASE_ID, itemNumber: 2, slot: "AM-1", courtroom: "COURT-1" });
     expect(result.accepted).toBe(true);
     expect(publishSpy).toHaveBeenCalledTimes(1);
+  });
+
+  // GAP-COURT-CAUSE-LIST-04: optional exact hearing link.
+  it("listCaseOnCauseList publishes the optional hearingId when it is a hearing of the case", async () => {
+    const { listCaseOnCauseList } = await import("../src/modules/cause-list/commands.js");
+    const hearingId = randomUUID();
+    precheckRows = [{ id: hearingId, caseId: CASE_ID }];
+    try {
+      const result = await listCaseOnCauseList(ctx(), randomUUID(), { caseId: CASE_ID, hearingId, itemNumber: 1, slot: "AM-1", courtroom: "COURT-1" });
+      expect(result.accepted).toBe(true);
+      expect(publishSpy).toHaveBeenCalledTimes(1);
+      expect((publishSpy.mock.calls[0] as unknown[])[1]).toMatchObject({ payload: { hearingId, caseId: CASE_ID } });
+    } finally { precheckRows = []; }
+  });
+
+  it("listCaseOnCauseList rejects an unknown hearing with 404 HEARING_NOT_FOUND, without publishing", async () => {
+    const { listCaseOnCauseList } = await import("../src/modules/cause-list/commands.js");
+    precheckRows = [];
+    await expect(
+      listCaseOnCauseList(ctx(), randomUUID(), { caseId: CASE_ID, hearingId: randomUUID(), itemNumber: 1, slot: "AM-1", courtroom: "COURT-1" }),
+    ).rejects.toMatchObject({ status: 404, code: "HEARING_NOT_FOUND" });
+    expect(publishSpy).not.toHaveBeenCalled();
+  });
+
+  it("listCaseOnCauseList rejects another case's hearing with 422 HEARING_CASE_MISMATCH, without publishing", async () => {
+    const { listCaseOnCauseList } = await import("../src/modules/cause-list/commands.js");
+    const hearingId = randomUUID();
+    precheckRows = [{ id: hearingId, caseId: randomUUID() }];
+    try {
+      await expect(
+        listCaseOnCauseList(ctx(), randomUUID(), { caseId: CASE_ID, hearingId, itemNumber: 1, slot: "AM-1", courtroom: "COURT-1" }),
+      ).rejects.toMatchObject({ status: 422, code: "HEARING_CASE_MISMATCH" });
+      expect(publishSpy).not.toHaveBeenCalled();
+    } finally { precheckRows = []; }
+  });
+
+  it("listCaseOnCauseList rejects a malformed hearingId (zod)", async () => {
+    const { listCaseOnCauseList } = await import("../src/modules/cause-list/commands.js");
+    await expect(
+      listCaseOnCauseList(ctx(), randomUUID(), { caseId: CASE_ID, hearingId: "nope", itemNumber: 1, slot: "AM-1", courtroom: "COURT-1" }),
+    ).rejects.toThrow();
   });
 
   it("listCaseOnCauseList rejects a nonexistent cause-list with 404 CAUSELIST_NOT_FOUND, without publishing", async () => {

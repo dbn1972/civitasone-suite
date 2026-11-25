@@ -440,11 +440,12 @@ export async function createCauseList(input: {
 /** List a case onto a slot/courtroom of a cause-list. */
 export async function addCauseListItem(
   causeListId: string,
-  input: { caseId: string; itemNumber: number; slot: string; courtroom: string },
+  input: { caseId: string; hearingId?: string; itemNumber: number; slot: string; courtroom: string },
 ): Promise<void> {
   await send("POST", `v1/court/cause-lists/${causeListId}/items`, {
     body: {
       caseId: input.caseId,
+      ...(input.hearingId ? { hearingId: input.hearingId } : {}),
       itemNumber: input.itemNumber,
       slot: input.slot,
       courtroom: input.courtroom,

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button, Card, EmptyState, StatusPill } from "@/app/_components/ds";
-import type { CauseListItem, Court, CourtCase } from "../_data/types";
+import type { CauseListItem, Court, CourtCase, Hearing } from "../_data/types";
 import { fmtDate, humanize, todayIso } from "../_data/format";
 import {
   addCauseListItem,
@@ -10,6 +10,7 @@ import {
   fetchCase,
   fetchCauseListByCourtDate,
   fetchCauseListItems,
+  fetchCaseHearings,
   fetchConfigNamespace,
 } from "../_data/client";
 import {
@@ -370,7 +371,14 @@ export function CauseListConsole({
                             </td>
                             <td data-label="Type">{c ? humanize(c.caseType) : "—"}</td>
                             <td data-label="Stage">{c?.stage ? humanize(c.stage) : "—"}</td>
-                            <td data-label="Purpose">{humanize(it.purpose)}</td>
+                            <td data-label="Purpose">
+                              {humanize(it.purpose)}
+                              {it.hearingId && (
+                                <div style={{ fontSize: 12, color: "var(--ink2)" }}>
+                                  Linked hearing{it.hearingScheduledDate ? ` · ${fmtDate(it.hearingScheduledDate)}` : ""}
+                                </div>
+                              )}
+                            </td>
                             {/* GAP-COURT-CAUSE-LIST-03: slot shown VERBATIM (no humanize). */}
                             <td data-label="Slot" style={mono}>
                               {it.slot ?? "—"}
@@ -409,6 +417,28 @@ function AddItemForm({
 }) {
   const t = useEstabT("courtCauseListSlots");
   const [caseId, setCaseId] = useState("");
+  // GAP-COURT-CAUSE-LIST-04: OPTIONAL exact hearing link, chosen from the selected case's hearings.
+  const [hearingId, setHearingId] = useState("");
+  const [hearings, setHearings] = useState<Hearing[]>([]);
+  const [hearingsError, setHearingsError] = useState(false);
+  useEffect(() => {
+    setHearingId("");
+    setHearings([]);
+    setHearingsError(false);
+    if (!caseId) return;
+    let cancelled = false;
+    fetchCaseHearings(caseId)
+      .then((hs) => {
+        if (!cancelled) setHearings(hs.filter((h) => h.status !== "cancelled"));
+      })
+      .catch(() => {
+        // The link is optional: a failed read must not block listing, but it is not silent either.
+        if (!cancelled) setHearingsError(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [caseId]);
   const [itemNumber, setItemNumber] = useState(String(nextItemNumber));
   const [slot, setSlot] = useState("");
   const [courtroom, setCourtroom] = useState("");
@@ -475,11 +505,13 @@ function AddItemForm({
     try {
       await addCauseListItem(causeListId, {
         caseId,
+        ...(hearingId ? { hearingId } : {}),
         itemNumber: n,
         slot,
         courtroom,
       });
       setCaseId("");
+      setHearingId("");
       setSlot("");
       setCourtroom("");
       setItemNumber(String(nextItemNumber + 1));
@@ -515,6 +547,21 @@ function AddItemForm({
                 </option>
               ))}
             </select>
+            {caseId && (
+              <select
+                aria-label="Linked hearing (optional)"
+                value={hearingId}
+                onChange={(e) => setHearingId(e.target.value)}
+                style={{ ...fieldStyle, minWidth: 200 }}
+              >
+                <option value="">No linked hearing</option>
+                {hearings.map((h) => (
+                  <option key={h.id} value={h.id}>
+                    {fmtDate(h.scheduledDate)} — {h.purpose ? humanize(h.purpose) : "No purpose"}
+                  </option>
+                ))}
+              </select>
+            )}
             <input
               type="number"
               min={1}
@@ -560,6 +607,11 @@ function AddItemForm({
               {busy ? "Listing…" : "List case"}
             </Button>
           </div>
+          {hearingsError && (
+            <p role="status" style={{ color: "var(--ink2)", fontSize: 12, margin: "6px 0 0" }}>
+              Could not load this case&apos;s hearings; the case can still be listed without a hearing link.
+            </p>
+          )}
           {localError && (
             <p role="alert" style={{ color: "var(--bad)", fontSize: 12, margin: "6px 0 0" }}>
               {localError}
