@@ -3901,15 +3901,52 @@ export async function getProcurementGem(q?: string): Promise<ProcurementGemResul
   };
 }
 
+/**
+ * One EMD / performance-BG row, normalised from the procurement-service list
+ * payload ({emdNo|pbgNo, vendorId, amountMinor (string paise), instrument,
+ * validUntil?, status}). The backend does NOT join the vendor name: `vendor`
+ * holds a placeholder until the page resolves it from `vendorId`.
+ */
 export type EmdBgEntry = {
   id: string;
+  /** emdNo / pbgNo. */
+  ref: string;
+  vendorId: string;
   vendor: string;
   type: string;
+  /** Paise. */
   amount: number;
+  /** ISO date; "" when the instrument carries no expiry (EMD rows have none). */
   validity: string;
-  bank: string;
   status: string;
 };
+
+const INSTRUMENT_LABEL: Record<string, string> = { bank_guarantee: "Bank guarantee", dd: "Demand draft", online: "Online" };
+
+export function mapEmdBgRows(payload: unknown, kind: "EMD" | "BG"): EmdBgEntry[] | null {
+  const rows = getArrayPayload(payload);
+  if (!rows) return null;
+  const out: EmdBgEntry[] = [];
+  for (const r of rows) {
+    if (!isRecord(r)) continue;
+    const id = toText(r.id);
+    if (!id) continue;
+    const paise = Number(r.amountMinor);
+    const instrument = toText(r.instrument) ?? "";
+    const vendorId = toText(r.vendorId) ?? "";
+    out.push({
+      id,
+      ref: toText(kind === "EMD" ? r.emdNo : r.pbgNo) ?? id.slice(0, 8),
+      vendorId,
+      vendor: vendorId ? "Vendor " + vendorId.slice(0, 8) : "—",
+      type: kind + " · " + (INSTRUMENT_LABEL[instrument] ?? (instrument || "—")),
+      amount: Number.isFinite(paise) ? paise : 0,
+      validity: toText(r.validUntil) ?? "",
+      status: toText(r.status) ?? "",
+    });
+  }
+  return out;
+}
 
 /** GAP-PROCUREMENT-VENDORS-DETAIL-04: optional `vendorId` restricts the register to one vendor, server-side. */
 function securityListPath(base: string, query?: { vendorId?: string; limit?: number }): string {
@@ -3924,7 +3961,7 @@ export async function getProcurementEMD(query?: { vendorId?: string; limit?: num
   return fetchJson<unknown, EmdBgEntry[]>(securityListPath("/api/v1/procurement/emd", query), [], {
     revalidateSeconds: 120,
     telemetryKey: "procurement.emd_bg",
-    mapResponse: (p) => getArrayPayload(p) as EmdBgEntry[] | null,
+    mapResponse: (p) => mapEmdBgRows(p, "EMD"),
   });
 }
 
@@ -3933,7 +3970,7 @@ export async function getProcurementPBG(query?: { vendorId?: string; limit?: num
   return fetchJson<unknown, EmdBgEntry[]>(securityListPath("/api/v1/procurement/pbg", query), [], {
     revalidateSeconds: 120,
     telemetryKey: "procurement.pbg",
-    mapResponse: (p) => getArrayPayload(p) as EmdBgEntry[] | null,
+    mapResponse: (p) => mapEmdBgRows(p, "BG"),
   });
 }
 
