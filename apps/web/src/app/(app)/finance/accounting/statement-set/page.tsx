@@ -63,17 +63,19 @@ export default async function StatementSetPage(props: { searchParams?: Promise<{
           <LoadErrorState result={rp} area={t("rpArea")} backHref="/finance" />
         ) : (
           <Card title={t("rpCard", { fy })}>
-            <DataTable<{ id: string; account: string; receipts: string; payments: string; closing: string }>
+            <DataTable<{ id: string; account: string; opening: string; receipts: string; payments: string; closing: string }>
               caption={t("rpTitle")}
               columns={[
                 { key: "account", label: t("colAccount") },
+                { key: "opening", label: t("colOpening"), align: "right", cellType: "amount" },
                 { key: "receipts", label: t("colReceipts"), align: "right", cellType: "amount" },
                 { key: "payments", label: t("colPayments"), align: "right", cellType: "amount" },
-                { key: "closing", label: t("colNet"), align: "right", cellType: "amount" },
+                { key: "closing", label: t("colClosing"), align: "right", cellType: "amount" },
               ]}
               rows={rp.data.rows.map((r) => ({
                 id: r.account || "-",
                 account: r.account === "bank" ? t("bank") : r.account === "cash" ? t("cash") : r.account || "—",
+                opening: r.openingBalanceMinor ?? "",
                 receipts: r.totalReceiptsMinor ?? "",
                 payments: r.totalPaymentsMinor ?? "",
                 closing: r.closingBalanceMinor ?? "",

@@ -26,7 +26,7 @@ const render = (ui: React.ReactElement) =>
 
 const RP = mapReceiptsPayments({
   fiscalYear: "2026-27",
-  data: [{ bank_or_cash: "bank", total_receipts: "500000", total_payments: "200000", closing_balance: "300000" }],
+  data: [{ bank_or_cash: "bank", opening_balance: "100000", total_receipts: "500000", total_payments: "200000", closing_balance: "400000" }],
 });
 const IE = mapIncomeExpenditure({
   fiscalYear: "2026-27", periodStart: "2026-04-01", periodEnd: "2027-03-31",
@@ -89,6 +89,11 @@ describe("StatementSetPage", () => {
 });
 
 describe("statement mappers", () => {
+  it("R&P row reconciles: opening + receipts - payments = closing", () => {
+    const r = RP!.rows[0]!;
+    expect(BigInt(r.openingBalanceMinor!) + BigInt(r.totalReceiptsMinor!) - BigInt(r.totalPaymentsMinor!)).toBe(BigInt(r.closingBalanceMinor!));
+  });
+
   it("unreadable money is null, not zero", () => {
     expect(minorOrNull("12.5")).toBeNull();
     expect(minorOrNull(undefined)).toBeNull();

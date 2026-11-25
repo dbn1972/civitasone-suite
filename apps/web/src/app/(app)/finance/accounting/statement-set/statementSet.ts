@@ -38,6 +38,7 @@ export type IncomeExpenditure = {
 
 export type ReceiptsPaymentsRow = {
   account: string;
+  openingBalanceMinor: string | null;
   totalReceiptsMinor: string | null;
   totalPaymentsMinor: string | null;
   closingBalanceMinor: string | null;
@@ -108,6 +109,7 @@ export function mapReceiptsPayments(p: unknown): ReceiptsPayments | null {
     return d
       ? [{
           account: str(d.bank_or_cash),
+          openingBalanceMinor: minorOrNull(d.opening_balance),
           totalReceiptsMinor: minorOrNull(d.total_receipts),
           totalPaymentsMinor: minorOrNull(d.total_payments),
           closingBalanceMinor: minorOrNull(d.closing_balance),
