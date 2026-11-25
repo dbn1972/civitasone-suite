@@ -21005,5 +21005,16 @@
       "ifscInvalid": "Enter a valid 11-character IFSC code, for example SBIN0001234.",
       "submitted": "Bank account ending {masked} submitted for linking. It will be available for payouts shortly.",
       "readNote": "Only the last four digits of the account number are ever stored."
+    },
+    "telephonyAgents": {
+      "columnAction": "Set presence",
+      "setFor": "Set presence for {name}",
+      "saving": "Saving…",
+      "submitted": "Status change submitted.",
+      "failed": "Could not change the status. Please try again.",
+      "status_available": "Available",
+      "status_busy": "Busy",
+      "status_wrap_up": "Wrap-up",
+      "status_offline": "Offline"
     }
 }

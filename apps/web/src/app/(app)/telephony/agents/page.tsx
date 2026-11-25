@@ -12,6 +12,10 @@ import { PageHeader, StatCard, StatGrid, StatusPill, DataTable, ErrorState, Butt
 import type { PillVariant } from "../../../_components/ds/StatusPill";
 import { useOfflineResource } from "@/lib/sync/resource";
 import { toHumanError } from "@/lib/messages";
+import { useSessionIdentity } from "@/lib/auth/useSessionIdentity";
+import { useEstabT } from "@/lib/estab/useEstabT";
+import { TELEPHONY_PRESENCE_OVERRIDE_ROLES } from "@/lib/telephony/roles";
+import { PresenceOverride } from "./PresenceOverride";
 
 type AgentRow = {
   id: string;
@@ -21,6 +25,7 @@ type AgentRow = {
   queueName: string | null;
   status: string;
   extension: string | null;
+  version?: number;
 } & Record<string, unknown>;
 
 /**
@@ -70,6 +75,29 @@ export default function TelephonyAgentsPage() {
     "/v1/telephony/agents",
     { map: toAgents, initialData: [] },
   );
+  const t = useEstabT("telephonyAgents");
+  const identity = useSessionIdentity();
+  // Display gating only; telephony-service stays the authority. Supervisors/admins may set anyone's presence,
+  // a line agent (telephony_user) only their own.
+  const isSupervisor = identity.roles.some((r) => TELEPHONY_PRESENCE_OVERRIDE_ROLES.includes(r));
+  const isLineAgent = identity.roles.includes("telephony_user");
+  const canOverride = (a: AgentRow) => isSupervisor || (isLineAgent && !!identity.userId && a.userId === identity.userId);
+  const showOverride = agents.some(canOverride);
+  const tableColumns = showOverride
+    ? [
+        ...columns,
+        {
+          key: "id" as const,
+          label: t("columnAction"),
+          render: (r: AgentRow) =>
+            canOverride(r) ? (
+              <PresenceOverride id={r.id} name={r.displayName} status={r.status} version={r.version} onChanged={refresh} />
+            ) : (
+              "—"
+            ),
+        },
+      ]
+    : columns;
   const [refreshedAt, setRefreshedAt] = useState<string>(() => formatInIST(new Date(), { hour: "2-digit", minute: "2-digit" }));
 
   const available = agents.filter((a) => a.status === "available").length;
@@ -133,7 +161,7 @@ export default function TelephonyAgentsPage() {
         </StatGrid>
         <div className="card">
           <h2 className="sr-only">Agents table</h2>
-          <DataTable<AgentRow> columns={columns} rows={agents} sortable filterable filterPlaceholder="Filter agents…" pageSize={15} />
+          <DataTable<AgentRow> columns={tableColumns} rows={agents} sortable filterable filterPlaceholder="Filter agents…" pageSize={15} />
         </div>
       </div>
     </>
