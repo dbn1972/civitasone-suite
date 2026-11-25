@@ -6,6 +6,8 @@ import { formatMoney, humanizeStatus } from "@/lib/formatters";
 import { getSessionRoles, hasAnyRole } from "@/lib/auth/roleGuard";
 import { GRANTS_MAKER_ROLES } from "../../roles";
 import { getGranteeById } from "@/app/_data/loaders";
+import { LinkBankForm } from "./LinkBankForm";
+import { getTranslations } from "next-intl/server";
 
 const TYPE_LABELS: Record<string, string> = {
   individual: "Individual",
@@ -29,6 +31,7 @@ export default async function GranteeDetailPage(props: { params: Promise<{ id: s
   // SF-02: only a real 404 is "not found"; other failures render the error badge below.
   if (source === "error" && status === 404) notFound();
 
+  const t = await getTranslations("grantsBank");
   const canViewPii = hasAnyRole(getSessionRoles(), GRANTS_MAKER_ROLES);
 
   const renderPii = (value: string | null | undefined) => {
@@ -71,6 +74,12 @@ export default async function GranteeDetailPage(props: { params: Promise<{ id: s
               <div className="field"><span className="label">PAN</span><span className="mono">{renderPii(grantee.panNo)}</span></div>
             </div>
           </Card>
+
+          {canViewPii && (
+            <Card title={t("title")} padding>
+              <LinkBankForm granteeId={params.id} />
+            </Card>
+          )}
 
           <Card title="Grants & utilisation" padding>
             <p style={{ color: "var(--ink2)" }}>
