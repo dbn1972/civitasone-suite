@@ -3,6 +3,8 @@ import { getProcurementVendorScorecard, getProcurementVendorById } from "../../.
 import { toHumanError } from "@/lib/messages";
 import { formatIndianDate } from "@/lib/formatters";
 import { getTranslations } from "next-intl/server";
+import { getSessionRoles, hasAnyRole, PROCUREMENT_WRITE_ROLES } from "@/lib/auth/roleGuard";
+import { RecomputeScorecard } from "./RecomputeScorecard";
 
 // The backend (scorecard-domain.ts ratingBand) emits A (>= 85), B (>= 70),
 // C (>= 50), D (< 50) or "unrated" - GAP-...-SCORECARD-03. The older
@@ -57,6 +59,8 @@ export default async function VendorScorecardPage(props: { params: Promise<{ id:
   ]);
 
   const vendorName = vendor?.name ?? "Vendor";
+  const canRecompute = hasAnyRole(getSessionRoles(), PROCUREMENT_WRITE_ROLES);
+  const recompute = canRecompute ? <RecomputeScorecard vendorId={params.id} /> : undefined;
 
   if (!scorecard) {
     // GAP-...-SCORECARD-01: an outage must not read as "this vendor has no
@@ -76,7 +80,7 @@ export default async function VendorScorecardPage(props: { params: Promise<{ id:
     }
     return (
       <>
-        <PageHeader title="Vendor Scorecard" subtitle={vendorName} back={"/procurement/vendors/" + params.id} />
+        <PageHeader title="Vendor Scorecard" subtitle={vendorName} back={"/procurement/vendors/" + params.id} actions={recompute} />
         <EmptyState icon="📊" title="No scorecard yet" message="Performance data will appear after GRN acceptance and order completions." />
       </>
     );
@@ -110,9 +114,12 @@ export default async function VendorScorecardPage(props: { params: Promise<{ id:
         subtitle={`${vendorName} · As of ${asOf}`}
         back={"/procurement/vendors/" + params.id}
         actions={
+          <>
+          {recompute}
           <span style={{ background: bandColor, color: "var(--panel)", borderRadius: 4, padding: "2px 10px", fontSize: 12, fontWeight: 600, textTransform: "capitalize" }}>
             {scorecard.ratingBand}
           </span>
+          </>
         }
       />
 

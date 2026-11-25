@@ -5,12 +5,13 @@ import { maskPan, maskPhone, maskEmail } from "../../../../_components/ds/Masked
 import { getProcurementVendorById, getProcurementPOs, getProcurementGRNs, getVendorEmd, getVendorPbg } from "../../../../_data/loaders";
 import { getTranslations } from "next-intl/server";
 import { VendorActions } from "./VendorActions";
+import { ShowCausePanel } from "./ShowCausePanel";
 import { VendorOrdersTable, type VendorPoRow } from "./VendorOrdersTable";
 import { VendorGrnsTable, VendorSecuritiesTable } from "./VendorHistoryTables";
 import { GRN_STATUS_LABELS } from "../../grn/statusLabels";
 import { toHumanError } from "@/lib/messages";
 import { formatIndianDate, formatMoney, todayIST } from "@/lib/formatters";
-import { getSessionRoles, hasAnyRole, PROCUREMENT_WRITE_ROLES } from "@/lib/auth/roleGuard";
+import { getSessionRoles, getSessionUserId, hasAnyRole, PROCUREMENT_WRITE_ROLES } from "@/lib/auth/roleGuard";
 
 const EMPANELMENT_LABELS: Record<string, string> = {
   empanelled: "Empanelled",
@@ -49,6 +50,9 @@ const EXPIRY_WARN_DAYS = 30;
 const VENDOR_REVEAL_PATH = "v1/procurement/pii/reveal";
 const VENDOR_PAN_REVEAL_ROLES = ["procurement_admin", "super_admin", "audit_officer"];
 const GRN_HISTORY_LIMIT = 50;
+// scorecard-routes.ts: show-cause readers = writers + audit/finance; decide = procurement_admin/super_admin.
+const SHOW_CAUSE_READ_ROLES = [...PROCUREMENT_WRITE_ROLES, "audit_officer", "finance_officer"];
+const SHOW_CAUSE_DECIDE_ROLES = ["procurement_admin", "super_admin"];
 
 export default async function VendorDetailPage(
   props: { params: Promise<{ id: string }>; searchParams?: Promise<{ registered?: string }> }
@@ -103,6 +107,8 @@ export default async function VendorDetailPage(
   });
   // GAP-PROCUREMENT-VENDORS-DETAIL-02: lifecycle actions for procurement writers only.
   const canManage = hasAnyRole(getSessionRoles(), PROCUREMENT_WRITE_ROLES);
+  const sessionRoles = getSessionRoles();
+  const canSeeShowCause = hasAnyRole(sessionRoles, SHOW_CAUSE_READ_ROLES);
   const today = todayIST();
   const daysLeft = vendor.empanelmentValidTill ? daysUntil(vendor.empanelmentValidTill, today) : null;
 
@@ -316,6 +322,14 @@ export default async function VendorDetailPage(
           </div>
         </Card>
       )}
+      {canSeeShowCause ? (
+        <ShowCausePanel
+          vendorId={vendor.id}
+          canWrite={canManage}
+          canDecide={hasAnyRole(sessionRoles, SHOW_CAUSE_DECIDE_ROLES)}
+          currentUserId={getSessionUserId()}
+        />
+      ) : null}
     </>
   );
 }

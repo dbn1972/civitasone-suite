@@ -61,7 +61,10 @@ export default async function VendorsPage(props: { searchParams?: Promise<Record
         title="Vendor Directory"
         subtitle="Vendor directory with empanelment status and performance ratings. Use the status filter to narrow the list."
         actions={
-          <Link href="/procurement/vendors/new" className="btn primary">+ Register Vendor</Link>
+          <>
+            <Link href="/procurement/vendors/blacklist" className="btn ghost">Blacklist register</Link>
+            <Link href="/procurement/vendors/new" className="btn primary">+ Register Vendor</Link>
+          </>
         }
       />
 
