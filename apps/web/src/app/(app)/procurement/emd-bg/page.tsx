@@ -1,5 +1,5 @@
 import { PageHeader } from "../../../_components/ds";
-import { getProcurementEMD, getProcurementPBG } from "../../../_data/loaders";
+import { getProcurementEMD, getProcurementPBG, getProcurementVendors } from "../../../_data/loaders";
 import { EmdBgTable } from "./EmdBgTable";
 
 export default async function EmdBgPage() {
@@ -8,10 +8,17 @@ export default async function EmdBgPage() {
   // single `source` was set to "error" if EITHER failed, so one register's
   // outage silently hid or stale-cached BOTH, and the headline stats were
   // computed server-side from the merged (possibly half-missing) list.
-  const [{ data: emdEntries, source: emdSource }, { data: pbgEntries, source: pbgSource }] = await Promise.all([
+  const [{ data: rawEmd, source: emdSource }, { data: rawPbg, source: pbgSource }, vendors] = await Promise.all([
     getProcurementEMD(),
     getProcurementPBG(),
+    getProcurementVendors({ limit: 200 }),
   ]);
+  // The security register carries only vendorId; resolve display names here.
+  // An unresolved id keeps the "Vendor <id8>" placeholder rather than a blank.
+  const names = new Map((vendors.data ?? []).map((v) => [v.id, v.name]));
+  const withName = (rows: typeof rawEmd) => rows.map((e) => ({ ...e, vendor: names.get(e.vendorId) ?? e.vendor }));
+  const emdEntries = withName(rawEmd);
+  const pbgEntries = withName(rawPbg);
 
   return (
     <>

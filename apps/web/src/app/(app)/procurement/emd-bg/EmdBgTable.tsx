@@ -19,7 +19,7 @@ type EmdRow = {
   expiry: string;
   /** Whole days until validity ends (IST); null when unparseable. Drives the 30-day filter. */
   daysLeft: number | null;
-  bank: string;
+  ref: string;
   status: string;
   register: Register;
   amountPaise: number;
@@ -39,6 +39,7 @@ type Props = {
  * there is no parseable date.
  */
 function expiryLabel(validity: string): string {
+  if (!validity) return "—";
   const days = daysUntilIST(validity);
   if (days === null) return "—";
   if (days < 0) return `Expired ${-days} day${-days === 1 ? "" : "s"} ago`;
@@ -57,10 +58,10 @@ function toRows(entries: EmdBgEntry[], register: Register): EmdRow[] {
     // procurement page.
     amount: formatMoney(e.amount),
     // GAP-PROCUREMENT-EMD-BG-05: dd Mon yyyy, not the raw backend string.
-    validity: formatIndianDate(e.validity),
+    validity: e.validity ? formatIndianDate(e.validity) : "—",
     expiry: expiryLabel(e.validity),
     daysLeft: daysUntilIST(e.validity),
-    bank: e.bank,
+    ref: e.ref,
     status: e.status,
     register,
     amountPaise: e.amount,
@@ -170,7 +171,7 @@ export function EmdBgTable({ emdEntries, pbgEntries, emdSource = "api", pbgSourc
               rows={shownRows}
               sortable
               filterable
-              filterPlaceholder="Search vendor, bank, type…"
+              filterPlaceholder="Search vendor, reference, type…"
               pageSize={15}
               exportable exportAudit="procurement/emd-bg"
               exportFilename="emd-bank-guarantees"
@@ -182,13 +183,13 @@ export function EmdBgTable({ emdEntries, pbgEntries, emdSource = "api", pbgSourc
                 { key: "amount", label: "Amount", align: "right" },
                 { key: "validity", label: "Valid Until" },
                 { key: "expiry", label: "Expiry" },
-                { key: "bank", label: "Bank" },
+                { key: "ref", label: "Reference" },
                 { key: "status", label: "Status", cellType: "status" },
                 {
                   key: "id",
                   label: t("actions.column"),
                   render: (r) => (
-                    <EmdBgActions id={r.id} register={r.register} status={r.status} vendor={r.vendor} amountPaise={r.amountPaise} />
+                    <EmdBgActions id={r.id} register={r.register} status={r.status} vendor={r.vendor} amountPaise={r.amountPaise} reference={r.ref} />
                   ),
                 },
               ]}

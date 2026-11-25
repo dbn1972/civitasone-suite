@@ -38,11 +38,11 @@ const FUTURE = "2999-01-01";
 const PAST = "2000-01-01";
 
 const EMD: EmdBgEntry[] = [
-  { id: "e1", vendor: "Alpha Co", type: "EMD", amount: 125050, validity: FUTURE, bank: "SBI", status: "Active" },
-  { id: "e2", vendor: "Beta Co", type: "EMD", amount: 500000, validity: PAST, bank: "HDFC", status: "Active" },
+  { id: "e1", vendor: "Alpha Co", type: "EMD", amount: 125050, validity: FUTURE, ref: "R-1", vendorId: "v1", status: "Active" },
+  { id: "e2", vendor: "Beta Co", type: "EMD", amount: 500000, validity: PAST, ref: "R-1", vendorId: "v1", status: "Active" },
 ];
 const PBG: EmdBgEntry[] = [
-  { id: "p1", vendor: "Gamma Co", type: "BG", amount: 1000000, validity: FUTURE, bank: "ICICI", status: "Active" },
+  { id: "p1", vendor: "Gamma Co", type: "BG", amount: 1000000, validity: FUTURE, ref: "R-1", vendorId: "v1", status: "Active" },
 ];
 
 describe("EmdBgTable", () => {
@@ -112,7 +112,7 @@ describe("EmdBgTable", () => {
       const d = new Date(Date.now() + days * 86_400_000 + 5.5 * 3_600_000);
       return d.toISOString().slice(0, 10);
     }
-    const SOON: EmdBgEntry = { id: "s1", vendor: "Soon Co", type: "EMD", amount: 100, validity: isoIn(10), bank: "SBI", status: "Active" };
+    const SOON: EmdBgEntry = { id: "s1", vendor: "Soon Co", type: "EMD", amount: 100, validity: isoIn(10), ref: "R-1", vendorId: "v1", status: "Active" };
 
     it("narrows the register to instruments that lapse within 30 days, and says how many are shown", () => {
       seed({ emd: { data: [...EMD, SOON], provenance: "live" }, pbg: { data: PBG, provenance: "live" } });
