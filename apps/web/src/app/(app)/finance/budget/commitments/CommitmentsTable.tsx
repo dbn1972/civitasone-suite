@@ -8,6 +8,9 @@ import { minorToDecimalString } from "@/lib/money";
 
 type Row = Record<string, unknown>;
 
+/** Must match the limit getFinanceCommitments sends (route max is 500). */
+export const COMMITMENT_FETCH_LIMIT = 500;
+
 export const COMMITMENT_STATUSES = ["active", "partially_released", "fully_released", "cancelled"] as const;
 
 /** Head display: "2202 · General Education" when the monitoring lookup knows it, else null (caller shows the localized fallback). */

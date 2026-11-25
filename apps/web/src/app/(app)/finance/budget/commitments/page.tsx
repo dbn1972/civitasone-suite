@@ -8,10 +8,10 @@ import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { currentFinancialYear, isValidFinancialYearLabel } from "@/lib/fiscalYear";
 import { formatMoneyCompact } from "@/lib/formatters";
 import { FyFilter } from "../../_components/FyFilter";
-import { CommitmentsTable } from "./CommitmentsTable";
+import { CommitmentsTable, COMMITMENT_FETCH_LIMIT } from "./CommitmentsTable";
 
 /** Mirrors finance-service subledger/routes.ts FINANCE_ROLES on GET /v1/finance/commitments. */
-export const COMMITMENT_READ_ROLES = ["finance_officer", "finance_admin", "super_admin"];
+const COMMITMENT_READ_ROLES = ["finance_officer", "finance_admin", "super_admin"];
 
 function sumMinor(rows: ReadonlyArray<Record<string, unknown>>, key: string): bigint {
   let total = 0n;
@@ -21,7 +21,8 @@ function sumMinor(rows: ReadonlyArray<Record<string, unknown>>, key: string): bi
   return total;
 }
 
-export default async function CommitmentRegisterPage({ searchParams }: { searchParams?: { fy?: string } }) {
+export default async function CommitmentRegisterPage(props: { searchParams?: Promise<{ fy?: string }> }) {
+  const searchParams = await props.searchParams;
   if (!getSessionRoles().some((r) => COMMITMENT_READ_ROLES.includes(r))) {
     return <PermissionDenied module="commitment register" requiredRoles={COMMITMENT_READ_ROLES} backHref="/finance" backLabel="Back to Finance" />;
   }
@@ -50,6 +51,11 @@ export default async function CommitmentRegisterPage({ searchParams }: { searchP
         <StatCard icon="🔒" tone="warn" label={t("statOutstanding")} value={money(sumMinor(rows, "balance_minor"))} />
         <StatCard icon="📌" label={t("statOpen")} value={errored ? "—" : active.length} />
       </StatGrid>
+      {!errored && rows.length >= COMMITMENT_FETCH_LIMIT && (
+        <div role="status" style={{ marginBottom: 12, padding: "10px 14px", border: "1px solid var(--line)", borderRadius: "var(--r)", background: "var(--panel)", fontSize: 13 }}>
+          {t("truncated", { limit: COMMITMENT_FETCH_LIMIT })}
+        </div>
+      )}
       <Card title={t("cardTitle")}>
         {errored ? (
           <div className="pad">

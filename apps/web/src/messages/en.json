@@ -4138,6 +4138,7 @@
     "unknownHead": "Unknown head",
     "search": "Search commitments…",
     "emptyTitle": "No commitments",
+    "truncated": "Showing the first {limit} commitments for this financial year; the totals above reflect these rows only.",
     "emptyMessage": "No budget commitments have been recorded for this financial year."
   },
   "financeDashboard": {

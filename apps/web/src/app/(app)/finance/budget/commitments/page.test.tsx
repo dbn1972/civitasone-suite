@@ -15,7 +15,7 @@ vi.mock("@/lib/sync/resource", () => ({
 }));
 vi.mock("next-intl/server", async () => {
   const en = (await import("@/messages/en.json")).default as unknown as Record<string, Record<string, string>>;
-  return { getTranslations: async (ns: string) => (key: string) => en[ns]?.[key] ?? key };
+  return { getTranslations: async (ns: string) => (key: string, v?: Record<string, unknown>) => (en[ns]?.[key] ?? key).replace("{limit}", String(v?.limit ?? "")) };
 });
 vi.mock("next-intl", async () => {
   const en = (await import("@/messages/en.json")).default as unknown as Record<string, Record<string, string>>;
@@ -41,7 +41,7 @@ describe("Commitment register page", () => {
   });
 
   it("requests the register for the resolved FY and renders rows with head name and exact amounts", async () => {
-    render(await CommitmentRegisterPage({ searchParams: { fy: "2026-27" } }));
+    render(await CommitmentRegisterPage({ searchParams: Promise.resolve({ fy: "2026-27" }) }));
     expect(getCommitments).toHaveBeenCalledWith("2026-27");
     expect(screen.getByText("PO/2026-27/0042")).toBeInTheDocument();
     expect(screen.getByText("2202 · General Education")).toBeInTheDocument();
@@ -49,26 +49,38 @@ describe("Commitment register page", () => {
   });
 
   it("falls back to the current FY on a malformed ?fy=", async () => {
-    await CommitmentRegisterPage({ searchParams: { fy: "bogus" } });
+    await CommitmentRegisterPage({ searchParams: Promise.resolve({ fy: "bogus" }) });
     expect(getCommitments).toHaveBeenCalledWith(expect.stringMatching(/^\d{4}-\d{2}$/));
+  });
+
+  it("warns that totals cover only the first 500 rows when the cap is hit", async () => {
+    const many = Array.from({ length: 500 }, (_, i) => row({ id: `c${i}`, reference_no: `PO/${i}` }));
+    getCommitments.mockResolvedValue({ data: many, source: "api" });
+    render(await CommitmentRegisterPage({ searchParams: Promise.resolve({}) }));
+    expect(screen.getByRole("status")).toHaveTextContent(/first 500 commitments/);
+  });
+
+  it("shows no truncation notice below the cap", async () => {
+    render(await CommitmentRegisterPage({ searchParams: Promise.resolve({}) }));
+    expect(screen.queryByText(/first 500 commitments/)).not.toBeInTheDocument();
   });
 
   it("shows an empty state, not zero rows silently", async () => {
     getCommitments.mockResolvedValue({ data: [], source: "api" });
-    render(await CommitmentRegisterPage({ searchParams: {} }));
+    render(await CommitmentRegisterPage({ searchParams: Promise.resolve({}) }));
     expect(screen.getByText("No commitments")).toBeInTheDocument();
   });
 
   it("shows an error state (no table, no fake zeros) when the fetch fails", async () => {
     getCommitments.mockResolvedValue({ data: [], source: "error" });
-    render(await CommitmentRegisterPage({ searchParams: {} }));
+    render(await CommitmentRegisterPage({ searchParams: Promise.resolve({}) }));
     expect(screen.queryByText("No commitments")).not.toBeInTheDocument();
     expect(screen.getAllByText("—").length).toBeGreaterThan(0);
   });
 
   it("denies a role outside the backend's finance roles without fetching", async () => {
     mockRoles = ["hr_admin"];
-    render(await CommitmentRegisterPage({ searchParams: {} }));
+    render(await CommitmentRegisterPage({ searchParams: Promise.resolve({}) }));
     expect(getCommitments).not.toHaveBeenCalled();
   });
 });
