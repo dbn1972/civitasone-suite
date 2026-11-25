@@ -65,10 +65,10 @@ export function PresenceOverride({
           <option key={s} value={s}>{t(`status_${s}`)}</option>
         ))}
       </select>
-      <span role="status" aria-live="polite" style={{ fontSize: 12, color: "var(--good)", marginLeft: 6 }}>
+      <span role="status" aria-live="polite" style={{ fontSize: 12, color: "var(--good)", marginInlineStart: 6 }}>
         {pending ? t("saving") : message}
       </span>
-      <span role="alert" style={{ fontSize: 12, color: "var(--bad)", marginLeft: 6 }}>{error}</span>
+      <span role="alert" style={{ fontSize: 12, color: "var(--bad)", marginInlineStart: 6 }}>{error}</span>
     </div>
   );
 }
