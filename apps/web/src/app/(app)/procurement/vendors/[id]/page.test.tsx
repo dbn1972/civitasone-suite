@@ -17,9 +17,13 @@ vi.mock("../../../../_data/loaders", () => ({
 }));
 vi.mock("@/lib/auth/roleGuard", () => ({
   getSessionRoles: () => sessionRoles,
+  getSessionUserId: () => "u-1",
   hasAnyRole: (roles: string[], allowed: string[]) => allowed.some((r) => roles.includes(r)),
   PROCUREMENT_APPROVER_ROLES: ["procurement_admin", "super_admin"],
   PROCUREMENT_WRITE_ROLES: ["procurement_officer", "procurement_admin", "super_admin"],
+}));
+vi.mock("./ShowCausePanel", () => ({
+  ShowCausePanel: (p: { canWrite: boolean; canDecide: boolean }) => <div data-testid="show-cause" data-write={String(p.canWrite)} data-decide={String(p.canDecide)} />,
 }));
 vi.mock("@/lib/formatters", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/formatters")>();
@@ -155,6 +159,22 @@ describe("VendorDetailPage", () => {
     render(await VendorDetailPage({ params: Promise.resolve({ id: "v1" }) }));
     expect(screen.queryByTestId("vendor-actions")).toBeNull();
     expect(screen.queryByRole("button", { name: "Blacklist" })).toBeNull();
+  });
+
+  it("W4: show-cause panel gating mirrors the backend role guards", async () => {
+    vendorMock.mockResolvedValue({ data: VENDOR, source: "api" });
+    const roleCase = async (roles: string[]) => {
+      sessionRoles = roles;
+      const { unmount } = render(await VendorDetailPage({ params: Promise.resolve({ id: "v1" }) }));
+      const el = screen.queryByTestId("show-cause");
+      const out = el ? [el.getAttribute("data-write"), el.getAttribute("data-decide")] : null;
+      unmount();
+      return out;
+    };
+    expect(await roleCase(["procurement_officer"])).toEqual(["true", "false"]);
+    expect(await roleCase(["procurement_admin"])).toEqual(["true", "true"]);
+    expect(await roleCase(["audit_officer"])).toEqual(["false", "false"]);
+    expect(await roleCase(["store_keeper"])).toBeNull();
   });
 
   it("DETAIL-02: a blacklisted vendor shows no action buttons, only the register note", async () => {
