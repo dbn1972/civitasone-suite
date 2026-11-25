@@ -12,7 +12,8 @@
  */
 import { useCallback, useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
-import { ActionButton, ConfirmDialog } from "@/app/_components/ds";
+import { ActionButton, ConfirmDialog, DataTable } from "@/app/_components/ds";
+import { maskPan } from "@/app/_components/ds/Masked";
 import { userFacingErrorFromResponse } from "@/lib/api/userFacingFromResponse";
 import { isNetworkFailure } from "@/lib/userFacingError";
 
@@ -25,6 +26,9 @@ interface Entry {
   blacklistedUntil?: string | null;
   orderRef?: string | null;
 }
+
+type LocalRow = { id: string; vendorId: string; vendor: string; reason: string; from: string; until: string; actions: string };
+type CentralRow = { id: string; pan: string; reason: string; from: string; until: string; orderRef: string };
 
 const PREFIX = "/api/proxy/v1/procurement";
 const PAN_RE = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
@@ -83,36 +87,45 @@ export function BlacklistRegister({ canCentralDebar }: { canCentralDebar: boolea
         <h2 id="bl-h" style={{ fontSize: 16, marginBlockStart: 0 }}>{t("localTitle")}</h2>
         <ListState list={local} empty={t("localEmpty")} retryLabel={t("retry")} failedLabel={t("loadFailed")} loadingLabel={t("loading")}>
           {(rows) => (
-            <table className="tbl" style={{ width: "100%" }}>
-              <thead><tr>
-                <th scope="col">{t("vendor")}</th><th scope="col">{t("reason")}</th>
-                <th scope="col">{t("from")}</th><th scope="col">{t("until")}</th><th scope="col"><span className="sr-only">{t("actions")}</span></th>
-              </tr></thead>
-              <tbody>
-                {rows.map((r) => (
-                  <tr key={r.id}>
-                    <td>{names[r.vendorId] ?? r.vendorId}</td>
-                    <td>{r.reason}</td>
-                    <td>{r.blacklistedFrom}</td>
-                    <td>{r.blacklistedUntil ?? t("indefinite")}</td>
-                    <td>
-                      <ActionButton
-                        className="btn ghost"
-                        label={t("reinstate")}
-                        confirmTitle={t("reinstateTitle")}
-                        confirmDescription={t("reinstateBody")}
-                        confirmLabel={t("reinstate")}
-                        onConfirm={async () => {
-                          const res = await fetch(`${PREFIX}/vendors/${r.vendorId}/blacklist`, { method: "DELETE" });
-                          if (!res.ok) throw await userFacingErrorFromResponse(res, "save", "vendor blacklist");
-                        }}
-                        onSuccess={accepted(local.load)}
-                      />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <DataTable<LocalRow>
+              columns={[
+                { key: "vendor", label: t("vendor") },
+                { key: "reason", label: t("reason") },
+                { key: "from", label: t("from") },
+                { key: "until", label: t("until") },
+                {
+                  key: "actions",
+                  label: t("actions"),
+                  render: (r) => (
+                    <ActionButton
+                      className="btn ghost"
+                      label={t("reinstate")}
+                      confirmTitle={t("reinstateTitle")}
+                      confirmDescription={t("reinstateBody")}
+                      confirmLabel={t("reinstate")}
+                      onConfirm={async () => {
+                        const res = await fetch(`${PREFIX}/vendors/${r.vendorId}/blacklist`, { method: "DELETE" });
+                        if (!res.ok) throw await userFacingErrorFromResponse(res, "save", "vendor blacklist");
+                      }}
+                      onSuccess={accepted(local.load)}
+                    />
+                  ),
+                  csv: () => "",
+                },
+              ]}
+              rows={rows.map((r): LocalRow => ({
+                id: r.id,
+                vendorId: r.vendorId,
+                vendor: names[r.vendorId] ?? r.vendorId,
+                reason: r.reason,
+                from: r.blacklistedFrom,
+                until: r.blacklistedUntil ?? t("indefinite"),
+                actions: "",
+              }))}
+              sortable
+              filterable
+              pageSize={25}
+            />
           )}
         </ListState>
       </section>
@@ -125,20 +138,26 @@ export function BlacklistRegister({ canCentralDebar }: { canCentralDebar: boolea
         <p className="muted" style={{ fontSize: 12 }}>{t("centralHint")}</p>
         <ListState list={central} empty={t("centralEmpty")} retryLabel={t("retry")} failedLabel={t("loadFailed")} loadingLabel={t("loading")}>
           {(rows) => (
-            <table className="tbl" style={{ width: "100%" }}>
-              <thead><tr>
-                <th scope="col">{t("pan")}</th><th scope="col">{t("reason")}</th>
-                <th scope="col">{t("from")}</th><th scope="col">{t("until")}</th><th scope="col">{t("orderRef")}</th>
-              </tr></thead>
-              <tbody>
-                {rows.map((r) => (
-                  <tr key={r.id}>
-                    <td className="mono">{r.pan ?? "—"}</td><td>{r.reason}</td>
-                    <td>{r.blacklistedFrom}</td><td>{r.blacklistedUntil ?? t("indefinite")}</td><td>{r.orderRef ?? "—"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <DataTable<CentralRow>
+              columns={[
+                { key: "pan", label: t("pan") },
+                { key: "reason", label: t("reason") },
+                { key: "from", label: t("from") },
+                { key: "until", label: t("until") },
+                { key: "orderRef", label: t("orderRef") },
+              ]}
+              rows={rows.map((r): CentralRow => ({
+                id: r.id,
+                pan: r.pan ? maskPan(r.pan) : "—",
+                reason: r.reason,
+                from: r.blacklistedFrom,
+                until: r.blacklistedUntil ?? t("indefinite"),
+                orderRef: r.orderRef ?? "—",
+              }))}
+              sortable
+              filterable
+              pageSize={25}
+            />
           )}
         </ListState>
       </section>

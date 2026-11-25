@@ -19,6 +19,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { ActionButton } from "@/app/_components/ds";
+import { formatIndianDate } from "@/lib/formatters";
 import { userFacingErrorFromResponse } from "@/lib/api/userFacingFromResponse";
 
 export type ShowCauseStatus = "issued" | "responded" | "appealed" | "upheld" | "closed";
@@ -133,7 +134,7 @@ function ShowCauseItem({
     <li className="card pad" style={{ borderInlineStart: "4px solid var(--line)" }}>
       <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
         <span className={`pill ${s === "upheld" ? "bad" : s === "closed" ? "" : "warn"}`}>{t(`status.${s}`)}</span>
-        {row.createdAt ? <span className="muted" style={{ fontSize: 12 }}>{new Date(row.createdAt).toLocaleDateString("en-IN")}</span> : null}
+        {row.createdAt ? <span className="muted" style={{ fontSize: 12 }}>{formatIndianDate(row.createdAt)}</span> : null}
       </div>
       <dl style={{ margin: "8px 0" }}>
         <dt className="label">{t("reason")}</dt><dd style={{ margin: 0 }}>{row.reason}</dd>
