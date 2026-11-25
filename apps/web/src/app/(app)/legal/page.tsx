@@ -13,6 +13,7 @@ export default function Page() {
         { href: "/legal/cases/new", label: "New Case", note: "Register a court case", roles: LEGAL_OPERATOR_ROLES },
         { href: "/legal/hearings", label: "Hearings", note: "Upcoming and past court hearings" },
         { href: "/legal/court-orders", label: "Court Orders", note: "Compliance-tracked court orders" },
+        { href: "/legal/notices", label: "Legal Notices", note: "Notices sent and received, with responses", roles: LEGAL_OPERATOR_ROLES },
         { href: "/legal/opinions", label: "Legal Opinions", note: "In-house and external legal opinions" },
       ]}
     />

@@ -93,6 +93,7 @@ export const LINKABLE_INTERMEDIATE_PATHS: ReadonlySet<string> = new Set([
   "/learning/assessments",
   "/legal",
   "/legal/court-orders",
+  "/legal/notices",
   "/legal/opinions",
   "/locations",
   "/locations/maps",
