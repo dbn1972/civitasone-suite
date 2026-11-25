@@ -7911,7 +7911,9 @@ export type AnalyticsKpiRow = {
   kpiName: string;
   category: string;
   currentValue: string;
-  target: string;
+  // API returns a number (or null when no target is configured) for D9 KPIs;
+  // legacy rows are preformatted strings. KpiTable normalises for display.
+  target: string | number | null;
   trend: string;
   owner: string;
   // D9 contract fields (additive; older API responses omit them).

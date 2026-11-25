@@ -21,7 +21,7 @@ describe("buildKpis (D9 contract)", () => {
     expect(k["finance.payments_made_paise"].currentValue).toBe("₹10,000");
     expect(k["finance.payments_made_count"]).toMatchObject({ value: 4, unit: "count" });
     expect(k["visitor.overstay_rate_pct"]).toMatchObject({ value: 5, unit: "percent", direction: "down_good", trendPct: -50 });
-    expect(k["court.disposal_rate_pct"]).toMatchObject({ value: 40, unit: "percent" });
+    expect(k["court.disposals_per_registration_pct"]).toMatchObject({ value: 40, unit: "percent" });
   });
 
   it("omits KPIs with no signal instead of faking 0/dash", () => {
@@ -43,10 +43,10 @@ describe("buildKpis (D9 contract)", () => {
 
   it("honours tenant targets and direction for status", () => {
     const k = Object.fromEntries(
-      buildKpis(AGGS, ADMIN, { "visitor.overstay_rate_pct": { target: 6, owner: "CISO" }, "court.disposal_rate_pct": { target: 50 } }).map((x) => [x.key, x]),
+      buildKpis(AGGS, ADMIN, { "visitor.overstay_rate_pct": { target: 6, owner: "CISO" }, "court.disposals_per_registration_pct": { target: 50 } }).map((x) => [x.key, x]),
     );
     expect(k["visitor.overstay_rate_pct"]).toMatchObject({ status: "on_target", owner: "CISO", target: 6 });
-    expect(k["court.disposal_rate_pct"].status).toBe("off_target");
+    expect(k["court.disposals_per_registration_pct"].status).toBe("off_target");
   });
 
   it("D10: module roles see only their module; reader-only sees none; admin sees all", () => {

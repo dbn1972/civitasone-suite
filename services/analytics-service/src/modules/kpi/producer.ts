@@ -91,7 +91,9 @@ export const KPI_DEFS: Def[] = [
     measure: (a) => cnt(sel(a, "meeting", "attendance.marked")) },
   { key: "court.cases_registered_count", name: "Cases Registered (30d)", module: "court", category: "Judiciary", unit: "count", direction: "up_good", owner: "Registrar",
     measure: (a) => cnt(sel(a, "court", "case.registered")) },
-  { key: "court.disposal_rate_pct", name: "Case Disposal Rate (30d)", module: "court", category: "Judiciary", unit: "percent", direction: "up_good", owner: "Registrar",
+  // Ratio of disposals to registrations in the SAME window; disposed cases may
+  // have been registered earlier, so it can exceed 100% — hence not a "rate".
+  { key: "court.disposals_per_registration_pct", name: "Disposals per Registration (30d)", module: "court", category: "Judiciary", unit: "percent", direction: "up_good", owner: "Registrar",
     measure: (a) => pct(cnt(sel(a, "court", "case.status_changed", "disposed")), cnt(sel(a, "court", "case.registered"))) },
   { key: "court.hearings_scheduled_count", name: "Hearings Scheduled (30d)", module: "court", category: "Judiciary", unit: "count", direction: "up_good", owner: "Registrar",
     measure: (a) => cnt(sel(a, "court", "hearing.scheduled")) },
