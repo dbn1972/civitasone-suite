@@ -3,6 +3,16 @@ import { render, screen } from "@testing-library/react";
 
 const loaderMock = vi.fn();
 vi.mock("../../../_data/loaders", () => ({ getAssetMaintenance: () => loaderMock() }));
+const rolesMock = vi.fn(() => ["asset_manager"] as string[]);
+vi.mock("@/lib/auth/roleGuard", () => ({ getSessionRoles: () => rolesMock() }));
+vi.mock("./MaintenanceJobs", () => ({
+  MaintenanceJobs: ({ rows, canAct }: { rows: Array<{ id: string; assetName: string; maintenanceType: string; scheduledDate: string; vendor: string; status: string; assetCode: string; journal: string }>; canAct: boolean }) => (
+    <table data-testid="jobs" data-can-act={String(canAct)}>
+      <thead><tr><th>Asset code</th><th>Asset</th><th>Type</th><th>Scheduled</th><th>Technician / Agency</th><th>Status</th><th>Journal</th></tr></thead>
+      <tbody>{rows.map((r) => <tr key={r.id}><td>{r.assetCode}</td><td>{r.assetName}</td><td>{r.maintenanceType}</td><td>{r.scheduledDate}</td><td>{r.vendor}</td><td>{r.status}</td><td>{r.journal}</td></tr>)}</tbody>
+    </table>
+  ),
+}));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }) }));
 
 vi.mock("../AccountingBanner", () => ({ AccountingBanner: ({ areas }: { areas: string[] }) => <div data-testid="accounting-banner" data-areas={areas.join(",")} /> }));

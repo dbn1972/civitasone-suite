@@ -9,6 +9,7 @@ import { formatMoney, formatIndianDate } from "@/lib/formatters";
 import { toHumanError } from "@/lib/messages";
 import { AssetDetailActions } from "./AssetDetailActions";
 import { AssetFinancialActions } from "./AssetFinancialActions";
+import { WriteoffRequestCard } from "./WriteoffRequestCard";
 import { RaiseEOfficeNote } from "../../../_components/RaiseEOfficeNote";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { canWriteAssets } from "@/lib/auth/workRoles";
@@ -109,6 +110,7 @@ export default async function AssetDetailPage(props: { params: Promise<{ id: str
       <div className="grid g-main" style={{ alignItems: "start" }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
           <AssetDetailActions assetId={asset.id} barcode={asset.barcode} status={asset.status} roles={roles} />
+          {canWriteAssets(roles) && scope === "full" ? <WriteoffRequestCard assetId={asset.id} assetCode={asset.assetCode} /> : null}
           {scope === "full" ? (
             <AssetFinancialActions assetId={asset.id} assetCode={asset.assetCode} bookValueMinor={asset.currentValue} />
           ) : null}

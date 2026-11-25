@@ -11,6 +11,7 @@ const rolesMock = vi.fn<() => string[]>(() => ["asset_manager"]);
 vi.mock("@/lib/auth/roleGuard", () => ({ getSessionRoles: () => rolesMock() }));
 vi.mock("../AccountingBanner", () => ({ AccountingBanner: ({ areas }: { areas: string[] }) => <div data-testid="accounting-banner" data-areas={areas.join(",")} /> }));
 vi.mock("./AssetDetailActions", () => ({ AssetDetailActions: () => <div data-testid="actions" /> }));
+vi.mock("./WriteoffRequestCard", () => ({ WriteoffRequestCard: () => <div data-testid="writeoff-request" /> }));
 vi.mock("./AssetFinancialActions", () => ({ AssetFinancialActions: () => <div data-testid="financial" /> }));
 vi.mock("../../../_components/RaiseEOfficeNote", () => ({ RaiseEOfficeNote: (p: { notifyPath?: string; statusAllowsRaise?: boolean }) => <div data-testid="eoffice" data-notify={p.notifyPath ?? ""} data-allows={String(p.statusAllowsRaise)} /> }));
 
