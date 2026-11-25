@@ -7914,6 +7914,13 @@ export type AnalyticsKpiRow = {
   target: string;
   trend: string;
   owner: string;
+  // D9 contract fields (additive; older API responses omit them).
+  key?: string;
+  value?: number;
+  unit?: "paise" | "percent" | "count" | "days";
+  direction?: "up_good" | "down_good";
+  trendPct?: number | null;
+  status?: "on_target" | "off_target" | "no_target";
 };
 
 export async function getAnalyticsKpis(): Promise<LoaderResult<AnalyticsKpiRow[]>> {
