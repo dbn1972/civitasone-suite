@@ -7,6 +7,7 @@ import { startOutboxPurge, resolveAuditOutboxRetentionDays } from "@civitasone/o
 import { runWithTenant } from "@civitasone/db";
 import { registerAuditConsumers } from "./modules/events/consumer.js";
 import { registerPlanConsumers } from "./modules/plan/consumer.js";
+import { registerInvestigationConsumers } from "./modules/investigation/consumer.js";
 import { registerObservationConsumers } from "./modules/observation/consumer.js";
 import { registerParaConsumers } from "./modules/para/consumer.js";
 import { registerComplianceConsumers } from "./modules/compliance/consumer.js";
@@ -32,6 +33,7 @@ const log = pino({ name: "audit-worker" });
 
 registerAuditConsumers(queue);
 registerPlanConsumers(queue);
+registerInvestigationConsumers(queue);
 registerObservationConsumers(queue);
 registerParaConsumers(queue);
 registerComplianceConsumers(queue);

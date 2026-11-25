@@ -2461,6 +2461,8 @@ export const AuditPlanItemSchema = z.object({
   planNo: z.string().optional(),
   title: z.string().optional(),
   riskLevel: z.enum(["low", "medium", "high"]).optional(),
+  // GAP-AUDIT-PLAN-05: parent plan id for the plan-level defer/complete actions.
+  planId: z.string().optional(),
   plannedFrom: z.string(),
   plannedTo: z.string(),
   auditorTeam: z.string().optional(),
@@ -2537,6 +2539,9 @@ export const InvestigationSummarySchema = z.object({
   // loader normalizes unmodelled values to "unknown" instead of letting a new
   // backend status (e.g. on_hold) fail the entire payload into an error state.
   status: z.string(),
+  closeOutcome: z.string().nullish(),
+  closeReason: z.string().nullish(),
+  closedAt: z.string().nullish(),
 });
 export const InvestigationSummaryListSchema = z.array(InvestigationSummarySchema);
 

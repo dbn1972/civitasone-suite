@@ -47,6 +47,7 @@ export function InvestigationTable({ rows, source, canViewDetail = false }: { ro
       filterable
       filterPlaceholder="Search investigations..."
       pageSize={15}
+      rowHref={canViewDetail ? (row) => `/audit/investigation/${encodeURIComponent(String(row.id))}` : undefined}
       exportable={canViewDetail} exportAudit="audit/investigation"
       exportFilename="investigations"
     />

@@ -46,7 +46,7 @@ export default async function AuditPlanPage() {
           </div>
         </Card>
       ) : (
-        <PlanTable items={items} />
+        <PlanTable items={items} canWrite={hasAnyRole(getSessionRoles(), AUDIT_PLAN_WRITE_ROLES)} />
       )}
     </div>
   );

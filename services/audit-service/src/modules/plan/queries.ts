@@ -24,6 +24,8 @@ export async function listPlanItems(tenantId: string, limit: number) {
   );
   return (rows ?? []).map((row) => ({
     id: row.id,
+    // GAP-AUDIT-PLAN-05: parent plan id so the row can call the plan-level defer/complete routes.
+    ...(row.planId ? { planId: row.planId } : {}),
     auditUnit: row.unitRef ?? row.deptRef,
     department: row.deptRef,
     type: "routine" as const,
@@ -37,6 +39,7 @@ export async function listPlanItems(tenantId: string, limit: number) {
       : {}),
     plannedFrom: row.scheduledFrom.toString(),
     plannedTo: row.scheduledTo.toString(),
-    status: (row.status === "completed" ? "completed" : row.status === "in_progress" ? "in_progress" : row.status === "deferred" ? "deferred" : "planned") as "planned" | "in_progress" | "completed" | "deferred",
+    // A plan-level terminal state (completed/deferred, set by the plan operations) wins over the item status.
+    status: (row.planStatus === "completed" || row.planStatus === "deferred" ? row.planStatus : row.status === "completed" ? "completed" : row.status === "in_progress" ? "in_progress" : row.status === "deferred" ? "deferred" : "planned") as "planned" | "in_progress" | "completed" | "deferred",
   }));
 }

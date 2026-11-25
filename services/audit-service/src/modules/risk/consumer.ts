@@ -41,7 +41,7 @@ export function registerRiskConsumers(queue: Queue): void {
   queue.subscribe(COMMANDS.riskUpdate, async (msg) => {
     const p = msg.payload as {
       riskId: string; tenantId: string; likelihood?: Likelihood; impact?: Impact;
-      mitigationStatus?: string; status?: string; owner?: string; reviewDate?: string;
+      mitigationStatus?: string; status?: string; owner?: string; reviewDate?: string; closeReason?: string;
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
@@ -56,11 +56,14 @@ export function registerRiskConsumers(queue: Queue): void {
       };
       if (p.mitigationStatus !== undefined) patch.mitigationStatus = p.mitigationStatus;
       if (p.status !== undefined) patch.status = p.status;
+      // Closing records the reason; any other explicit status (re-open) clears a stale one.
+      if (p.status === "closed") patch.closeReason = p.closeReason ?? null;
+      else if (p.status !== undefined) patch.closeReason = null;
       if (p.owner !== undefined) patch.ownerRef = p.owner;
       if (p.reviewDate !== undefined) patch.reviewDate = p.reviewDate;
       const rows = await repo.updateRiskVersioned(tx, p.riskId, p.tenantId, risk.version ?? 1, patch);
       if (rows !== 1) throw new StaleWriteError("risk", p.riskId);
-      await audit(tx, msg, "update", "risk", p.riskId, { riskScore: patch.riskScore });
+      await audit(tx, msg, "update", "risk", p.riskId, { riskScore: patch.riskScore, ...(p.status === "closed" ? { status: "closed", closeReason: p.closeReason } : {}) });
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "audit_risk", "list:50"));
   });

@@ -2356,6 +2356,8 @@ export type AuditPlanItem = {
   planNo?: string;
   title?: string;
   riskLevel?: "low" | "medium" | "high";
+  // GAP-AUDIT-PLAN-05: parent audit_plans id, used by the plan-level defer/complete routes.
+  planId?: string;
   plannedFrom: string;
   plannedTo: string;
   auditorTeam?: string;
@@ -2435,6 +2437,10 @@ export type InvestigationSummary = {
   // does not yet model (e.g. on_hold/reopened) — it must NOT be coerced to
   // in_progress (which inflated "Active Investigations").
   status: "in_progress" | "findings_submitted" | "closed" | "unknown";
+  // GAP-AUDIT-INVESTIGATION-05: recorded when a case is closed (detail route only).
+  closeOutcome?: string;
+  closeReason?: string;
+  closedAt?: string;
 };
 
 // ── Legal types ───────────────────────────────────────────────────────────────

@@ -2,6 +2,7 @@ import { PageHeader, StatCard, Card, RefreshErrorState } from "../../../_compone
 import { getRiskRegister } from "../../../_data/loaders";
 import { toHumanError } from "@/lib/messages";
 import { band } from "@/lib/audit/riskScoring";
+import { getSessionRoles, hasAnyRole, AUDIT_PLAN_WRITE_ROLES } from "@/lib/auth/roleGuard";
 import { RiskTable } from "./RiskTable";
 import { AddRiskButton } from "./AddRiskButton";
 import { AuditBreadcrumb } from "../_components/AuditBreadcrumb";
@@ -39,7 +40,7 @@ export default async function RiskRegisterPage() {
           </div>
         </Card>
       ) : (
-        <RiskTable items={items} />
+        <RiskTable items={items} canWrite={hasAnyRole(getSessionRoles(), AUDIT_PLAN_WRITE_ROLES)} />
       )}
     </div>
   );

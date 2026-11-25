@@ -44,6 +44,8 @@ export async function listPlanItemsByTenant(tenantId: string, limit: number) {
   return db.transaction((tx) => tx
     .select({
       id: auditPlanItems.id,
+      planId: auditPlanItems.planId,
+      planStatus: auditPlans.status,
       deptRef: auditPlanItems.deptRef,
       unitRef: auditPlanItems.unitRef,
       scheduledFrom: auditPlanItems.scheduledFrom,

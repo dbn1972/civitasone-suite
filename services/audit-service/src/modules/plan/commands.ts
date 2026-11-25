@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { RequestContext } from "@civitasone/types";
 import { queue, cache } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
-import type { CreatePlanBody, CreatePlanItemBody } from "./validators.js";
+import type { CreatePlanBody, CreatePlanItemBody, DeferPlanBody } from "./validators.js";
 
 export type Accepted = { id: string; status: string; correlationId: string };
 
@@ -32,6 +32,26 @@ export async function startPlan(ctx: RequestContext, planId: string): Promise<Ac
   await queue.publish(COMMANDS.planStart, {
     messageId,
     type: COMMANDS.planStart,
+    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+    payload: { planId, tenantId: ctx.tenantId },
+  });
+  await cache.invalidate(cache.makeKey(ctx.tenantId, "plan", planId));
+  return { id: planId, status: "accepted", correlationId: ctx.correlationId };
+}
+
+export async function deferPlan(ctx: RequestContext, planId: string, body: DeferPlanBody): Promise<Accepted> {
+  await queue.publish(COMMANDS.planDefer, {
+    messageId: randomUUID(), type: COMMANDS.planDefer,
+    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+    payload: { planId, tenantId: ctx.tenantId, reason: body.reason },
+  });
+  await cache.invalidate(cache.makeKey(ctx.tenantId, "plan", planId));
+  return { id: planId, status: "accepted", correlationId: ctx.correlationId };
+}
+
+export async function completePlan(ctx: RequestContext, planId: string): Promise<Accepted> {
+  await queue.publish(COMMANDS.planComplete, {
+    messageId: randomUUID(), type: COMMANDS.planComplete,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
     payload: { planId, tenantId: ctx.tenantId },
   });

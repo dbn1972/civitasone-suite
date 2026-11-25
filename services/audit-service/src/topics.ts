@@ -11,6 +11,10 @@ export const COMMANDS = {
   planCreate:            "audit.plan.create",
   planItemCreate:        "audit.plan_item.create",
   planStart:             "audit.plan.start",
+  planDefer:             "audit.plan.defer",
+  planComplete:          "audit.plan.complete",
+  investigationAssign:   "audit.investigation.assign",
+  investigationClose:    "audit.investigation.close",
   observationCreate:     "audit.observation.create",
   // AU-01: auditee reply and auditor review commands
   observationReply:      "audit.observation.reply",

@@ -478,7 +478,9 @@ export const AUDIT_PII_EXPORT_ROLES = ["audit_admin", "super_admin", "platform_a
  * UI masking alone is advisory; server-side redaction is tracked for HUMAN
  * REVIEW (see batch report).
  */
-export const AUDIT_INVESTIGATION_DETAIL_ROLES = ["audit_officer", "audit_admin", "super_admin"];
+export const AUDIT_INVESTIGATION_DETAIL_ROLES = ["audit_admin", "audit_officer", "vigilance_admin"];
+// GAP-AUDIT-INVESTIGATION-05 / owner decision B4: the SAME three roles read, assign and close (audit-service
+// modules/investigation/routes.ts INVESTIGATION_ROLES). tenant_admin and super_admin are deliberately excluded.
 
 /**
  * GAP-AUDIT-OBSERVATIONS-DETAIL-02: who may act on an observation. Mirrors

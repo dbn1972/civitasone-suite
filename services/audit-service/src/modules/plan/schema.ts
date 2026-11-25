@@ -12,6 +12,7 @@ export const auditPlans = planSchema.table("audit_plans", {
   periodTo:   date("period_to").notNull(),
   riskLevel:  varchar("risk_level", { length: 16 }).notNull().default("medium"),
   status:     varchar("status", { length: 24 }).notNull().default("draft"),
+  deferReason: text("defer_reason"),
   createdAt:  timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:  timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy:  uuid("created_by").notNull(),

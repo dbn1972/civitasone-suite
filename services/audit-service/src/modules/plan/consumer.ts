@@ -4,7 +4,7 @@ import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, CONSUMED_EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
-import { assertCanStart } from "./domain.js";
+import { assertCanStart, assertCanDefer, assertCanComplete } from "./domain.js";
 
 const AUDIT_TOPIC = CONSUMED_EVENTS.auditEventRecord;
 
@@ -74,12 +74,44 @@ export function registerPlanConsumers(queue: Queue): void {
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "plan", p.planId));
   });
+
+  queue.subscribe(COMMANDS.planDefer, async (msg) => {
+    const p = msg.payload as { planId: string; tenantId: string; reason: string };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const plan = await repo.findPlanByIdTx(tx, p.planId, p.tenantId);
+      if (!plan) throw new Error(`plan ${p.planId} not found`);
+      assertCanDefer(plan.status ?? "draft");
+      const rows = await repo.updatePlanVersioned(tx, p.planId, p.tenantId, plan.version ?? 1, {
+        status: "deferred", deferReason: p.reason, updatedBy: msg.actorId, version: (plan.version ?? 1) + 1,
+      });
+      if (rows !== 1) throw new StaleWriteError("plan", p.planId);
+      await audit(tx, msg, "defer", "plan", p.planId, { reason: p.reason });
+    });
+    await cache.invalidate(cache.makeKey(msg.tenantId, "plan", p.planId));
+  });
+
+  queue.subscribe(COMMANDS.planComplete, async (msg) => {
+    const p = msg.payload as { planId: string; tenantId: string };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const plan = await repo.findPlanByIdTx(tx, p.planId, p.tenantId);
+      if (!plan) throw new Error(`plan ${p.planId} not found`);
+      assertCanComplete(plan.status ?? "draft");
+      const rows = await repo.updatePlanVersioned(tx, p.planId, p.tenantId, plan.version ?? 1, {
+        status: "completed", updatedBy: msg.actorId, version: (plan.version ?? 1) + 1,
+      });
+      if (rows !== 1) throw new StaleWriteError("plan", p.planId);
+      await audit(tx, msg, "complete", "plan", p.planId);
+    });
+    await cache.invalidate(cache.makeKey(msg.tenantId, "plan", p.planId));
+  });
 }
 
-async function audit(tx: any, msg: { tenantId: string; actorId: string; correlationId: string }, action: string, resourceType: string, resourceId: string): Promise<void> {
+async function audit(tx: any, msg: { tenantId: string; actorId: string; correlationId: string }, action: string, resourceType: string, resourceId: string, newValue?: Record<string, unknown>): Promise<void> {
   await enqueue(tx, {
     topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
     tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-    payload: { service: "audit", action, resourceType, resourceId, outcome: "success" },
+    payload: { service: "audit", action, resourceType, resourceId, outcome: "success", ...(newValue ? { newValue } : {}) },
   });
 }

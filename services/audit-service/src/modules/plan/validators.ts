@@ -24,3 +24,9 @@ export const createPlanItemBody = z.object({
 export type CreatePlanItemBody = z.infer<typeof createPlanItemBody>;
 
 export const idParam = z.object({ id: z.string().uuid() });
+
+// GAP-AUDIT-PLAN-05: a deferral must say why; the reason is persisted (plan.audit_plans.defer_reason) and audited.
+export const deferPlanBody = z.object({
+  reason: z.string().trim().min(3, "a defer reason is required").max(2000),
+});
+export type DeferPlanBody = z.infer<typeof deferPlanBody>;

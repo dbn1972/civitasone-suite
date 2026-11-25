@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { DataTable, Segmented } from "@/app/_components/ds";
 import type { RiskSummary } from "@civitasone/types";
 import { band, BAND_LABEL, statusLabel } from "@/lib/audit/riskScoring";
+import { RiskActions } from "./RiskActions";
 
 const FILTERS = ["All", "High", "Medium", "Low"];
 const BAND_BY_FILTER: Record<string, "high" | "medium" | "low" | null> = {
@@ -29,7 +30,7 @@ function statusPill(status: string): ReactNode {
   return <span className={`pill ${tone}`} title={status}>{label}</span>;
 }
 
-export function RiskTable({ items }: { items: RiskSummary[] }) {
+export function RiskTable({ items, canWrite = false }: { items: RiskSummary[]; canWrite?: boolean }) {
   const router = useRouter();
   const params = useSearchParams();
   const bandParam = params.get("band");
@@ -62,6 +63,7 @@ export function RiskTable({ items }: { items: RiskSummary[] }) {
             { key: "owner", label: "Owner area", render: (r) => r.owner ?? "—" },
             { key: "riskScore", label: "Rating", render: (r) => ratingCell(r.riskScore) },
             { key: "status", label: "Status", render: (r) => statusPill(r.status) },
+            ...(canWrite ? [{ key: "id" as const, label: "Actions", render: (r: RiskSummary) => <RiskActions riskId={r.id} riskCode={r.riskCode} status={r.status} /> }] : []),
           ]}
           rows={rows}
           sortable

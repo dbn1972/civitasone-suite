@@ -4,10 +4,11 @@ import { AuditPlanListSchema } from "@civitasone/schemas/web";
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { createPlanBody, createPlanItemBody, idParam } from "./validators.js";
+import { createPlanBody, createPlanItemBody, deferPlanBody, idParam } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 import * as repo from "./repo.js";
+import { assertCanComplete, assertCanDefer, DomainError } from "./domain.js";
 
 const AUDIT_ROLES = ["audit_officer", "audit_admin", "super_admin"];
 const READER_ROLES = [...AUDIT_ROLES, "finance_admin"];
@@ -36,6 +37,29 @@ export async function planRoutes(app: FastifyInstance): Promise<void> {
     // 202 for a command that can never apply. The consumer stays the race-safe check.
     if (!(await repo.findPlanById(id, ctx.tenantId))) throw new HttpError(404, "NOT_FOUND", "plan not found");
     return sendAccepted(reply, acceptedResponseSchema, await commands.startPlan(ctx, id));
+  });
+
+  // GAP-AUDIT-PLAN-05: defer (reason required) and complete. Same 404 pre-check as /start, plus a 409
+  // pre-check on the current status; the consumer remains the race-safe authority.
+  app.patch("/v1/audit/plans/:id/defer", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, AUDIT_ROLES);
+    const { id } = idParam.parse(req.params);
+    const body = deferPlanBody.parse(req.body);
+    const plan = await repo.findPlanById(id, ctx.tenantId);
+    if (!plan) throw new HttpError(404, "NOT_FOUND", "plan not found");
+    guard(() => assertCanDefer(plan.status ?? "draft"));
+    return sendAccepted(reply, acceptedResponseSchema, await commands.deferPlan(ctx, id, body));
+  });
+
+  app.patch("/v1/audit/plans/:id/complete", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, AUDIT_ROLES);
+    const { id } = idParam.parse(req.params);
+    const plan = await repo.findPlanById(id, ctx.tenantId);
+    if (!plan) throw new HttpError(404, "NOT_FOUND", "plan not found");
+    guard(() => assertCanComplete(plan.status ?? "draft"));
+    return sendAccepted(reply, acceptedResponseSchema, await commands.completePlan(ctx, id));
   });
 
   // LIST top-level audit plans (auditPlans) for the caller's tenant. Distinct
@@ -68,6 +92,13 @@ export async function planRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.setErrorHandler(errorHandler);
+}
+
+function guard(fn: () => void): void {
+  try { fn(); } catch (e) {
+    if (e instanceof DomainError) throw new HttpError(409, e.code, e.message);
+    throw e;
+  }
 }
 
 function errorHandler(err: unknown, req: { headers: Record<string, unknown>; id: string; log: { error: (o: object, m: string) => void } }, reply: { code: (n: number) => { send: (o: object) => void } }): void {

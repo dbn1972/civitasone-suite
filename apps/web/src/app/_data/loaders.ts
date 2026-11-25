@@ -5873,6 +5873,29 @@ export async function getInvestigations(): Promise<LoaderResult<InvestigationSum
   });
 }
 
+/** GAP-AUDIT-INVESTIGATION-05: one case (GET /v1/audit/investigations/:id; 404 -> status 404, 403 -> status 403). */
+export async function getInvestigationDetail(id: string): Promise<LoaderResult<InvestigationSummary | null>> {
+  return fetchJson<unknown, InvestigationSummary | null>(`/api/v1/audit/investigations/${encodeURIComponent(id)}`, null, {
+    telemetryKey: "audit.investigation.detail",
+    mapResponse: (p) => {
+      if (!isRecord(p)) return null;
+      const rowId = toText(p.id);
+      if (!rowId) return null;
+      const rawStatus = toText(p.status) ?? "unknown";
+      const status: InvestigationSummary["status"] =
+        rawStatus === "in_progress" || rawStatus === "findings_submitted" || rawStatus === "closed" ? rawStatus : "unknown";
+      const closeOutcome = toText(p.closeOutcome);
+      const closeReason = toText(p.closeReason);
+      const closedAt = toText(p.closedAt);
+      return {
+        id: rowId, caseId: toText(p.caseId) ?? "", subject: toText(p.subject) ?? "", assignedTo: toText(p.assignedTo) ?? "",
+        started: toText(p.started) ?? "", findings: toText(p.findings) ?? "", status,
+        ...(closeOutcome ? { closeOutcome } : {}), ...(closeReason ? { closeReason } : {}), ...(closedAt ? { closedAt } : {}),
+      };
+    },
+  });
+}
+
 // ── Legal loaders ─────────────────────────────────────────────────────────────
 
 const LEGAL_DASHBOARD_EMPTY: LegalDashboard = {
