@@ -45,7 +45,7 @@ export function InstallmentScheduleForm({
   const update = (i: number, patch: Partial<Row>) =>
     setRows((rs) => rs.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
 
-  const minors = rows.map((r) => rupeesToMinorString(r.amount));
+  const minors = rows.map((r) => rupeesToMinorString(r.amount.replace(/[,\s]/g, "")));
   const total = minors.reduce<bigint>((s, m) => s + (m ? BigInt(m) : 0n), 0n);
 
   async function submit(e: React.FormEvent) {

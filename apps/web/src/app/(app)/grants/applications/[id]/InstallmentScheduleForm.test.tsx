@@ -50,4 +50,14 @@ describe("InstallmentScheduleForm", () => {
     await waitFor(() => expect(screen.getByRole("alert")).toBeTruthy());
     expect(refreshMock).not.toHaveBeenCalled();
   });
+
+  it("accepts Indian comma-formatted amounts such as the placeholder", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 202 }));
+    render(<InstallmentScheduleForm applicationId="app-1" approvedMinor={50000000} />);
+    fireEvent.change(screen.getByLabelText(/^Amount/), { target: { value: " 2,50,000 " } });
+    fireEvent.click(screen.getByRole("button", { name: "Create schedule" }));
+    await waitFor(() => expect(refreshMock).toHaveBeenCalled());
+    const body = JSON.parse((fetchSpy.mock.calls[0][1] as RequestInit).body as string);
+    expect(body.installments[0].amountMinor).toBe(25000000);
+  });
 });
