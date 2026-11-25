@@ -3,6 +3,8 @@ import { formatIndianDate, humanizeStatus } from "@/lib/formatters";
 import { journalState, type JournalState } from "../glStatus";
 
 export type MaintenanceRow = {
+  /** Work-order id (PATCH /v1/assets/work-orders/:id/complete). */
+  id: string;
   assetId: string;
   assetCode: string;
   assetName: string;
@@ -22,6 +24,7 @@ export type MaintenanceRow = {
  */
 export function buildMaintenanceRows(records: MaintenanceSummary[], journalLabel: (state: JournalState, error?: string) => string = (s) => s): MaintenanceRow[] {
   return records.map((r) => ({
+    id: r.id,
     assetId: r.assetId,
     assetCode: r.assetCode,
     assetName: r.assetName,

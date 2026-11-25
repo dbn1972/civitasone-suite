@@ -1,4 +1,7 @@
 import { PageHeader } from "@/app/_components/ds";
+import { getSessionRoles } from "@/lib/auth/roleGuard";
+import { WriteoffApproveCard } from "./WriteoffApproveCard";
+import { canApproveWriteoff } from "./writeoffApi";
 import { CondemnationWorkflow, type CondemnationData } from "./CondemnationWorkflow";
 import { loadList, mapAssetOptions, mapAuctions, mapRecommendations, mapSurveys } from "./readModels";
 
@@ -43,6 +46,7 @@ export default async function CondemnationPage() {
         backLabel="Assets"
       />
       <CondemnationWorkflow data={data} />
+      {canApproveWriteoff(getSessionRoles()) ? <WriteoffApproveCard /> : null}
     </div>
   );
 }

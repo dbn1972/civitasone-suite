@@ -1,12 +1,15 @@
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { getAssetMaintenance } from "../../../_data/loaders";
-import { PageHeader, StatCard, StatGrid, EmptyState, DataTable, RefreshErrorState } from "../../../_components/ds";
+import { PageHeader, StatCard, StatGrid, EmptyState, RefreshErrorState } from "../../../_components/ds";
 import { toHumanError } from "@/lib/messages";
 import Link from "next/link";
 import { buildMaintenanceRows, countByType } from "./maintenanceRows";
 import { getTranslations } from "next-intl/server";
 import { AccountingBanner } from "../AccountingBanner";
 import { journalKey, rejectionNote } from "../glStatus";
+import { getSessionRoles } from "@/lib/auth/roleGuard";
+import { canWriteAssets } from "@/lib/auth/workRoles";
+import { MaintenanceJobs } from "./MaintenanceJobs";
 
 export default async function AssetMaintenancePage() {
   const { data: records, source } = await getAssetMaintenance();
@@ -52,25 +55,7 @@ export default async function AssetMaintenancePage() {
         ) : rows.length === 0 ? (
           <EmptyState icon="🛠️" title="No maintenance jobs" message="Log maintenance jobs to track asset uptime." />
         ) : (
-          <DataTable
-            columns={[
-              { key: "assetCode", label: "Asset code" },
-              { key: "assetName", label: "Asset" },
-              { key: "maintenanceType", label: "Type" },
-              { key: "scheduledDate", label: "Scheduled" },
-              { key: "vendor", label: "Technician / Agency" },
-              { key: "status", label: "Status", cellType: "status" },
-              { key: "journal", label: t("journal") },
-            ]}
-            rows={rows}
-            rowLinkKey="assetId"
-            rowLinkPrefix="/assets/"
-            identifyingColumnKey="assetName"
-            sortable
-            filterable
-            filterPlaceholder="Filter jobs…"
-            pageSize={15}
-          />
+          <MaintenanceJobs rows={rows} canAct={canWriteAssets(getSessionRoles())} />
         )}
       </div>
     </>
