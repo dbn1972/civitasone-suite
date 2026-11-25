@@ -170,6 +170,7 @@ import type {
   CourtOrderSummary,
   CourtOrderPage,
   LegalOpinionSummary,
+  LegalNoticeSummary,
   UserSummary,
   UserDetail,
   RoleDetail,
@@ -5902,6 +5903,39 @@ export async function getLegalOpinions(): Promise<LoaderResult<LegalOpinionSumma
     // vocabulary. The bare LegalOpinionSummaryListSchema rejected every real
     // response, so the list silently fell back to empty. Map explicitly.
     mapResponse: mapLegalOpinionSummaries,
+  });
+}
+
+// GET /v1/legal/notices (services/legal-service/src/modules/notices/routes.ts) returns
+// `{ items: NoticeRow[] }` (noticeNo, subject, partyRef, direction sent|received, status open|responded).
+export function mapLegalNotices(payload: unknown): LegalNoticeSummary[] | null {
+  const rows = getArrayPayload(payload);
+  if (!rows) return null;
+  const mapped: LegalNoticeSummary[] = [];
+  for (const row of rows) {
+    if (!isRecord(row)) continue;
+    const id = toText(row.id);
+    const noticeNo = toText(row.noticeNo) ?? toText(row.notice_no);
+    const subject = toText(row.subject);
+    if (!id || !noticeNo || !subject) continue;
+    mapped.push({
+      id,
+      noticeNo,
+      subject,
+      partyRef: toText(row.partyRef) ?? toText(row.party_ref) ?? "—",
+      direction: toText(row.direction) === "received" ? "received" : "sent",
+      status: toText(row.status) === "open" ? "open" : "responded",
+      createdAt: toText(row.createdAt) ?? toText(row.created_at) ?? "",
+    });
+  }
+  return mapped;
+}
+
+export async function getLegalNotices(): Promise<LoaderResult<LegalNoticeSummary[]>> {
+  return fetchJson<unknown, LegalNoticeSummary[]>("/api/v1/legal/notices", [], {
+    revalidateSeconds: 30,
+    telemetryKey: "legal.notices",
+    mapResponse: mapLegalNotices,
   });
 }
 
