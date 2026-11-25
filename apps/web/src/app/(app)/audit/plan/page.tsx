@@ -3,6 +3,8 @@ import { toHumanError } from "@/lib/messages";
 import { getAuditPlan } from "../../../_data/loaders";
 import { PlanTable } from "./PlanTable";
 import { PlanAuditButton } from "./PlanAuditButton";
+import { getSessionRoles, hasAnyRole, AUDIT_PLAN_WRITE_ROLES } from "@/lib/auth/roleGuard";
+import { PlanItemButton } from "./PlanItemButton";
 import { AuditBreadcrumb } from "../_components/AuditBreadcrumb";
 
 export default async function AuditPlanPage() {
@@ -24,7 +26,12 @@ export default async function AuditPlanPage() {
       <PageHeader
         title="Internal Audit Planning"
         subtitle="Risk-based annual audit plan & universe."
-        actions={<PlanAuditButton />}
+        actions={
+          <>
+            {hasAnyRole(getSessionRoles(), AUDIT_PLAN_WRITE_ROLES) ? <PlanItemButton /> : null}
+            <PlanAuditButton />
+          </>
+        }
       />
       <div className="grid g-4" style={{ marginBottom: 18 }}>
         <StatCard icon="🗓️" iconBg="var(--badbg)" label="Planned Audits" value={total ?? "—"} />

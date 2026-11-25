@@ -1177,3 +1177,10 @@ export const KNOWLEDGE_POLICY_APPROVER_ROLES = ["knowledge_admin", "super_admin"
  */
 // Defined in ./navRoles (client-safe: the nav model needs it too); re-exported here.
 export { INSPECTION_ROLES } from "./navRoles";
+
+/**
+ * GAP-AUDIT-PLAN-01: roles permitted to add items to an audit plan. MUST mirror
+ * audit-service AUDIT_ROLES (modules/plan/routes.ts) for POST /v1/audit/plans/:id/items.
+ * The server is the authority; this only decides whether the UI offers the control.
+ */
+export const AUDIT_PLAN_WRITE_ROLES = ["audit_officer", "audit_admin", "super_admin"];
