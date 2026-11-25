@@ -16,8 +16,10 @@
  */
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import type {
+  ActionItem,
   ActiveVote,
   AgendaItem,
+  Decision,
   ConfigEntry,
   LiveAttendance,
   Meeting,
@@ -427,5 +429,63 @@ export function getConfigNamespace(namespace: string): Promise<LoaderResult<Conf
       telemetryKey: `meeting.config.${namespace}`,
       mapResponse: mapConfig,
     },
+  );
+}
+
+// ─── action items & decisions (P0-6) ─────────────────────────────────────────
+
+function mapActionItems(payload: unknown): ActionItem[] {
+  return asArray(pickData(payload)).map((o) => ({
+    id: str(o.id),
+    meetingId: str(o.meetingId),
+    decisionId: strOrNull(o.decisionId),
+    agendaItemId: strOrNull(o.agendaItemId),
+    description: str(o.description),
+    assigneeId: str(o.assigneeId),
+    deadline: str(o.deadline),
+    priority: str(o.priority, "medium"),
+    slaHours: typeof o.slaHours === "number" ? o.slaHours : null,
+    escalationLevel: num(o.escalationLevel),
+    status: str(o.status, "assigned"),
+    evidenceUrl: strOrNull(o.evidenceUrl),
+    evidenceNote: strOrNull(o.evidenceNote),
+    verifiedBy: strOrNull(o.verifiedBy),
+    verifiedAt: strOrNull(o.verifiedAt),
+    completedAt: strOrNull(o.completedAt),
+    acknowledgedAt: strOrNull(o.acknowledgedAt),
+    overdueAt: strOrNull(o.overdueAt),
+    version: num(o.version, 1),
+  }));
+}
+
+function mapDecisions(payload: unknown): Decision[] {
+  return asArray(pickData(payload)).map((o) => ({
+    id: str(o.id),
+    meetingId: str(o.meetingId),
+    agendaItemId: strOrNull(o.agendaItemId),
+    text: str(o.text),
+    type: str(o.type, "general"),
+    authority: strOrNull(o.authority),
+    effectiveDate: strOrNull(o.effectiveDate),
+    status: str(o.status, "effective"),
+    responsibleOfficer: strOrNull(o.responsibleOfficer),
+    deadline: strOrNull(o.deadline),
+    version: num(o.version, 1),
+  }));
+}
+
+export function getActionItems(meetingId: string): Promise<LoaderResult<ActionItem[]>> {
+  return fetchJson<unknown, ActionItem[]>(
+    `/api/v1/meeting/${encodeURIComponent(meetingId)}/action-items`,
+    [],
+    { telemetryKey: "meeting.actionItems", mapResponse: mapActionItems },
+  );
+}
+
+export function getDecisions(meetingId: string): Promise<LoaderResult<Decision[]>> {
+  return fetchJson<unknown, Decision[]>(
+    `/api/v1/meeting/${encodeURIComponent(meetingId)}/decisions`,
+    [],
+    { telemetryKey: "meeting.decisions", mapResponse: mapDecisions },
   );
 }

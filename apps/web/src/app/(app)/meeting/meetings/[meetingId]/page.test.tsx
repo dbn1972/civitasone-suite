@@ -14,7 +14,10 @@ vi.mock("../../_data/loaders", () => ({
   getAgenda: (...a: unknown[]) => getAgendaMock(...a),
   getLiveAttendance: (...a: unknown[]) => getLiveAttendanceMock(...a),
   getActiveVotes: (...a: unknown[]) => getActiveVotesMock(...a),
+  getActionItems: () => Promise.resolve({ data: [], source: "api" }),
+  getDecisions: () => Promise.resolve({ data: [], source: "api" }),
 }));
+vi.mock("./ActionsDecisionsPanel", () => ({ ActionsDecisionsPanel: () => <div data-testid="actions-panel" /> }));
 
 // MeetingConsole is a heavy client component; stub it since these tests only
 // exercise the page's error-branching.
