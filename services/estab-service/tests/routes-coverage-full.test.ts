@@ -183,7 +183,7 @@ describe("POST /v1/estab/approval-rules — valid payload", () => {
         sourceType: "finance_sanction",
         label: "Standard Approval Rule",
         workflowDefinitionCode: "file_noting",
-        steps: [{ role: "estab_section_officer", label: "Section Officer" }],
+        steps: [{ role: "estab_division_admin", label: "Section Officer" }],
       },
     });
     await app.close();

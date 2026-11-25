@@ -99,6 +99,7 @@ export const estabInward = filesSchema.table("estab_inward", {
   category:    varchar("category", { length: 32 }),
   receivedDate: date("received_date"),
   dueDate:     date("due_date"),
+  classification: varchar("classification", { length: 16 }).notNull().default("public"),
   detachedReason: text("detached_reason"),
   detachedAt:  timestamp("detached_at", { withTimezone: true }),
   status:     varchar("status", { length: 24 }).notNull().default("received"),

@@ -19,6 +19,7 @@ export const COMMANDS = {
   inwardRegister:       "estab.inward.register",
   inwardAttach:         "estab.inward.attach",
   inwardDetach:         "estab.inward.detach",
+  inwardReclassify:     "estab.inward.reclassify",
   dispatchDelivery:     "estab.dispatch.delivery",
   fileAttachmentAdd:    "estab.file.attachment.add",
   committeeCreate:      "estab.committee.create",

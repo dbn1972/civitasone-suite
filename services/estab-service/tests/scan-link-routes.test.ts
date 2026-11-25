@@ -208,7 +208,7 @@ describe("GET /internal/v1/scan-link/clearance", () => {
   const check = (o: { fileId: string; userId: string; roles?: string; tenant?: string; as?: string[] }) =>
     app.inject({
       method: "GET",
-      url: `/internal/v1/scan-link/clearance?fileId=${o.fileId}&userId=${o.userId}&roles=${o.roles ?? "estab_officer"}`,
+      url: `/internal/v1/scan-link/clearance?fileId=${o.fileId}&userId=${o.userId}&roles=${o.roles ?? "estab_admin"}`,
       headers: o.as ? hdr(o.as, o.tenant ?? TC) : internalHdr(o.tenant ?? TC),
     });
   const verdict = async (r: Awaited<ReturnType<typeof check>>) => r.json().data as { allowed: boolean; reason: string | null };
@@ -241,7 +241,10 @@ describe("GET /internal/v1/scan-link/clearance", () => {
   it("insufficient ROLES (no estab reader role) => allowed:false even for a cleared user", async () => {
     expect(await verdict(await check({ fileId: secretFile, userId: CLEARED, roles: "citizen,hr_officer" }))).toEqual({ allowed: false, reason: "FORBIDDEN_ROLE" });
     expect(await verdict(await check({ fileId: secretFile, userId: CLEARED, roles: "" }))).toMatchObject({ allowed: false });
-    expect((await verdict(await check({ fileId: secretFile, userId: CLEARED, roles: "audit_officer,citizen" }))).allowed).toBe(true);
+    expect((await verdict(await check({ fileId: secretFile, userId: CLEARED, roles: "estab_admin,citizen" }))).allowed).toBe(true);
+    // D14: a reader without a classified-access role is refused a Confidential+ file whatever their clearance.
+    expect(await verdict(await check({ fileId: secretFile, userId: CLEARED, roles: "estab_officer" }))).toEqual({ allowed: false, reason: "CLASSIFIED" });
+    expect(await verdict(await check({ fileId: secretFile, userId: CLEARED, roles: "audit_officer" }))).toEqual({ allowed: false, reason: "CLASSIFIED" });
   });
 
   it("reclassification flips the verdict immediately", async () => {

@@ -601,7 +601,7 @@ export function registerFilesConsumers(rawQueue: Queue): void {
       id: string; tenantId: string; dakNo?: string; fromAddress: string; subject: string;
       assignedTo?: string; sourceSection?: string;
       mode?: string; language?: string; urgency?: string; category?: string;
-      receivedDate?: string; dueDate?: string;
+      receivedDate?: string; dueDate?: string; classification?: string;
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
@@ -617,6 +617,7 @@ export function registerFilesConsumers(rawQueue: Queue): void {
         urgency: p.urgency ?? null, category: p.category ?? null,
         receivedDate: p.receivedDate ?? new Date().toISOString().slice(0, 10),
         dueDate: p.dueDate ?? null,
+        classification: p.classification ?? "public",
         status: "received",
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });
@@ -661,6 +662,23 @@ export function registerFilesConsumers(rawQueue: Queue): void {
         toOfficer: inward.assignedTo ?? null, action: "detached", remarks: p.reason,
       });
       await audit(tx, msg, "detach_from_file", "inward", p.inwardId);
+    });
+  });
+
+  // D12: the dealing hand reclassifies a DAK; reason mandatory, audited, recorded as a movement.
+  queue.subscribe(COMMANDS.inwardReclassify, async (msg) => {
+    const p = msg.payload as { tenantId: string; inwardId: string; classification: string; reason: string };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const inward = await repo.findInwardByIdTx(tx, p.inwardId, p.tenantId);
+      if (!inward) return;
+      await repo.updateInward(tx, p.inwardId, { classification: p.classification, updatedBy: msg.actorId });
+      await repo.insertInwardMovement(tx, {
+        tenantId: p.tenantId, inwardId: p.inwardId, fromOfficer: inward.assignedTo ?? null,
+        toOfficer: inward.assignedTo ?? null, action: "reclassified",
+        remarks: `${inward.classification} -> ${p.classification}: ${p.reason}`,
+      });
+      await audit(tx, msg, "reclassify", "inward", p.inwardId, { from: inward.classification, to: p.classification, reason: p.reason });
     });
   });
 

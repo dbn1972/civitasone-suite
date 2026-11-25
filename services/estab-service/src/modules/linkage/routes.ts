@@ -10,6 +10,8 @@ import { fileFromModuleBody, refQuery } from "./validators.js";
 import * as commands from "./commands.js";
 import { resolveActorEmployeeId, verifyEmployeeExists, HrmsUnavailableError } from "../../shared/hrms-client.js";
 import { checkEligibility, tenantHasOperators } from "../operators/eligibility.js";
+import { roleMayAccessClassification, isConfidentialOrAbove } from "../files/domain.js";
+import { assertRoleMayAccess, assertFileClassAccess } from "../files/classAccess.js";
 
 // Any authenticated service-account or officer from a source module can raise a file.
 const INITIATOR_ROLES = [
@@ -23,6 +25,11 @@ const INITIATOR_ROLES = [
 
 const READER_ROLES = [...INITIATOR_ROLES, "audit_officer"];
 
+/** service_account is the trusted source-module caller; users need a classified-access role for Confidential+. */
+function mayReadClassified(ctx: { roles: string[] }): boolean {
+  return hasAnyRole(ctx as never, ["service_account"]) || roleMayAccessClassification(ctx.roles, "confidential");
+}
+
 export async function linkageRoutes(app: FastifyInstance): Promise<void> {
   /**
    * POST /v1/estab/files/from-module
@@ -33,6 +40,11 @@ export async function linkageRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, INITIATOR_ROLES);
     const parsed = fileFromModuleBody.parse(req.body);
+    // D14: explicitly raising a Confidential+ file needs a classified-access role (a service account is
+    // the trusted source-module caller and is exempt; the default is Ordinary, see validators.ts).
+    if (isConfidentialOrAbove(parsed.classification) && !mayReadClassified(ctx)) {
+      await assertRoleMayAccess(ctx, parsed.classification, "from_module_denied_role");
+    }
 
     // GAP-GRANTS-DISBURSEMENTS-DETAIL-03: the initiating officer comes from the session, never the client.
     // A service account is a trusted internal caller and keeps the id it supplies.
@@ -125,7 +137,12 @@ export async function linkageRoutes(app: FastifyInstance): Promise<void> {
       // screens, not an error: answer 200 {data:null} so the browser logs no failed request.
       return reply.send({ data: null });
     }
-    return reply.send({ data: rows[0] });
+    // A Confidential+ file is shown to a source module's officers by status only (no subject / file number).
+    const row = rows[0] as Record<string, unknown>;
+    if (!mayReadClassified(ctx) && isConfidentialOrAbove(String(row.classification))) {
+      return reply.send({ data: { ...row, subject: null, file_no: null, redacted: true } });
+    }
+    return reply.send({ data: row });
   });
 
   /**
@@ -137,6 +154,7 @@ export async function linkageRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, READER_ROLES);
     // UAT W8-A: a malformed :id reached the uuid column and 500ed (22P02); it is a 400 now.
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
+    if (!mayReadClassified(ctx)) await assertFileClassAccess(ctx, id, "decision_log_denied_role");
 
     // files.module_decision_log is also RLS ENABLEd AND FORCEd — same gap as
     // above, see withRawTenantGuc.

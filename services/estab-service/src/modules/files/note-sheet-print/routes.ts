@@ -1,3 +1,4 @@
+import { assertRoleMayAccess } from "../classAccess.js";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { OfficialPdf, formatDateIst, DocumentUnavailableError } from "@civitasone/render/official";
@@ -63,6 +64,7 @@ export async function noteSheetPrintRoutes(app: FastifyInstance): Promise<void> 
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
     const file = await queries.getFileDetail(ctx.tenantId, id);
     if (!file) throw new HttpError(404, "NOT_FOUND", "file not found");
+    await assertRoleMayAccess(ctx, file.classification, "note_sheet_denied_role", id);
 
     // Tenant organisation name for the header — NOT a hardcoded sovereign/owner
     // string (editions include Govt, PSU, NGO, private). Resolved defensively

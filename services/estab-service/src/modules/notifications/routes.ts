@@ -1,3 +1,4 @@
+import { roleMayAccessClassification } from "../files/domain.js";
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
@@ -16,7 +17,7 @@ export async function notificationRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
     const { limit } = listQuery.parse(req.query);
-    const data = await getNotifications(ctx.tenantId, limit);
+    const data = await getNotifications(ctx.tenantId, limit, roleMayAccessClassification(ctx.roles, "confidential"));
     return reply.send({ data });
   });
 

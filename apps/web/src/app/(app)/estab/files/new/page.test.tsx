@@ -59,7 +59,7 @@ describe("NewFilePage (estab) — classification is sent verbatim, no lossy rema
     const options = Array.from(
       (screen.getByLabelText("Classification") as HTMLSelectElement).options,
     ).map((o) => o.value);
-    expect(options).toEqual(["public", "confidential", "secret", "top_secret"]);
+    expect(options).toEqual(["public", "restricted", "confidential", "secret", "top_secret"]);
   });
 
   it("sends the selected classification value unchanged (secret stays secret)", async () => {

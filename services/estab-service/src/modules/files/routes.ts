@@ -8,21 +8,22 @@ import {
   createDispatchBody, registerInwardBody, submitNotingBody, openFileFromInwardBody,
   addAttachmentBody, recallFileBody, reopenFileBody, attachInwardBody, detachInwardBody,
   deliveryUpdateBody, fileSearchQuery, duplicateCheckQuery, registerListQuery,
-  openVolumeBody, openPartFileBody, linkFileBody, setFileTypeBody,
+  openVolumeBody, openPartFileBody, linkFileBody, setFileTypeBody, reclassifyInwardBody,
 } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
-import { randomUUID } from "node:crypto";
 import { noteSheetPrintRoutes } from "./note-sheet-print/routes.js";
-import { isTopSecret, isFileReadOnly } from "./domain.js";
-import { queue } from "../../shared/infra.js";
+import {
+  publishFileAccessAudit, assertRoleMayAccess, assertFileClassAccess, assertInwardClassAccess,
+  assertClassifiedHolder, mayViewClassified,
+} from "./classAccess.js";
+import { isTopSecret, isFileReadOnly, roleMayAccessClassification, isConfidentialOrAbove } from "./domain.js";
 import {
   isMoveAllowed, isAccessAllowed, isActiveOperator,
   clearanceRankFor, tenantHasOperators, CLASSIFICATION_RANK,
 } from "../operators/eligibility.js";
 import { resolveActorEmployeeId, HrmsUnavailableError } from "../../shared/hrms-client.js";
 
-const AUDIT_TOPIC = "audit.event.record";
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
@@ -34,9 +35,11 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
  * One adoption lookup + one clearance lookup per request, not one per row.
  */
 async function withinClearance<T extends { classification: string }>(
-  ctx: { tenantId: string; actorId: string },
+  ctx: { tenantId: string; actorId: string; roles: string[] },
   rows: T[],
 ): Promise<T[]> {
+  // D14: Confidential+ rows are visible only to the classified-access roles, adopted or not.
+  if (ctx.roles) rows = rows.filter((r) => roleMayAccessClassification(ctx.roles, r.classification));
   if (!(await tenantHasOperators(ctx.tenantId))) return rows;
   const rank = await clearanceRankFor(ctx.tenantId, ctx.actorId);
   return rows.filter((r) => (CLASSIFICATION_RANK[r.classification] ?? 1) <= Math.max(rank, 1));
@@ -69,22 +72,6 @@ async function assertInwardAvailable(tenantId: string, inwardId: string): Promis
   if (state === "linked") throw new HttpError(409, "DAK_ALREADY_LINKED", "this DAK is already linked to a file");
 }
 
-async function publishFileAccessAudit(
-  ctx: { tenantId: string; actorId: string; correlationId: string },
-  payload: Record<string, unknown>,
-): Promise<void> {
-  // Queue-first audit side-effect — no Postgres write in the GET handler (F3).
-  await queue.publish(AUDIT_TOPIC, {
-    messageId: randomUUID(),
-    type: AUDIT_TOPIC,
-    tenantId: ctx.tenantId,
-    actorId: ctx.actorId,
-    correlationId: ctx.correlationId,
-    schemaVersion: "1.0",
-    payload: { service: "estab", ...payload },
-  });
-}
-
 const ESTAB_ROLES  = ["estab_officer", "estab_admin", "estab_deputy_secretary", "super_admin"];
 const READER_ROLES = [...ESTAB_ROLES, "audit_officer"];
 
@@ -93,6 +80,8 @@ export async function filesRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ESTAB_ROLES);
     const body = createFileBody.parse(req.body);
+    await assertRoleMayAccess(ctx, body.classification, "create_denied_role");
+    assertClassifiedHolder(ctx, body.classification, body.currentWith);
     // GAP-ESTAB-WORKSPACE-03: a file may only be CREATED at a classification
     // the creating actor is cleared for — client-side option hiding is not a
     // control. Mirrors the GET/move clearance gate (isAccessAllowed): public is
@@ -120,6 +109,7 @@ export async function filesRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ESTAB_ROLES);
     const { id } = idParam.parse(req.params);
+    await assertFileClassAccess(ctx, id, "noting_add_denied_role");
     const body = addNotingBody.parse(req.body);
     await assertFileWritable(ctx.tenantId, id);
     return sendAccepted(reply, acceptedResponseSchema, await commands.addNoting(ctx, id, body));
@@ -130,6 +120,7 @@ export async function filesRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ESTAB_ROLES);
     const { id } = idParam.parse(req.params);
+    await assertFileClassAccess(ctx, id, "volume_denied_role");
     const body = openVolumeBody.parse(req.body ?? {});
     await assertFileExists(ctx.tenantId, id);
     return sendAccepted(reply, acceptedResponseSchema, await commands.openVolume(ctx, id, body));
@@ -139,6 +130,7 @@ export async function filesRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ESTAB_ROLES);
     const { id } = idParam.parse(req.params);
+    await assertFileClassAccess(ctx, id, "part_denied_role");
     const body = openPartFileBody.parse(req.body ?? {});
     await assertFileExists(ctx.tenantId, id);
     return sendAccepted(reply, acceptedResponseSchema, await commands.openPartFile(ctx, id, body));
@@ -148,7 +140,9 @@ export async function filesRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ESTAB_ROLES);
     const { id } = idParam.parse(req.params);
+    await assertFileClassAccess(ctx, id, "link_denied_role");
     const body = linkFileBody.parse(req.body);
+    await assertFileClassAccess(ctx, body.targetFileId, "link_target_denied_role");
     await assertFileExists(ctx.tenantId, id);
     // UAT W8-A: the file being linked to must exist in this tenant too.
     if (!(await queries.fileExists(ctx.tenantId, body.targetFileId))) {
@@ -161,6 +155,7 @@ export async function filesRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ESTAB_ROLES);
     const { id } = idParam.parse(req.params);
+    await assertFileClassAccess(ctx, id, "type_denied_role");
     const body = setFileTypeBody.parse(req.body);
     await assertFileExists(ctx.tenantId, id);
     return sendAccepted(reply, acceptedResponseSchema, await commands.setFileType(ctx, id, body));
@@ -170,6 +165,7 @@ export async function filesRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ESTAB_ROLES);
     const { id } = idParam.parse(req.params);
+    await assertFileClassAccess(ctx, id, "submit_denied_role");
     const body = submitNotingBody.parse(req.body);
     await assertFileWritable(ctx.tenantId, id);
     return sendAccepted(reply, acceptedResponseSchema, await commands.submitNotingForApproval(ctx, id, body));
@@ -181,6 +177,7 @@ export async function filesRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ESTAB_ROLES);
     const { id } = idParam.parse(req.params);
+    await assertFileClassAccess(ctx, id, "sign_denied_role");
     const { notingId } = z.object({ notingId: z.string().uuid() }).parse(req.params);
     await assertFileExists(ctx.tenantId, id);
     // UAT W8-A: the noting must exist in this tenant and belong to this file.
@@ -194,6 +191,7 @@ export async function filesRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ESTAB_ROLES);
     const { id } = idParam.parse(req.params);
+    await assertFileClassAccess(ctx, id, "move_denied_role");
     const body = moveFileBody.parse(req.body);
     await assertFileWritable(ctx.tenantId, id);
     // O6 — a file may only be marked to an ACTIVE enrolled eOffice operator,
@@ -207,6 +205,8 @@ export async function filesRoutes(app: FastifyInstance): Promise<void> {
     if (target && !(await isAccessAllowed(ctx.tenantId, body.toOfficer, target.classification))) {
       throw new HttpError(422, "INSUFFICIENT_CLEARANCE", "the receiving officer's clearance is below this file's classification");
     }
+    // D14: and the receiving officer must be a verified classified-access holder (refuse rather than strand the file).
+    if (target) assertClassifiedHolder(ctx, target.classification, body.toOfficer);
     return sendAccepted(reply, acceptedResponseSchema, await commands.moveFile(ctx, id, body));
   });
 
@@ -214,6 +214,7 @@ export async function filesRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ESTAB_ROLES);
     const { id } = idParam.parse(req.params);
+    await assertFileClassAccess(ctx, id, "close_denied_role");
     const body = closeFileBody.parse(req.body);
     await assertFileExists(ctx.tenantId, id);
     return sendAccepted(reply, acceptedResponseSchema, await commands.closeFile(ctx, id, body));
@@ -224,6 +225,7 @@ export async function filesRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ESTAB_ROLES);
     const { id } = idParam.parse(req.params);
+    await assertFileClassAccess(ctx, id, "recall_denied_role");
     const body = recallFileBody.parse(req.body ?? {});
     await assertFileExists(ctx.tenantId, id);
     return sendAccepted(reply, acceptedResponseSchema, await commands.recallFile(ctx, id, body));
@@ -234,6 +236,7 @@ export async function filesRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ESTAB_ROLES);
     const { id } = idParam.parse(req.params);
+    await assertFileClassAccess(ctx, id, "reopen_denied_role");
     const body = reopenFileBody.parse(req.body);
     await assertFileExists(ctx.tenantId, id);
     return sendAccepted(reply, acceptedResponseSchema, await commands.reopenFile(ctx, id, body));
@@ -244,13 +247,51 @@ export async function filesRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ESTAB_ROLES);
     const { id } = idParam.parse(req.params);
+    await assertFileClassAccess(ctx, id, "attach_receipt_denied_role");
     const body = attachInwardBody.parse(req.body);
+    await assertInwardClassAccess(ctx, body.inwardId, "attach_receipt_dak_denied_role");
     await assertFileExists(ctx.tenantId, id);
     // UAT W8-A: the DAK entry being attached must exist in this tenant.
     if ((await queries.inwardLinkState(ctx.tenantId, body.inwardId)) === "missing") {
       throw new HttpError(404, "INWARD_NOT_FOUND", "the DAK entry does not exist");
     }
     return sendAccepted(reply, acceptedResponseSchema, await commands.attachInward(ctx, body, id));
+  });
+
+  // D12: reclassify a DAK. Only the dealing hand (assignedTo) may do so, reason mandatory + audited.
+  // Raising it to Confidential+ additionally needs a classified-access role (D14).
+  app.post("/v1/estab/inward/:id/reclassify", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ESTAB_ROLES);
+    const { id } = idParam.parse(req.params);
+    const body = reclassifyInwardBody.parse(req.body);
+    const inward = await queries.getInward(ctx.tenantId, id);
+    if (!inward) throw new HttpError(404, "NOT_FOUND", "DAK not found");
+    if (!inward.assignedTo) {
+      throw new HttpError(409, "NO_DEALING_HAND", "this DAK has no dealing hand assigned; assign one before reclassifying");
+    }
+    // assignedTo may be an identity sub OR an HRMS employee id (estab stores both id spaces, see
+    // /files/mine), so the dealing hand is matched under either of the caller's ids.
+    if (inward.assignedTo !== ctx.actorId) {
+      let employeeId: string | null = null;
+      try {
+        employeeId = UUID_RE.test(ctx.actorId) ? await resolveActorEmployeeId(ctx.tenantId, ctx.actorId) : null;
+      } catch (err) {
+        if (err instanceof HrmsUnavailableError) {
+          throw new HttpError(503, "HRMS_UNAVAILABLE", "could not confirm your officer identity right now; try again shortly");
+        }
+        throw err;
+      }
+      if (!employeeId || inward.assignedTo !== employeeId) {
+        throw new HttpError(403, "FORBIDDEN", "only the dealing hand of this DAK may reclassify it");
+      }
+    }
+    // Downgrading (or touching) a Confidential+ DAK needs the classified-access role too.
+    await assertRoleMayAccess(ctx, inward.classification, "reclassify_denied_role", id);
+    if (isConfidentialOrAbove(body.classification)) {
+      await assertRoleMayAccess(ctx, body.classification, "reclassify_denied_role", id);
+    }
+    return sendAccepted(reply, acceptedResponseSchema, await commands.reclassifyInward(ctx, id, body));
   });
 
   // Detach a wrongly-attached receipt (reason mandatory, audited).
@@ -273,6 +314,7 @@ export async function filesRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
     const { id } = idParam.parse(req.params);
+    await assertInwardClassAccess(ctx, id, "inward_movements_denied_role");
     const movements = await queries.listInwardMovements(ctx.tenantId, id);
     return reply.send({ data: movements });
   });
@@ -295,7 +337,12 @@ export async function filesRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ESTAB_ROLES);
     const { id } = idParam.parse(req.params);
-    const body = openFileFromInwardBody.parse(req.body);
+    const parsed = openFileFromInwardBody.parse(req.body);
+    // D12: omitted classification => inherit the DAK's own (Ordinary unless reclassified).
+    const inwardRow = parsed.classification ? null : await queries.getInward(ctx.tenantId, id);
+    const body = { ...parsed, classification: parsed.classification ?? inwardRow?.classification ?? "public" } as typeof parsed & { classification: string };
+    await assertRoleMayAccess(ctx, body.classification, "open_file_denied_role");
+    assertClassifiedHolder(ctx, body.classification, body.currentWith);
     // GAP-ESTAB-WORKSPACE-03: same clearance gate as direct file creation —
     // opening a file from a receipt must not escalate classification beyond the
     // actor's clearance. Public is always allowed; no-op until operators adopted.
@@ -347,7 +394,7 @@ export async function filesRoutes(app: FastifyInstance): Promise<void> {
       throw err;
     }
     const holderIds = [...new Set([ctx.actorId, ...(employeeId && UUID_RE.test(employeeId) ? [employeeId] : [])])];
-    const files = await queries.listFilesByHolder(ctx.tenantId, holderIds, limit, offset);
+    const files = await queries.listFilesByHolder(ctx.tenantId, holderIds, limit, offset, !mayViewClassified(ctx));
     const enrolled = employeeId ? await isActiveOperator(ctx.tenantId, employeeId) : false;
     return reply.send({ data: files, actorId: ctx.actorId, employeeId, operator: { adopted, enrolled } });
   });
@@ -387,7 +434,8 @@ export async function filesRoutes(app: FastifyInstance): Promise<void> {
     const rank = adopted ? await clearanceRankFor(ctx.tenantId, ctx.actorId) : 4;
     const allowed = Object.entries(CLASSIFICATION_RANK)
       .filter(([, need]) => need <= Math.max(rank, 1))
-      .map(([name]) => name);
+      .map(([name]) => name)
+      .filter((name) => roleMayAccessClassification(ctx.roles, name));
     return reply.send({ allowed, clearanceRank: rank, adopted });
   });
 
@@ -405,7 +453,7 @@ export async function filesRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
     const { subject, limit } = duplicateCheckQuery.parse(req.query);
-    const matches = await queries.findSimilarOpenFiles(ctx.tenantId, subject, limit);
+    const matches = await queries.findSimilarOpenFiles(ctx.tenantId, subject, limit, !mayViewClassified(ctx));
     return reply.send({ data: matches, duplicate: matches.length > 0 });
   });
 
@@ -413,7 +461,7 @@ export async function filesRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
     const q = registerListQuery.parse(req.query);
-    const { rows, total } = await queries.listInwardPage(ctx.tenantId, q.limit, { q: q.q, offset: q.offset });
+    const { rows, total } = await queries.listInwardPage(ctx.tenantId, q.limit, { q: q.q, offset: q.offset, hideClassified: !mayViewClassified(ctx) });
     return reply.send({
       data: rows,
       pagination: { hasMore: q.offset + rows.length < total, pageSize: q.limit, offset: q.offset, total },
@@ -424,7 +472,7 @@ export async function filesRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
     const q = listQuerySchema.parse(req.query);
-    const rows = await queries.listInward(ctx.tenantId, q.limit);
+    const rows = await queries.listInward(ctx.tenantId, q.limit, { hideClassified: !mayViewClassified(ctx) });
     return reply.send({ data: rows, meta: { page: 1, pageSize: q.limit, total: rows.length } });
   });
 
@@ -432,7 +480,7 @@ export async function filesRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
     const q = listQuerySchema.parse(req.query);
-    const rows = await queries.listNotings(ctx.tenantId, q.limit);
+    const rows = await queries.listNotings(ctx.tenantId, q.limit, !mayViewClassified(ctx));
     return reply.send({ data: rows, meta: { page: 1, pageSize: q.limit, total: rows.length } });
   });
 
@@ -451,6 +499,7 @@ export async function filesRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
     const { id } = idParam.parse(req.params);
+    await assertFileClassAccess(ctx, id, "movements_denied_role");
     const movements = await queries.listFileMovements(ctx.tenantId, id);
     return reply.send({ data: movements });
   });
@@ -470,6 +519,7 @@ export async function filesRoutes(app: FastifyInstance): Promise<void> {
 
     const file = await queries.getFileDetail(ctx.tenantId, id);
     if (!file) throw new HttpError(404, "NOT_FOUND", "file not found");
+    await assertRoleMayAccess(ctx, file.classification, "attachment_download_denied_role", attId);
     if (!(await isAccessAllowed(ctx.tenantId, ctx.actorId, file.classification))) {
       await publishFileAccessAudit(ctx, {
         action: "attachment_download_denied_clearance",
@@ -502,6 +552,7 @@ export async function filesRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ESTAB_ROLES);
     const { id } = idParam.parse(req.params);
+    await assertFileClassAccess(ctx, id, "attachment_add_denied_role");
     const body = addAttachmentBody.parse(req.body);
     await assertFileExists(ctx.tenantId, id);
     return sendAccepted(reply, acceptedResponseSchema, await commands.addAttachment(ctx, id, body));
@@ -513,6 +564,7 @@ export async function filesRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const file = await queries.getFileDetail(ctx.tenantId, id);
     if (!file) throw new HttpError(404, "NOT_FOUND", "file not found");
+    await assertRoleMayAccess(ctx, file.classification, "access_denied_role", id);
     // CSMOP classification-based access control: deny if the officer's clearance
     // is below the file's classification (once the tenant adopts the operator
     // model). The denial itself is audited.

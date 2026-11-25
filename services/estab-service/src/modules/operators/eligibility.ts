@@ -84,7 +84,7 @@ export async function invalidateOperatorCache(tenantId: string, employeeId: stri
 
 /** Classification → clearance rank (CSMOP). */
 export const CLASSIFICATION_RANK: Record<string, number> = {
-  public: 1, confidential: 2, secret: 3, top_secret: 4,
+  public: 1, restricted: 1, confidential: 2, secret: 3, top_secret: 4,
 };
 
 /** Highest clearance rank held by an employee across their active desks (0 if none). */

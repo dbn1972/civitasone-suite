@@ -16,7 +16,7 @@ export type EOfficeNotification = {
  * (no cross-service SQL). Surfaces overdue files, DFAs awaiting approval/dispatch,
  * and recent module decisions.
  */
-export async function getNotifications(tenantId: string, limit: number): Promise<EOfficeNotification[]> {
+export async function getNotifications(tenantId: string, limit: number, includeClassified = false): Promise<EOfficeNotification[]> {
   const items: EOfficeNotification[] = [];
   // Tier-routed client: pool tenants → shared DB, silo tenants → their own DB.
   const sqlClient = await sqlClientFor(tenantId);
@@ -38,6 +38,7 @@ export async function getNotifications(tenantId: string, limit: number): Promise
         SELECT id, file_no, subject, due_by
         FROM files.estab_files
         WHERE tenant_id = ${tenantId} AND status = 'active' AND due_by IS NOT NULL AND due_by < NOW()
+          AND (${includeClassified} OR classification NOT IN ('confidential','secret','top_secret'))
         ORDER BY due_by ASC
         LIMIT ${limit}
       `;

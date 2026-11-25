@@ -181,7 +181,7 @@ describe("CSMOP — classification view gate (isAccessAllowed)", () => {
     const res = await app.inject({
       method: "GET",
       url: `/v1/estab/files/${fileId}`,
-      headers: authHeaders(actor, OFFICER_ROLES, T),
+      headers: authHeaders(actor, ["estab_admin"] /* D14: Confidential+ needs a classified-access role */, T),
     });
     expect(res.statusCode).toBe(200);
     expect(res.json().classification).toBe("secret");
@@ -236,7 +236,7 @@ describe("CSMOP — move gate (isMoveAllowed / clearance)", () => {
     const res = await app.inject({
       method: "PATCH",
       url: `/v1/estab/files/${fileId}/move`,
-      headers: { ...authHeaders(actor, OFFICER_ROLES, T), ...CT },
+      headers: { ...authHeaders(actor, ["estab_admin"], T), ...CT },
       payload: { toOfficer: target },
     });
     expect(res.statusCode).toBe(422);

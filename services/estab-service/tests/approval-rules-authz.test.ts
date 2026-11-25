@@ -32,7 +32,7 @@ const validRule = {
   maxAmountMinor: 500_000,
   workflowDefinitionCode: "finance.sanction.am02",
   startNodeKey: "start",
-  steps: [{ role: "director", label: "Director" }],
+  steps: [{ role: "estab_admin", label: "Estab Admin" }],
   priority: 100,
 };
 

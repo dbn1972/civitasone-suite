@@ -4,7 +4,23 @@ export class DomainError extends Error {
   constructor(public code: string, message: string) { super(message); }
 }
 
-export const FILE_CLASSIFICATIONS = ["top_secret", "secret", "confidential", "public"] as const;
+// D14: Ordinary(stored `public`) / Restricted / Confidential / Secret (+ legacy top_secret). D12 default = Ordinary.
+export const FILE_CLASSIFICATIONS = ["top_secret", "secret", "confidential", "restricted", "public"] as const;
+
+/** D14: Confidential and above may be viewed/created only by these roles (on top of desk clearance). */
+export const CLASSIFIED_ACCESS_ROLES = ["knowledge_admin", "estab_admin", "super_admin"] as const;
+
+export const CLASSIFIED_TIERS = ["confidential", "secret", "top_secret"] as const;
+
+export function isConfidentialOrAbove(classification: string): boolean {
+  return classification === "confidential" || classification === "secret" || classification === "top_secret";
+}
+
+/** Role gate for a classification: anything below Confidential is open to every estab reader. */
+export function roleMayAccessClassification(roles: readonly string[], classification: string): boolean {
+  if (!isConfidentialOrAbove(classification)) return true;
+  return roles.some((r) => (CLASSIFIED_ACCESS_ROLES as readonly string[]).includes(r));
+}
 export const FILE_STATUSES = ["draft", "active", "closed", "archived"] as const;
 
 /**

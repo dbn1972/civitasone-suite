@@ -16,11 +16,13 @@ import { deptFieldMode } from "@/lib/estab/deptField";
 // an internal file as "public"; it is removed. The selected value is sent
 // unchanged — the server is the single source of truth for the enum and will
 // reject anything outside it (fail closed) rather than the client guessing.
-// NOTE (HUMAN REVIEW): if "restricted"/"unclassified" are required marking
-// tiers, the backend lattice + clearance ranks must be redesigned first; that
-// is out of scope for a client-only fix.
+// D14 (owner-approved): Ordinary (stored "public", the default) / Restricted /
+// Confidential / Secret (+ legacy Top Secret). Restricted carries no extra desk
+// clearance; Confidential and above are viewable only by knowledge_admin /
+// estab_admin (enforced server-side).
 const CLASSIFICATION_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
-  { value: "public", label: "Public (unclassified)" },
+  { value: "public", label: "Ordinary" },
+  { value: "restricted", label: "Restricted" },
   { value: "confidential", label: "Confidential" },
   { value: "secret", label: "Secret" },
   { value: "top_secret", label: "Top Secret" },

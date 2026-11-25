@@ -27,7 +27,9 @@ describe("F5 P0 FORCE RLS on fleet + quarters", () => {
       "utf8",
     );
     expect(routes).not.toMatch(/await\s+db\.transaction/);
-    expect(routes).toContain("queue.publish");
+    // the denial audit is published through files/classAccess.ts (queue-first), not a route-layer write
+    const classAccess = readFileSync(join(__dirname, "../src/modules/files/classAccess.ts"), "utf8");
+    expect(classAccess).toContain("queue.publish");
     expect(routes).toContain("access_denied_clearance");
   });
 
