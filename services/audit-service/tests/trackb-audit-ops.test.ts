@@ -39,8 +39,9 @@ const PLAN_ACTIVE = randomUUID();
 const PLAN_DONE = randomUUID();
 const RISK_1 = randomUUID();
 
-const ALLOWED = ["audit_admin", "audit_officer", "vigilance_admin"];
-const DENIED = ["tenant_admin", "super_admin", "vigilance_officer", "finance_admin", "employee"];
+const ACT_ALLOWED = ["audit_admin", "audit_officer", "vigilance_admin", "super_admin"];
+const READ_ALLOWED = [...ACT_ALLOWED, "vigilance_officer"];
+const DENIED = ["tenant_admin", "finance_admin", "employee"];
 
 function tenantQueue(): Queue {
   const q = new MemoryQueue();
@@ -105,7 +106,7 @@ describe("pure guards and validators", () => {
   });
 });
 
-describe("investigation routes (owner decision B4 role gate)", () => {
+describe("investigation routes (owner decision B4: tenant_admin excluded)", () => {
   it("401 without a token", async () => {
     expect((await app.inject({ method: "GET", url: `/v1/audit/investigations/${INV_OPEN}` })).statusCode).toBe(401);
   });
@@ -115,7 +116,22 @@ describe("investigation routes (owner decision B4 role gate)", () => {
     expect((await app.inject({ method: "PATCH", url: `/v1/audit/investigations/${INV_OPEN}/assign`, headers: h([role]), payload: { assignedTo: "x" } })).statusCode).toBe(403);
     expect((await app.inject({ method: "PATCH", url: `/v1/audit/investigations/${INV_OPEN}/close`, headers: h([role]), payload: { outcome: "inconclusive", reason: "no evidence" } })).statusCode).toBe(403);
   });
-  it.each(ALLOWED)("200 detail for %s", async (role) => {
+  it("vigilance_officer reads (list + detail) but cannot assign or close", async () => {
+    expect((await app.inject({ method: "GET", url: "/v1/audit/investigations", headers: h(["vigilance_officer"]) })).statusCode).toBe(200);
+    expect((await app.inject({ method: "GET", url: `/v1/audit/investigations/${INV_OPEN}`, headers: h(["vigilance_officer"]) })).statusCode).toBe(200);
+    expect((await app.inject({ method: "PATCH", url: `/v1/audit/investigations/${INV_OPEN}/assign`, headers: h(["vigilance_officer"]), payload: { assignedTo: "x" } })).statusCode).toBe(403);
+    expect((await app.inject({ method: "PATCH", url: `/v1/audit/investigations/${INV_OPEN}/close`, headers: h(["vigilance_officer"]), payload: { outcome: "inconclusive", reason: "no evidence" } })).statusCode).toBe(403);
+  });
+  it("super_admin can act (assign) - no break-glass lockout", async () => {
+    expect((await app.inject({ method: "PATCH", url: `/v1/audit/investigations/${INV_OPEN}/assign`, headers: h(["super_admin"]), payload: { assignedTo: "officer:sa" } })).statusCode).toBe(202);
+  });
+  it("empty JSON body on a PATCH is a 400, not a 500", async () => {
+    const res = await app.inject({ method: "PATCH", url: `/v1/audit/plans/${PLAN_ACTIVE}/complete`, headers: h(["audit_admin"]) });
+    expect(res.statusCode).toBe(400);
+    const res2 = await app.inject({ method: "PATCH", url: `/v1/audit/investigations/${INV_OPEN}/close`, headers: h(["audit_admin"]) });
+    expect(res2.statusCode).toBe(400);
+  });
+  it.each(READ_ALLOWED)("200 detail for %s", async (role) => {
     const res = await app.inject({ method: "GET", url: `/v1/audit/investigations/${INV_OPEN}`, headers: h([role]) });
     expect(res.statusCode).toBe(200);
     expect(res.json().caseId).toBe("CASE-T-1");

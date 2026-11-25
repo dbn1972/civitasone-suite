@@ -4,6 +4,7 @@ import { useCallback, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button, Modal } from "@/app/_components/ds";
 import { useFormError } from "@/lib/useFormError";
+import { useAuditT } from "@/lib/audit/useAuditT";
 
 export interface AuditActionField {
   /** JSON body key sent to the audit-service route. */
@@ -40,6 +41,7 @@ export interface AuditActionDialogProps {
 export function AuditActionDialog(props: AuditActionDialogProps) {
   const { triggerLabel, title, endpoint, fields, staticBody, submitLabel, area, description, variant = "ghost" } = props;
   const router = useRouter();
+  const t = useAuditT();
   const formError = useFormError(area);
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -52,7 +54,7 @@ export function AuditActionDialog(props: AuditActionDialogProps) {
     setError(null);
     for (const f of fields) {
       const v = (values[f.name] ?? "").trim();
-      if (v.length < (f.minLength ?? 1)) { setError(`${f.label} is required.`); return; }
+      if (v.length < (f.minLength ?? 1)) { setError(t("actRequired", { field: f.label })); return; }
     }
     const body: Record<string, unknown> = { ...(staticBody ?? {}) };
     for (const f of fields) {
@@ -76,7 +78,7 @@ export function AuditActionDialog(props: AuditActionDialogProps) {
       setBusy(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- formError helpers are stable; the wrapper object is not read.
-  }, [fields, values, staticBody, endpoint, router]);
+  }, [fields, values, staticBody, endpoint, router, t]);
 
   const id = `aad-${endpoint.replace(/[^a-z0-9]+/gi, "-")}`;
   return (
@@ -90,7 +92,7 @@ export function AuditActionDialog(props: AuditActionDialogProps) {
               <label className="lbl" htmlFor={`${id}-${f.name}`}>{f.label}</label>
               {f.kind === "select" ? (
                 <select id={`${id}-${f.name}`} className="inp" value={values[f.name] ?? ""} onChange={(e) => setValues((p) => ({ ...p, [f.name]: e.target.value }))}>
-                  <option value="">Select…</option>
+                  <option value="">{t("actSelect")}</option>
                   {(f.options ?? []).map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                 </select>
               ) : f.kind === "textarea" ? (
@@ -102,8 +104,8 @@ export function AuditActionDialog(props: AuditActionDialogProps) {
           ))}
           {error && <div role="alert" style={{ color: "var(--bad)", fontSize: 13, marginTop: 4 }}>{error}</div>}
           <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 12 }}>
-            <Button variant="ghost" onClick={close} disabled={busy}>Cancel</Button>
-            <Button onClick={() => void submit()} disabled={busy}>{busy ? "Saving…" : submitLabel}</Button>
+            <Button variant="ghost" onClick={close} disabled={busy}>{t("cancel")}</Button>
+            <Button onClick={() => void submit()} disabled={busy}>{busy ? t("actSaving") : submitLabel}</Button>
           </div>
         </div>
       </Modal>

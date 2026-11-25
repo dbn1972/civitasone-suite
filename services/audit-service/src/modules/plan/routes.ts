@@ -111,6 +111,12 @@ function errorHandler(err: unknown, req: { headers: Record<string, unknown>; id:
     void reply.code(err.status).send({ code: err.code, message: err.message, correlationId, retryable: false });
     return;
   }
+  // Fastify's own 4xx (e.g. FST_ERR_CTP_EMPTY_JSON_BODY on a body-less PATCH) is a client error, not a 500.
+  const status = (err as { statusCode?: number }).statusCode;
+  if (typeof status === "number" && status >= 400 && status < 500) {
+    void reply.code(status).send({ code: (err as { code?: string }).code ?? "BAD_REQUEST", message: "invalid request", correlationId, retryable: false });
+    return;
+  }
   req.log.error({ err }, "unhandled error");
   void reply.code(500).send({ code: "INTERNAL", message: "internal error", correlationId, retryable: true });
 }

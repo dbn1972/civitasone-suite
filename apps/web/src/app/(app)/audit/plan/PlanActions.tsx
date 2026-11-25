@@ -1,6 +1,7 @@
 "use client";
 
 import { AuditActionDialog } from "../_components/AuditActionDialog";
+import { useAuditT } from "@/lib/audit/useAuditT";
 
 /**
  * GAP-AUDIT-PLAN-05: plan-level Defer (reason required) and Complete. The audit-service routes are
@@ -8,7 +9,8 @@ import { AuditActionDialog } from "../_components/AuditActionDialog";
  * the status rules (defer: draft/in_progress, complete: in_progress) and answers 409 otherwise.
  */
 export function PlanActions({ planId, planNo, status }: { planId: string; planNo?: string; status: string }) {
-  const label = planNo ? `plan ${planNo}` : "plan";
+  const t = useAuditT();
+  const label = planNo ? t("actPlanNamed", { planNo }) : t("actPlanBare");
   const canDefer = status === "planned" || status === "in_progress";
   const canComplete = status === "in_progress";
   if (!canDefer && !canComplete) return <span style={{ color: "var(--ink2)" }}>—</span>;
@@ -16,22 +18,22 @@ export function PlanActions({ planId, planNo, status }: { planId: string; planNo
     <div style={{ display: "flex", gap: 6 }}>
       {canComplete ? (
         <AuditActionDialog
-          triggerLabel="Complete"
-          title={`Complete ${label}`}
-          description="Mark this audit plan as completed. This cannot be undone."
+          triggerLabel={t("actBtnComplete")}
+          title={t("actPlanCompleteTitle", { label })}
+          description={t("actPlanCompleteDesc")}
           endpoint={`/v1/audit/plans/${encodeURIComponent(planId)}/complete`}
           fields={[]}
-          submitLabel="Complete plan"
+          submitLabel={t("actPlanCompleteSubmit")}
           area="audit plan"
         />
       ) : null}
       {canDefer ? (
         <AuditActionDialog
-          triggerLabel="Defer"
-          title={`Defer ${label}`}
+          triggerLabel={t("actBtnDefer")}
+          title={t("actPlanDeferTitle", { label })}
           endpoint={`/v1/audit/plans/${encodeURIComponent(planId)}/defer`}
-          fields={[{ name: "reason", label: "Defer reason", kind: "textarea", minLength: 3 }]}
-          submitLabel="Defer plan"
+          fields={[{ name: "reason", label: t("actPlanDeferReason"), kind: "textarea", minLength: 3 }]}
+          submitLabel={t("actPlanDeferSubmit")}
           area="audit plan"
         />
       ) : null}
