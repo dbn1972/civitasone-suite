@@ -4119,6 +4119,27 @@
     "pending": "Pending",
     "rejected": "Rejected"
   },
+  "financeCommitments": {
+    "title": "Commitment Register",
+    "subtitle": "Budget earmarked by purchase orders and sanctions, and how much has been drawn down against bills.",
+    "cardTitle": "Budget Commitments",
+    "statCommitted": "Total Committed",
+    "statReleased": "Released Against Bills",
+    "statOutstanding": "Outstanding Commitment",
+    "statOpen": "Open Commitments",
+    "colReference": "Reference",
+    "colSource": "Raised By",
+    "colHead": "Budget Head",
+    "colCommitted": "Committed",
+    "colReleased": "Released",
+    "colBalance": "Balance",
+    "colStatus": "Status",
+    "colCommittedOn": "Committed On",
+    "unknownHead": "Unknown head",
+    "search": "Search commitments…",
+    "emptyTitle": "No commitments",
+    "emptyMessage": "No budget commitments have been recorded for this financial year."
+  },
   "financeDashboard": {
     "title": "Financial Management",
     "subtitle": "Budget, expenditure, receipts and treasury — one governed view.",

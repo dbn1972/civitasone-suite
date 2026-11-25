@@ -17,6 +17,7 @@ const financeSections: NavTile[] = [
 	{ title: "Budget Allocation", section: "Budget", description: "Allocation, commitment and expenditure by budget head and financial year.", href: "/finance/budget/allocation" },
 	{ title: "Budget Monitoring", section: "Budget", description: "Real-time head-wise allocation, commitment, expenditure and forecast.", href: "/finance/budget/monitoring" },
 	{ title: "Lapse Statement (31 March)", section: "Budget", description: "Head-wise unspent provision that lapses at year-end (GFR), recorded or provisional.", href: "/finance/budget/lapse-statement" },
+	{ title: "Commitment Register", section: "Budget", description: "Budget earmarked by purchase orders and sanctions, with drawdown against bills.", href: "/finance/budget/commitments" },
 	{ title: "Fund Releases", section: "Budget", description: "Allocation distributions issued to subordinate offices and departments.", href: "/finance/budget/fund-releases" },
 
 	// Expenditure

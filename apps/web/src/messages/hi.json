@@ -4134,6 +4134,27 @@
     "pending": "लंबित",
     "rejected": "अस्वीकृत"
   },
+  "financeCommitments": {
+    "title": "प्रतिबद्धता रजिस्टर",
+    "subtitle": "क्रय आदेशों और स्वीकृतियों द्वारा आरक्षित बजट और बिलों के विरुद्ध उसका समायोजन।",
+    "cardTitle": "बजट प्रतिबद्धताएँ",
+    "statCommitted": "कुल प्रतिबद्ध",
+    "statReleased": "बिलों के विरुद्ध जारी",
+    "statOutstanding": "शेष प्रतिबद्धता",
+    "statOpen": "खुली प्रतिबद्धताएँ",
+    "colReference": "संदर्भ",
+    "colSource": "किसके द्वारा सृजित",
+    "colHead": "बजट शीर्ष",
+    "colCommitted": "प्रतिबद्ध",
+    "colReleased": "जारी",
+    "colBalance": "शेष",
+    "colStatus": "स्थिति",
+    "colCommittedOn": "प्रतिबद्धता की तिथि",
+    "unknownHead": "अज्ञात शीर्ष",
+    "search": "प्रतिबद्धताएँ खोजें…",
+    "emptyTitle": "कोई प्रतिबद्धता नहीं",
+    "emptyMessage": "इस वित्तीय वर्ष के लिए कोई बजट प्रतिबद्धता दर्ज नहीं है।"
+  },
   "financeDashboard": {
     "title": "वित्तीय प्रबंधन",
     "subtitle": "बजट, व्यय, प्राप्तियाँ और कोषागार — एक शासित दृश्य।",

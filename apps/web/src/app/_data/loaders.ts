@@ -2842,6 +2842,33 @@ export async function getFinanceBudgetMonitoringLines(fy?: string): Promise<Load
   });
 }
 
+/** One row of GET /v1/finance/commitments (finance-service subledger/routes.ts; snake_case columns, amounts in paise as strings). */
+export interface FinanceCommitment {
+  id: string;
+  budget_head_id: string | null;
+  reference_type: string;
+  reference_id: string | null;
+  reference_no: string | null;
+  committed_minor: string;
+  released_minor: string;
+  balance_minor: string;
+  fy: string;
+  status: "active" | "partially_released" | "fully_released" | "cancelled";
+  committed_at: string;
+}
+
+export async function getFinanceCommitments(fy?: string, status?: string): Promise<LoaderResult<FinanceCommitment[]>> {
+  const qs = new URLSearchParams();
+  if (fy) qs.set("fy", fy);
+  if (status) qs.set("status", status);
+  qs.set("limit", "500");
+  return fetchJson<unknown, FinanceCommitment[]>(`/api/v1/finance/commitments?${qs.toString()}`, [], {
+    revalidateSeconds: 60,
+    telemetryKey: "finance.commitments",
+    mapResponse: (p) => getArrayPayload(p) as FinanceCommitment[] | null,
+  });
+}
+
 export async function getFinanceFundReleases(fy?: string): Promise<LoaderResult<AllocationDistributionSummary[]>> {
   const url = fy
     ? `/api/v1/finance/allocation-distributions?fy=${encodeURIComponent(fy)}`
