@@ -18,6 +18,11 @@ import { UserFacingError } from "@/lib/userFacingError";
 import { AgendaSubmitError, readAgendaRefusal } from "./agendaErrors";
 import type { LateAgendaRequest } from "./types";
 import type {
+  ActionItem,
+  ActionItemPatch,
+  AssignActionItemInput,
+  Decision,
+  RecordDecisionInput,
   ActiveVote,
   CommitteeSummary,
   ConfigEntry,
@@ -504,4 +509,73 @@ export async function setConfig(input: {
 /** Apply a vertical onboarding preset (board-of-directors | statutory-committee | municipal-council). */
 export async function applyPreset(preset: PresetName): Promise<void> {
   await send("POST", `v1/meeting/config/presets/${preset}`, { body: {} });
+}
+
+// ─── Action items & decisions (P0-6) ─────────────────────────────────────────
+// Writes are queued (202): the consumer applies them asynchronously, so callers
+// re-fetch after a short delay rather than expecting the row immediately.
+
+export async function fetchActionItems(meetingId: string): Promise<ActionItem[]> {
+  const out = await get<{ data?: ActionItem[] }>(`v1/meeting/${meetingId}/action-items`);
+  return out.data ?? [];
+}
+
+export async function fetchDecisions(meetingId: string): Promise<Decision[]> {
+  const out = await get<{ data?: Decision[] }>(`v1/meeting/${meetingId}/decisions`);
+  return out.data ?? [];
+}
+
+export async function assignActionItem(meetingId: string, input: AssignActionItemInput): Promise<void> {
+  await send("POST", `v1/meeting/${meetingId}/action-items`, { body: input, headers: idempotencyKey() });
+}
+
+/** PATCH sends only the changed fields plus the optimistic-lock `version`. */
+export async function updateActionItem(actionId: string, version: number, patch: ActionItemPatch): Promise<void> {
+  await send("PATCH", `v1/meeting/action-items/${actionId}`, {
+    body: { version, patch },
+    headers: idempotencyKey(),
+  });
+}
+
+export async function acknowledgeActionItem(actionId: string, version: number): Promise<void> {
+  await send("POST", `v1/meeting/action-items/${actionId}/acknowledge`, {
+    body: { version },
+    headers: idempotencyKey(),
+  });
+}
+
+export async function submitActionProgress(actionId: string, updateText: string, percentage: number): Promise<void> {
+  await send("POST", `v1/meeting/action-items/${actionId}/progress`, {
+    body: { updateText, percentage },
+    headers: idempotencyKey(),
+  });
+}
+
+export async function submitActionEvidence(
+  actionId: string,
+  evidence: { evidenceUrl?: string; evidenceNote?: string },
+): Promise<void> {
+  await send("POST", `v1/meeting/action-items/${actionId}/evidence`, {
+    body: evidence,
+    headers: idempotencyKey(),
+  });
+}
+
+/** `verifierId` is shape-required by the schema; the server binds the real verifier to the session actor. */
+export async function verifyActionItem(
+  actionId: string,
+  input: { verifierId: string; verified: boolean; note?: string },
+): Promise<void> {
+  await send("POST", `v1/meeting/action-items/${actionId}/verify`, { body: input, headers: idempotencyKey() });
+}
+
+export async function recordDecision(meetingId: string, input: RecordDecisionInput): Promise<void> {
+  await send("POST", `v1/meeting/${meetingId}/decisions`, { body: input, headers: idempotencyKey() });
+}
+
+export async function withdrawDecision(meetingId: string, decisionId: string, version: number): Promise<void> {
+  await send("PATCH", `v1/meeting/${meetingId}/decisions/${decisionId}`, {
+    body: { version, patch: { status: "withdrawn" } },
+    headers: idempotencyKey(),
+  });
 }

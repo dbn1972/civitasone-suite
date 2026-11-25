@@ -17,6 +17,7 @@ const financeSections: NavTile[] = [
 	{ title: "Budget Allocation", section: "Budget", description: "Allocation, commitment and expenditure by budget head and financial year.", href: "/finance/budget/allocation" },
 	{ title: "Budget Monitoring", section: "Budget", description: "Real-time head-wise allocation, commitment, expenditure and forecast.", href: "/finance/budget/monitoring" },
 	{ title: "Lapse Statement (31 March)", section: "Budget", description: "Head-wise unspent provision that lapses at year-end (GFR), recorded or provisional.", href: "/finance/budget/lapse-statement" },
+	{ title: "Commitment Register", section: "Budget", description: "Budget earmarked by purchase orders and sanctions, with drawdown against bills.", href: "/finance/budget/commitments" },
 	{ title: "Fund Releases", section: "Budget", description: "Allocation distributions issued to subordinate offices and departments.", href: "/finance/budget/fund-releases" },
 
 	// Expenditure
@@ -45,6 +46,7 @@ const financeSections: NavTile[] = [
 	{ title: "Fiscal Years", section: "Accounting", description: "Fiscal year setup and activation.", href: "/finance/fiscal-years" },
 	{ title: "New Voucher", section: "Accounting", description: "Draft and submit a double-entry journal voucher.", href: "/finance/accounting/vouchers/new" },
 	{ title: "Financial Statements", section: "Accounting", description: "Receipts, payments, and balance sheet summary.", href: "/finance/accounting/financial-statements" },
+	{ title: "Statement Set", section: "Accounting", description: "Receipts & Payments, Income & Expenditure and Balance Sheet by financial year.", href: "/finance/accounting/statement-set" },
 	{ title: "Period Close", section: "Accounting", description: "Soft-close, hard-close, and reopen accounting periods.", href: "/finance/period-close" },
 	{ title: "Payments", section: "Accounting", description: "Track outgoing and incoming payments with approvals.", href: "/finance/payments" },
 

@@ -170,6 +170,7 @@ import type {
   CourtOrderSummary,
   CourtOrderPage,
   LegalOpinionSummary,
+  LegalNoticeSummary,
   UserSummary,
   UserDetail,
   RoleDetail,
@@ -2839,6 +2840,33 @@ export async function getFinanceBudgetMonitoringLines(fy?: string): Promise<Load
       const obj = p as BudgetMonitoringLinesResponse;
       return Array.isArray(obj.lines) ? obj.lines : null;
     },
+  });
+}
+
+/** One row of GET /v1/finance/commitments (finance-service subledger/routes.ts; snake_case columns, amounts in paise as strings). */
+export interface FinanceCommitment {
+  id: string;
+  budget_head_id: string | null;
+  reference_type: string;
+  reference_id: string | null;
+  reference_no: string | null;
+  committed_minor: string;
+  released_minor: string;
+  balance_minor: string;
+  fy: string;
+  status: "active" | "partially_released" | "fully_released" | "cancelled";
+  committed_at: string;
+}
+
+export async function getFinanceCommitments(fy?: string, status?: string): Promise<LoaderResult<FinanceCommitment[]>> {
+  const qs = new URLSearchParams();
+  if (fy) qs.set("fy", fy);
+  if (status) qs.set("status", status);
+  qs.set("limit", "500");
+  return fetchJson<unknown, FinanceCommitment[]>(`/api/v1/finance/commitments?${qs.toString()}`, [], {
+    revalidateSeconds: 60,
+    telemetryKey: "finance.commitments",
+    mapResponse: (p) => getArrayPayload(p) as FinanceCommitment[] | null,
   });
 }
 
@@ -5902,6 +5930,39 @@ export async function getLegalOpinions(): Promise<LoaderResult<LegalOpinionSumma
     // vocabulary. The bare LegalOpinionSummaryListSchema rejected every real
     // response, so the list silently fell back to empty. Map explicitly.
     mapResponse: mapLegalOpinionSummaries,
+  });
+}
+
+// GET /v1/legal/notices (services/legal-service/src/modules/notices/routes.ts) returns
+// `{ items: NoticeRow[] }` (noticeNo, subject, partyRef, direction sent|received, status open|responded).
+export function mapLegalNotices(payload: unknown): LegalNoticeSummary[] | null {
+  const rows = getArrayPayload(payload);
+  if (!rows) return null;
+  const mapped: LegalNoticeSummary[] = [];
+  for (const row of rows) {
+    if (!isRecord(row)) continue;
+    const id = toText(row.id);
+    const noticeNo = toText(row.noticeNo) ?? toText(row.notice_no);
+    const subject = toText(row.subject);
+    if (!id || !noticeNo || !subject) continue;
+    mapped.push({
+      id,
+      noticeNo,
+      subject,
+      partyRef: toText(row.partyRef) ?? toText(row.party_ref) ?? "—",
+      direction: toText(row.direction) === "received" ? "received" : "sent",
+      status: toText(row.status) === "open" ? "open" : "responded",
+      createdAt: toText(row.createdAt) ?? toText(row.created_at) ?? "",
+    });
+  }
+  return mapped;
+}
+
+export async function getLegalNotices(): Promise<LoaderResult<LegalNoticeSummary[]>> {
+  return fetchJson<unknown, LegalNoticeSummary[]>("/api/v1/legal/notices", [], {
+    revalidateSeconds: 30,
+    telemetryKey: "legal.notices",
+    mapResponse: mapLegalNotices,
   });
 }
 

@@ -1,3 +1,5 @@
+import Link from "next/link";
+import { getTranslations } from "next-intl/server";
 import { PageHeader, RefreshErrorState } from "@/app/_components/ds";
 import { getSessionUserId, getSessionRoles, hasAnyRole } from "@/lib/auth/roleGuard";
 import { getVisitRequests, getVisitorLocations } from "../_data/loaders";
@@ -12,6 +14,7 @@ export const dynamic = "force-dynamic";
 const ELEVATED_APPROVAL_ROLES = ["protocol_officer", "security_admin", "tenant_admin", "super_admin"];
 
 export default async function HostPortalPage() {
+  const tNew = await getTranslations("visitor.newRequest");
   const [pending, approved, locations] = await Promise.all([
     getVisitRequests("pending_approval"),
     getVisitRequests("approved"),
@@ -43,6 +46,7 @@ export default async function HostPortalPage() {
       <PageHeader
         title="Host Portal"
         subtitle="Approve or reject the visitors requesting to see you, and review today's expected arrivals."
+        actions={<Link href="/visitor/host/new" className="btn primary">{tNew("raiseCta")}</Link>}
         back="/visitor"
         backLabel="Visitor"
       />

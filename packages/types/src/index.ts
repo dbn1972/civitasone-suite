@@ -2552,6 +2552,16 @@ export type LegalOpinionSummary = {
   issuedDate?: string;
 };
 
+export type LegalNoticeSummary = {
+  id: string;
+  noticeNo: string;
+  subject: string;
+  partyRef: string;
+  direction: "sent" | "received";
+  status: "open" | "responded";
+  createdAt: string;
+};
+
 // ── Admin / Platform types ────────────────────────────────────────────────────
 
 export type UserSummary = {

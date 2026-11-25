@@ -771,6 +771,30 @@ export const MEETING_CONCLUDE_ROLES = [
   "tenant_admin",
   "super_admin",
 ];
+/** P0-6: assign an action item -- mirrors action-item/routes.ts ASSIGN_ROLES. */
+export const MEETING_ACTION_ASSIGN_ROLES = ["meeting_admin", "committee_secretary", "tenant_admin", "super_admin"];
+/** P0-6: edit an action item -- mirrors action-item/routes.ts UPDATE_ROLES. */
+export const MEETING_ACTION_UPDATE_ROLES = [
+  "meeting_admin",
+  "committee_secretary",
+  "committee_member",
+  "tenant_admin",
+  "super_admin",
+];
+/** P0-6: acknowledge / progress / evidence -- mirrors action-item/routes.ts ASSIGNEE_ROLES. */
+export const MEETING_ACTION_ASSIGNEE_ROLES = [
+  "meeting_admin",
+  "committee_secretary",
+  "committee_chairperson",
+  "committee_member",
+  "employee",
+  "tenant_admin",
+  "super_admin",
+];
+/** P0-6: verify completion -- mirrors action-item/routes.ts VERIFY_ROLES. */
+export const MEETING_ACTION_VERIFY_ROLES = ["meeting_admin", "committee_chairperson", "tenant_admin", "super_admin"];
+/** P0-6: record / withdraw a decision -- mirrors decision/routes.ts RECORD_ROLES. */
+export const MEETING_DECISION_RECORD_ROLES = ["meeting_admin", "committee_secretary", "tenant_admin", "super_admin"];
 /** GAP-MEETING-MEETINGS-MEETINGID-MINUTES-03: role permitted to approve/reject minutes. */
 export const MEETING_MINUTES_APPROVE_ROLES = [
   "meeting_admin",

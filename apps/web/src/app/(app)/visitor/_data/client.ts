@@ -182,3 +182,59 @@ export async function fetchPreset(preset: PresetName): Promise<PresetEntry[]> {
 export async function applyPreset(preset: PresetName, reason: string): Promise<void> {
   await post(`v1/visitor/config/presets/${preset}`, { reason });
 }
+
+/** Body of POST /v1/visitor/visit-requests (visit-request/validators.ts createVisitRequestBody). */
+export interface CreateVisitRequestInput {
+  locationId: string;
+  visitorName: string;
+  visitorPhone: string;
+  visitorEmail?: string;
+  purpose: string;
+  hostEmployeeId: string;
+  /** ISO-8601 timestamp (z.string().datetime()). */
+  scheduledAt: string;
+  visitorCategory?: "standard" | "vip" | "contractor" | "delegation";
+  identityDocType?: string;
+  identityDocRef?: string;
+}
+
+export type CreateVisitFailure = "blacklisted" | "schedule" | "forbidden" | "invalid" | "generic";
+
+/** Typed failure so the form can show a specific, translated message (never a raw status/body). */
+export class CreateVisitRequestError extends Error {
+  kind: CreateVisitFailure;
+  constructor(kind: CreateVisitFailure) {
+    super(kind);
+    this.name = "CreateVisitRequestError";
+    this.kind = kind;
+  }
+}
+
+/**
+ * Host-initiated pre-registration. The service answers 202 (CQRS) with an ack
+ * and runs the blacklist screen synchronously; a blocked identity returns a
+ * deliberately vague 403 VISITOR_BLACKLISTED that we surface as a neutral
+ * "cannot be processed" message without disclosing why.
+ */
+export async function createVisitRequest(input: CreateVisitRequestInput): Promise<{ id: string | null }> {
+  const res = await browserFetch("v1/visitor/visit-requests", {
+    method: "POST",
+    body: JSON.stringify({ ...input, source: "host_preregister" }),
+  });
+  if (!res.ok) {
+    let code = "";
+    try {
+      const b = (await res.json()) as { code?: string; error?: { code?: string } };
+      code = b.error?.code ?? b.code ?? "";
+    } catch {
+      /* non-JSON body */
+    }
+    if (code === "VISITOR_BLACKLISTED") throw new CreateVisitRequestError("blacklisted");
+    if (code === "INVALID_SCHEDULED_DATE") throw new CreateVisitRequestError("schedule");
+    if (res.status === 403) throw new CreateVisitRequestError("forbidden");
+    if (res.status === 400 || res.status === 422) throw new CreateVisitRequestError("invalid");
+    throw new CreateVisitRequestError("generic");
+  }
+  const out = (await res.json().catch(() => ({}))) as { data?: { id?: string; messageId?: string } };
+  return { id: out.data?.id ?? out.data?.messageId ?? null };
+}

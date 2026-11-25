@@ -6,11 +6,15 @@ import {
   getAgenda,
   getLiveAttendance,
   getActiveVotes,
+  getActionItems,
+  getDecisions,
 } from "../../_data/loaders";
 import { MeetingConsole } from "./MeetingConsole";
+import { ActionsDecisionsPanel } from "./ActionsDecisionsPanel";
 import { resolveRecordRefs } from "@/lib/records/recordRefs";
 import {
   getSessionRoles,
+  getSessionUserId,
   hasAnyRole,
   MEETING_TRANSITION_ROLES,
   MEETING_LATE_AGENDA_APPROVAL_ROLES,
@@ -20,6 +24,11 @@ import {
   MEETING_PARTICIPANT_WRITE_ROLES,
   MEETING_CAST_ROLES,
   MEETING_CONCLUDE_ROLES,
+  MEETING_ACTION_ASSIGN_ROLES,
+  MEETING_ACTION_UPDATE_ROLES,
+  MEETING_ACTION_ASSIGNEE_ROLES,
+  MEETING_ACTION_VERIFY_ROLES,
+  MEETING_DECISION_RECORD_ROLES,
 } from "@/lib/auth/roleGuard";
 
 export const dynamic = "force-dynamic";
@@ -31,11 +40,13 @@ export default async function MeetingConsolePage(
 ) {
   const params = await props.params;
   const { meetingId } = params;
-  const [meeting, agenda, attendance, activeVotes] = await Promise.all([
+  const [meeting, agenda, attendance, activeVotes, actionItems, decisions] = await Promise.all([
     getMeeting(meetingId),
     getAgenda(meetingId),
     getLiveAttendance(meetingId),
     getActiveVotes(meetingId),
+    getActionItems(meetingId),
+    getDecisions(meetingId),
   ]);
 
   if (meeting.source === "error" || !meeting.data) {
@@ -113,13 +124,19 @@ export default async function MeetingConsolePage(
   };
 
   // UX-R5 (names, not ids): participants the attendance feed sends without a display name.
-  const unnamed = (attendance.data?.participants ?? []).filter((p) => !p.displayName).map((p) => p.employeeId);
+  const unnamed = [
+    ...(attendance.data?.participants ?? []).filter((p) => !p.displayName).map((p) => p.employeeId),
+    ...(actionItems.data ?? []).flatMap((a) => [a.assigneeId, a.verifiedBy]),
+    ...(decisions.data ?? []).map((d) => d.responsibleOfficer),
+  ].filter((id): id is string => typeof id === "string" && id !== "");
   const people = unnamed.length ? Object.fromEntries((await resolveRecordRefs({ people: unnamed })).people) : {};
 
   const degraded =
     agenda.source === "error" ||
     attendance.source === "error" ||
-    activeVotes.source === "error";
+    activeVotes.source === "error" ||
+    actionItems.source === "error" ||
+    decisions.source === "error";
 
   return (
     <>
@@ -145,6 +162,24 @@ export default async function MeetingConsolePage(
         activeVotesSource={activeVotes.source}
         viewerPermissions={viewerPermissions}
         people={people}
+      />
+      <ActionsDecisionsPanel
+        meetingId={meetingId}
+        actionItems={actionItems.data}
+        actionItemsSource={actionItems.source}
+        decisions={decisions.data}
+        decisionsSource={decisions.source}
+        agenda={agenda.data}
+        people={people}
+        viewerId={getSessionUserId()}
+        permissions={{
+          canAssign: hasAnyRole(sessionRoles, MEETING_ACTION_ASSIGN_ROLES),
+          canUpdate: hasAnyRole(sessionRoles, MEETING_ACTION_UPDATE_ROLES),
+          canAssigneeAct: hasAnyRole(sessionRoles, MEETING_ACTION_ASSIGNEE_ROLES),
+          canVerify: hasAnyRole(sessionRoles, MEETING_ACTION_VERIFY_ROLES),
+          canRecordDecision: hasAnyRole(sessionRoles, MEETING_DECISION_RECORD_ROLES),
+          employeeDirectory: viewerPermissions.employeeDirectory,
+        }}
       />
     </>
   );

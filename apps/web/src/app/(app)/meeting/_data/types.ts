@@ -326,3 +326,83 @@ export interface CommitteeSummary {
   type: string;
   status: string;
 }
+
+// ─── Action items & decisions (P0-6) ─────────────────────────────────────────
+// Mirror meeting-service action-item/domain.ts + decision/domain.ts vocabularies
+// and the ActionItemView / DecisionDto read shapes.
+
+export const ACTION_PRIORITIES = ["critical", "high", "medium", "low"] as const;
+export type ActionPriority = (typeof ACTION_PRIORITIES)[number];
+
+export const DECISION_TYPES = [
+  "administrative",
+  "policy",
+  "procurement",
+  "financial",
+  "hr",
+  "project",
+  "legal",
+  "general",
+] as const;
+export type DecisionType = (typeof DECISION_TYPES)[number];
+
+export interface ActionItem {
+  id: string;
+  meetingId: string;
+  decisionId: string | null;
+  agendaItemId: string | null;
+  description: string;
+  assigneeId: string;
+  deadline: string;
+  priority: string;
+  slaHours: number | null;
+  escalationLevel: number;
+  status: string;
+  evidenceUrl: string | null;
+  evidenceNote: string | null;
+  verifiedBy: string | null;
+  verifiedAt: string | null;
+  completedAt: string | null;
+  acknowledgedAt: string | null;
+  overdueAt: string | null;
+  version: number;
+}
+
+export interface Decision {
+  id: string;
+  meetingId: string;
+  agendaItemId: string | null;
+  text: string;
+  type: string;
+  authority: string | null;
+  effectiveDate: string | null;
+  status: string;
+  responsibleOfficer: string | null;
+  deadline: string | null;
+  version: number;
+}
+
+export interface AssignActionItemInput {
+  description: string;
+  assigneeId: string;
+  deadline: string;
+  priority: ActionPriority;
+  decisionId?: string;
+  agendaItemId?: string;
+  expectedEvidence?: string;
+}
+
+export interface ActionItemPatch {
+  description?: string;
+  assigneeId?: string;
+  deadline?: string;
+  priority?: ActionPriority;
+}
+
+export interface RecordDecisionInput {
+  text: string;
+  type: DecisionType;
+  agendaItemId?: string;
+  responsibleOfficer?: string;
+  deadline?: string;
+}
