@@ -8,6 +8,7 @@ vi.mock("next-intl", async (orig) => {
   return { ...actual, useTranslations: (ns?: string) => actual.createTranslator({ locale: "en", messages, namespace: ns as never }) };
 });
 
+import { maskPan } from "@/app/_components/ds/Masked";
 import { BlacklistRegister } from "./BlacklistRegister";
 
 const json = (data: unknown, status = 200) => new Response(JSON.stringify(data), { status, headers: { "content-type": "application/json" } });
@@ -34,7 +35,7 @@ describe("BlacklistRegister", () => {
     stub();
     render(<BlacklistRegister canCentralDebar={false} />);
     expect(await screen.findByText("Shree Ram Traders")).toBeInTheDocument();
-    expect(screen.getByText("ABCDE1234F")).toBeInTheDocument();
+    expect(screen.getByText(maskPan(central.pan))).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Add central debarment" })).not.toBeInTheDocument();
   });
 
