@@ -8,12 +8,13 @@ import { cache } from "../../shared/infra.js";
 import { scopedRead } from "../../shared/db.js";
 import { savedMetrics } from "../metrics/schema.js";
 import { factEvents } from "../facts/schema.js";
-import { eq, count, max } from "drizzle-orm";
+import { eq, count, max, sql } from "drizzle-orm";
 import { runWithTenant } from "@civitasone/db";
 // GAP2-ANALYTICS-ROLES-01: single canonical reader vocabulary across every
 // analytics read route (union of the two historical names so no existing
 // principal loses access). Previously this file used a bare
 // ["analytics_viewer", ...] array that did NOT include "analytics_user".
+import { buildKpis, KPI_DEFS, type FactAgg, type KpiOverride } from "./producer.js";
 import { ANALYTICS_READ_ROLES as READ_ROLES } from "../../shared/roles.js";
 
 function paginationMeta(total: number, page: number, pageSize: number) {
@@ -31,6 +32,52 @@ export function formatLatestEventTime(last: Date | null, now: Date = new Date())
   return shown.toISOString().slice(0, 16).replace("T", " ");
 }
 
+
+const DAY_MS = 86_400_000;
+
+/**
+ * Tenant-wide KPI inputs: fact_events aggregated over the current 30d and prior
+ * 30d windows (future-dated events excluded), plus tenant-configured targets /
+ * owners from saved_metrics (spec.target / spec.owner, keyed by metric_key ==
+ * KPI key). Reads analytics' OWN tables only.
+ */
+export async function loadKpiInputs(
+  tenantId: string,
+  now: Date = new Date(),
+): Promise<{ aggs: FactAgg[]; overrides: Record<string, KpiOverride> }> {
+  const curFrom = new Date(now.getTime() - 30 * DAY_MS).toISOString();
+  const prevFrom = new Date(now.getTime() - 60 * DAY_MS).toISOString();
+  const nowIso = now.toISOString();
+  const inCur = sql`${factEvents.occurredAt} >= ${curFrom}::timestamptz and ${factEvents.occurredAt} <= ${nowIso}::timestamptz`;
+  const inPrev = sql`${factEvents.occurredAt} >= ${prevFrom}::timestamptz and ${factEvents.occurredAt} < ${curFrom}::timestamptz`;
+  return runWithTenant(tenantId, () => scopedRead(async (tx) => {
+    const raw = await tx.select({
+      source: factEvents.source,
+      eventType: factEvents.eventType,
+      status: factEvents.status,
+      curCount: sql<number>`count(*) filter (where ${inCur})`.mapWith(Number),
+      curSum: sql<number>`coalesce(sum(${factEvents.amount}) filter (where ${inCur}), 0)`.mapWith(Number),
+      prevCount: sql<number>`count(*) filter (where ${inPrev})`.mapWith(Number),
+      prevSum: sql<number>`coalesce(sum(${factEvents.amount}) filter (where ${inPrev}), 0)`.mapWith(Number),
+    }).from(factEvents)
+      .where(sql`${factEvents.tenantId} = ${tenantId} and ${factEvents.occurredAt} >= ${prevFrom}::timestamptz and ${factEvents.occurredAt} <= ${nowIso}::timestamptz`)
+      .groupBy(factEvents.source, factEvents.eventType, factEvents.status);
+    const metrics = await tx.select({ metricKey: savedMetrics.metricKey, spec: savedMetrics.spec })
+      .from(savedMetrics).where(eq(savedMetrics.tenantId, tenantId)).limit(200);
+    const known = new Set(KPI_DEFS.map((d) => d.key));
+    const overrides: Record<string, KpiOverride> = {};
+    for (const m of metrics) {
+      if (!known.has(m.metricKey)) continue;
+      const spec = (m.spec ?? {}) as Record<string, unknown>;
+      const o: KpiOverride = {};
+      if (typeof spec.target === "number" && Number.isFinite(spec.target)) o.target = spec.target;
+      if (typeof spec.owner === "string") o.owner = spec.owner.slice(0, 100);
+      overrides[m.metricKey] = o;
+    }
+    return { aggs: raw as FactAgg[], overrides };
+  }));
+}
+
 export async function kpiRoutes(app: FastifyInstance): Promise<void> {
   // ─── KPI Library ────────────────────────────────────────────────────────────
   app.get("/v1/analytics/kpis", async (req, reply) => {
@@ -38,31 +85,15 @@ export async function kpiRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, READ_ROLES);
     const tenantId = ctx.tenantId;
 
-    const rows = await cache.getOrLoad(
-      cache.makeKey(tenantId, "analytics", "kpis"),
-      async () => {
-        const result = await runWithTenant(tenantId, () => scopedRead(async (tx) =>
-          tx.select({
-            id: savedMetrics.id,
-            name: savedMetrics.name,
-            metricKey: savedMetrics.metricKey,
-          }).from(savedMetrics)
-            .where(eq(savedMetrics.tenantId, tenantId))
-            .orderBy(savedMetrics.name)
-            .limit(200),
-        ));
-        return result.map((r) => ({
-          kpiName: r.name,
-          category: r.metricKey?.split(".")[0] ?? "General",
-          currentValue: "—",
-          target: "—",
-          trend: "—",
-          owner: "—",
-        }));
-      },
+    // Cache the tenant-wide aggregates + configured targets; the per-viewer
+    // module-role filter (D10) is applied AFTER the cache so one viewer's
+    // visibility never leaks to another through the shared key.
+    const base = await cache.getOrLoad(cache.makeKey(tenantId, "analytics", "kpis"), () =>
+      loadKpiInputs(tenantId),
     );
+    const data = buildKpis(base?.aggs ?? [], ctx.roles ?? [], base?.overrides ?? {});
 
-    return reply.send({ data: rows ?? [], meta: paginationMeta((rows ?? []).length, 1, 200) });
+    return reply.send({ data, meta: paginationMeta(data.length, 1, 200) });
   });
 
   // ─── Data Warehouse (dataset summary) ──────────────────────────────────────
