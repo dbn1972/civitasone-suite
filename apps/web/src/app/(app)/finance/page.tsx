@@ -46,6 +46,7 @@ const financeSections: NavTile[] = [
 	{ title: "Fiscal Years", section: "Accounting", description: "Fiscal year setup and activation.", href: "/finance/fiscal-years" },
 	{ title: "New Voucher", section: "Accounting", description: "Draft and submit a double-entry journal voucher.", href: "/finance/accounting/vouchers/new" },
 	{ title: "Financial Statements", section: "Accounting", description: "Receipts, payments, and balance sheet summary.", href: "/finance/accounting/financial-statements" },
+	{ title: "Statement Set", section: "Accounting", description: "Receipts & Payments, Income & Expenditure and Balance Sheet by financial year.", href: "/finance/accounting/statement-set" },
 	{ title: "Period Close", section: "Accounting", description: "Soft-close, hard-close, and reopen accounting periods.", href: "/finance/period-close" },
 	{ title: "Payments", section: "Accounting", description: "Track outgoing and incoming payments with approvals.", href: "/finance/payments" },
 
