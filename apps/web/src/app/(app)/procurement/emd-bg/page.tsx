@@ -17,9 +17,7 @@ export default async function EmdBgPage() {
     <>
       <PageHeader
         title="EMD & Bank Guarantees"
-        // GAP-PROCUREMENT-EMD-BG-05: honest subtitle — this is a read-only
-        // register today (no release/extend/forfeit workflow exists yet).
-        subtitle="Read-only register of earnest money deposits (EMD) and bank guarantees (BG) held as procurement security."
+        subtitle="Register of earnest money deposits (EMD) and bank guarantees (BG) held as procurement security. Procurement officers can forfeit, refund or release live instruments."
       />
 
       {/* GAP-PROCUREMENT-EMD-BG-01/02/03/04/05: the stat cards, per-register

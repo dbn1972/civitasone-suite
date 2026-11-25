@@ -7040,6 +7040,32 @@
       "poColumn": "Linked PO"
     },
     "emdBg": {
+      "actions": {
+        "column": "Actions",
+        "reasonRequired": "Reason for forfeiture (required, recorded in the audit trail)",
+        "reasonOptional": "Remarks (optional)",
+        "forfeit": {
+          "label": "Forfeit",
+          "title": "Forfeit {amount} held for {vendor}?",
+          "description": "This forfeits the security of {amount} held for {vendor}. On processing, the amount is booked to the Finance ledger as forfeiture income. The request is queued and processed shortly; the status here updates only after it completes. A forfeiture cannot be reversed from this screen.",
+          "confirm": "Forfeit security",
+          "accepted": "Forfeiture of {amount} accepted for processing; status will update shortly."
+        },
+        "refund": {
+          "label": "Refund",
+          "title": "Refund {amount} to {vendor}?",
+          "description": "This records the refund of the {amount} earnest money deposit held for {vendor} and posts it to the Finance ledger. It does not itself transfer funds; the bank payment is made through Finance. The request is queued and the status updates after processing. This cannot be undone from this screen.",
+          "confirm": "Refund deposit",
+          "accepted": "Refund of {amount} accepted for processing; status will update shortly."
+        },
+        "release": {
+          "label": "Release",
+          "title": "Release the {amount} bank guarantee of {vendor}?",
+          "description": "This releases the performance guarantee of {amount} held for {vendor} and posts it to the Finance ledger. It does not itself return funds or notify the bank. The request is queued and the status updates after processing. This cannot be undone from this screen.",
+          "confirm": "Release guarantee",
+          "accepted": "Release of {amount} accepted for processing; status will update shortly."
+        }
+      },
       "filterExpiring": "Expiring within 30 days",
       "filterShowing": "Showing {count} of {total}",
       "noneExpiringTitle": "Nothing expires in the next 30 days",

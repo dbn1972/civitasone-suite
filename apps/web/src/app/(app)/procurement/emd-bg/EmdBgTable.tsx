@@ -8,6 +8,7 @@ import { useSeededResource } from "@/lib/sync/resource";
 import { formatMoney, formatIndianDate, daysUntilIST } from "@/lib/formatters";
 import { toHumanError } from "@/lib/messages";
 import type { EmdBgEntry } from "../../../_data/loaders";
+import { EmdBgActions, type Register } from "./EmdBgActions";
 
 type EmdRow = {
   id: string;
@@ -20,6 +21,8 @@ type EmdRow = {
   daysLeft: number | null;
   bank: string;
   status: string;
+  register: Register;
+  amountPaise: number;
 } & Record<string, unknown>;
 
 type Props = {
@@ -43,7 +46,7 @@ function expiryLabel(validity: string): string {
   return `Expires in ${days} day${days === 1 ? "" : "s"}`;
 }
 
-function toRows(entries: EmdBgEntry[]): EmdRow[] {
+function toRows(entries: EmdBgEntry[], register: Register): EmdRow[] {
   return entries.map((e) => ({
     id: e.id,
     vendor: e.vendor,
@@ -59,6 +62,8 @@ function toRows(entries: EmdBgEntry[]): EmdRow[] {
     daysLeft: daysUntilIST(e.validity),
     bank: e.bank,
     status: e.status,
+    register,
+    amountPaise: e.amount,
   }));
 }
 
@@ -84,8 +89,8 @@ export function EmdBgTable({ emdEntries, pbgEntries, emdSource = "api", pbgSourc
   const emdErrored = emd.provenance === "error-no-data";
   const pbgErrored = pbg.provenance === "error-no-data";
 
-  const emdRows = useMemo(() => toRows(emd.data), [emd.data]);
-  const pbgRows = useMemo(() => toRows(pbg.data), [pbg.data]);
+  const emdRows = useMemo(() => toRows(emd.data, "emd"), [emd.data]);
+  const pbgRows = useMemo(() => toRows(pbg.data, "pbg"), [pbg.data]);
   const allRows = useMemo(() => [...emdRows, ...pbgRows], [emdRows, pbgRows]);
   const shownRows = useMemo(
     () => (expiringOnly ? allRows.filter((r) => r.daysLeft !== null && r.daysLeft >= 0 && r.daysLeft <= 30) : allRows),
@@ -179,6 +184,13 @@ export function EmdBgTable({ emdEntries, pbgEntries, emdSource = "api", pbgSourc
                 { key: "expiry", label: "Expiry" },
                 { key: "bank", label: "Bank" },
                 { key: "status", label: "Status", cellType: "status" },
+                {
+                  key: "id",
+                  label: t("actions.column"),
+                  render: (r) => (
+                    <EmdBgActions id={r.id} register={r.register} status={r.status} vendor={r.vendor} amountPaise={r.amountPaise} />
+                  ),
+                },
               ]}
             />
             )}
