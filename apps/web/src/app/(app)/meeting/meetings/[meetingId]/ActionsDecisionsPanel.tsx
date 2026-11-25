@@ -76,7 +76,7 @@ const labelStyle: React.CSSProperties = {
   letterSpacing: ".13em",
   textTransform: "uppercase",
   color: "var(--ink2)",
-  textAlign: "left",
+  textAlign: "start",
 };
 const fieldStyle: React.CSSProperties = {
   width: "100%",
