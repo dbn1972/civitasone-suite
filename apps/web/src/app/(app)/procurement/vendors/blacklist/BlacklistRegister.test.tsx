@@ -79,4 +79,13 @@ describe("BlacklistRegister", () => {
     expect(post.url).toBe("/api/proxy/v1/procurement/central-debarment");
     expect(JSON.parse(post.body!)).toEqual({ pan: "PQRST5678U", reason: "Fraud per order 14", blacklistedFrom: "2026-11-01" });
   });
+
+  it("requests vendor names in chunks of at most 100 ids", async () => {
+    const many = Array.from({ length: 150 }, (_, i) => ({ ...local, id: `b${i}`, vendorId: `v-${i}` }));
+    stub({ localRows: many });
+    render(<BlacklistRegister canCentralDebar={false} />);
+    await waitFor(() => expect(calls.filter((c) => c.url.includes("/vendors/names")).length).toBe(2));
+    const sizes = calls.filter((c) => c.url.includes("/vendors/names")).map((c) => decodeURIComponent(c.url.split("ids=")[1]).split(",").length);
+    expect(sizes.sort((x, y) => x - y)).toEqual([50, 100]);
+  });
 });

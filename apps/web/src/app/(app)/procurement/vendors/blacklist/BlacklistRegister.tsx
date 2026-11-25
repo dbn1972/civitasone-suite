@@ -57,12 +57,19 @@ export function BlacklistRegister({ canCentralDebar }: { canCentralDebar: boolea
   useEffect(() => {
     if (!ids) return;
     void (async () => {
-      try {
-        const res = await fetch(`${PREFIX}/vendors/names?ids=${ids.split(",").map(encodeURIComponent).join(",")}`, { cache: "no-store" });
-        if (!res.ok) return;
-        const json = (await res.json()) as { data?: Array<{ id: string; name: string }> };
-        setNames(Object.fromEntries((json.data ?? []).map((v) => [v.id, v.name])));
-      } catch { /* names are cosmetic; the id is shown as a fallback */ }
+      // The names endpoint caps at 100 ids per request; chunk and merge.
+      const all = ids.split(",");
+      const found: Record<string, string> = {};
+      for (let i = 0; i < all.length; i += 100) {
+        try {
+          const chunk = all.slice(i, i + 100).map(encodeURIComponent).join(",");
+          const res = await fetch(`${PREFIX}/vendors/names?ids=${chunk}`, { cache: "no-store" });
+          if (!res.ok) continue;
+          const json = (await res.json()) as { data?: Array<{ id: string; name: string }> };
+          for (const v of json.data ?? []) found[v.id] = v.name;
+        } catch { /* names are cosmetic; the id is shown as a fallback */ }
+      }
+      setNames(found);
     })();
   }, [ids]);
 
