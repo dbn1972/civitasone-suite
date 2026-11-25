@@ -84,7 +84,7 @@ describe("#55 PATCH /v1/audit/risks/:id — enums match the DB CHECKs", () => {
     });
   }
 
-  for (const payload of [{ status: "closed" }, { status: "open" }, { mitigationStatus: "not_started" }, { mitigationStatus: "in_progress" }]) {
+  for (const payload of [{ status: "closed", closeReason: "Mitigations verified" }, { status: "open" }, { mitigationStatus: "not_started" }, { mitigationStatus: "in_progress" }]) {
     it(`202 for the DB-valid ${JSON.stringify(payload)}`, async () => {
       const res = await app.inject({ method: "PATCH", url: `/v1/audit/risks/${RISK_ID}`, headers: auth(["audit_officer"]), payload });
       expect(res.statusCode).toBe(202);

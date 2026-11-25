@@ -81,6 +81,7 @@ export async function listRisksForPlan(tenantId: string, planId: string, limit =
       impact: auditRisks.impact, riskScore: auditRisks.riskScore, ownerRef: auditRisks.ownerRef,
       mitigationStatus: auditRisks.mitigationStatus, reviewDate: auditRisks.reviewDate,
       status: auditRisks.status, createdAt: auditRisks.createdAt, updatedAt: auditRisks.updatedAt,
+      closeReason: auditRisks.closeReason,
       createdBy: auditRisks.createdBy, updatedBy: auditRisks.updatedBy, version: auditRisks.version,
     })
     .from(auditPlanRisks)

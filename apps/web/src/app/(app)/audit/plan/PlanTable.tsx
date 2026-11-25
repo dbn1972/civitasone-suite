@@ -5,6 +5,7 @@ import { DataTable } from "@/app/_components/ds";
 import { formatIndianDate } from "@/lib/formatters";
 import type { AuditPlanItem } from "@civitasone/types";
 import { PlanAuditButton } from "./PlanAuditButton";
+import { PlanActions } from "./PlanActions";
 
 // GAP-AUDIT-PLAN-01: show the planner-chosen risk level (low/medium/high) that
 // is now carried on each plan item (projected from the parent audit_plans row),
@@ -34,7 +35,7 @@ function statusPill(status: string): ReactNode {
   return <span className="pill info">Planned</span>;
 }
 
-export function PlanTable({ items }: { items: AuditPlanItem[] }) {
+export function PlanTable({ items, canWrite = false }: { items: AuditPlanItem[]; canWrite?: boolean }) {
   return (
     <div className="card">
       <div className="card-h"><h3>Audit plan</h3></div>
@@ -58,6 +59,7 @@ export function PlanTable({ items }: { items: AuditPlanItem[] }) {
             { key: "riskLevel", label: "Risk", render: (r) => riskPill(r.riskLevel) },
             { key: "auditorTeam", label: "Team", render: (r) => r.auditorTeam ?? "—" },
             { key: "status", label: "Status", render: (r) => statusPill(r.status) },
+            ...(canWrite ? [{ key: "id" as const, label: "Actions", render: (r: AuditPlanItem) => r.planId ? <PlanActions planId={r.planId} planNo={r.planNo} status={r.status} /> : "—" }] : []),
           ]}
           rows={items}
           sortable

@@ -36,7 +36,11 @@ export const updateRiskBody = z.object({
   status:           riskStatusEnum.optional(),
   owner:            z.string().max(128).optional(),
   reviewDate:       z.string().optional(),
-}).refine((b) => Object.keys(b).length > 0, { message: "at least one field required" });
+  // GAP-AUDIT-RISK-REGISTER-04: closing a risk requires a reason (persisted in risk.audit_risks.close_reason).
+  closeReason:      z.string().trim().min(3, "a close reason is required").max(2000).optional(),
+}).refine((b) => Object.keys(b).length > 0, { message: "at least one field required" })
+  .refine((b) => b.status !== "closed" || !!b.closeReason, { message: "closeReason is required when closing a risk", path: ["closeReason"] })
+  .refine((b) => b.closeReason === undefined || b.status === "closed", { message: "closeReason is only valid with status closed", path: ["closeReason"] });
 export type UpdateRiskBody = z.infer<typeof updateRiskBody>;
 
 // P1-7: link selected risks to an audit plan (risk-driven planning / audit universe).

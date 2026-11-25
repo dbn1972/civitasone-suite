@@ -32,7 +32,8 @@ const ACTOR_A = "cccccccc-0000-4000-8000-aaaaaaaaaaaa";
 const ACTOR_B = "dddddddd-0000-4000-8000-bbbbbbbbbbbb";
 const INVESTIGATION_A = "eeeeeeee-0000-4000-8000-000000000001";
 
-const READER_ROLES = ["audit_officer", "audit_admin", "super_admin", "vigilance_officer"];
+// Owner decision B4: every prior reader is kept, vigilance_admin added, tenant_admin excluded.
+const READER_ROLES = ["audit_officer", "audit_admin", "super_admin", "vigilance_officer", "vigilance_admin"];
 
 async function seedInvestigationForTenantA(): Promise<void> {
   await runWithTenant(TENANT_A, () => db.transaction((tx) => tx.insert(investigations).values({

@@ -15,6 +15,7 @@ export const auditRisks = riskSchema.table("audit_risks", {
   mitigationStatus: varchar("mitigation_status", { length: 24 }).notNull().default("not_started"),
   reviewDate:       date("review_date"),
   status:           varchar("status", { length: 24 }).notNull().default("open"),
+  closeReason:      text("close_reason"),
   createdAt:        timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:        timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy:        uuid("created_by").notNull(),

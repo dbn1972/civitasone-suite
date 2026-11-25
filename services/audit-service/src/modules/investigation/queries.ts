@@ -9,3 +9,7 @@ export async function listInvestigations(tenantId: string, limit = 50, offset = 
     return { items, total, limit, offset };
   });
 }
+
+export async function getInvestigation(id: string, tenantId: string) {
+  return repo.findInvestigationById(id, tenantId);
+}
