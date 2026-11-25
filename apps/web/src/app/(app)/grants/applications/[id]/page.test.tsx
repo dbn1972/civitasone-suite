@@ -24,8 +24,10 @@ vi.mock("../../_data", () => ({
 }));
 
 const getGranteeByIdMock = vi.fn();
+const getGrantInstallmentsMock = vi.fn();
 vi.mock("@/app/_data/loaders", () => ({
   getGranteeById: (id: string) => getGranteeByIdMock(id),
+  getGrantInstallments: () => getGrantInstallmentsMock(),
 }));
 
 const rolesMock = vi.fn<() => string[]>(() => ["grant_admin"]);
@@ -67,6 +69,8 @@ describe("ApplicationDetailPage", () => {
     getApplicationByIdMock.mockReset();
     getSchemeByIdMock.mockReset();
     getGranteeByIdMock.mockReset();
+    getGrantInstallmentsMock.mockReset();
+    getGrantInstallmentsMock.mockResolvedValue({ data: [], source: "api" });
     resolveUsersMock.mockReset();
     resolveUsersMock.mockResolvedValue(new Map());
     rolesMock.mockReturnValue(["grant_admin"]);
@@ -195,5 +199,32 @@ describe("ApplicationDetailPage", () => {
     getApplicationByIdMock.mockResolvedValue({ data: { ...APP, submittedBy: SUB }, source: "api" });
     render(await ApplicationDetailPage({ params: Promise.resolve({ id: "app-1" }) }));
     expect(screen.queryByText(SUB)).not.toBeInTheDocument();
+  });
+
+  const APPROVED = { ...APP, status: "approved", amountApprovedMinor: 4000000, approvedAt: "2026-08-05" };
+
+  it("offers the installment schedule form on an approved application with no schedule yet", async () => {
+    getApplicationByIdMock.mockResolvedValue({ data: APPROVED, source: "api" });
+    render(await ApplicationDetailPage({ params: Promise.resolve({ id: "app-1" }) }));
+    expect(screen.getByRole("button", { name: "Create schedule" })).toBeInTheDocument();
+  });
+
+  it("lists the existing schedule instead of the form once installments exist", async () => {
+    getApplicationByIdMock.mockResolvedValue({ data: APPROVED, source: "api" });
+    getGrantInstallmentsMock.mockResolvedValue({
+      data: [{ id: "i1", grantId: "app-1", grantNo: "G", granteeName: "X", installmentNo: 1, amount: 2000000, scheduledDate: "2026-10-01", status: "pending" }],
+      source: "api",
+    });
+    render(await ApplicationDetailPage({ params: Promise.resolve({ id: "app-1" }) }));
+    expect(screen.queryByRole("button", { name: "Create schedule" })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Open installments register" })).toBeInTheDocument();
+  });
+
+  it("hides the schedule form from roles that cannot disburse", async () => {
+    rolesMock.mockReturnValue(["audit_officer"]);
+    getApplicationByIdMock.mockResolvedValue({ data: APPROVED, source: "api" });
+    render(await ApplicationDetailPage({ params: Promise.resolve({ id: "app-1" }) }));
+    expect(screen.queryByRole("button", { name: "Create schedule" })).not.toBeInTheDocument();
+    expect(screen.getByText(/Only grant and finance officers/)).toBeInTheDocument();
   });
 });

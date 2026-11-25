@@ -9,6 +9,9 @@ import { getApplicationById, getSchemeById } from "../../_data";
 import { getGranteeById } from "@/app/_data/loaders";
 import { resolveUsers } from "@/lib/directory/resolveUsers";
 import { ApplicationActions } from "./ApplicationActions";
+import { InstallmentScheduleForm } from "./InstallmentScheduleForm";
+import { getGrantInstallments } from "@/app/_data/loaders";
+import { GRANTS_DISBURSE_ROLES } from "../../roles";
 
 const STATUS_ACTIONS: Record<string, string[]> = {
   submitted:    ["assign-reviewer", "score", "approve", "reject"],
@@ -104,6 +107,15 @@ export default async function ApplicationDetailPage(props: { params: Promise<{ i
     if (name) return name;
     return UUID_RE.test(id) ? t("reviewerUnresolved") : id;
   };
+
+  // Installment schedule (approved applications): existing installments come
+  // from the already-wired list route; creation POSTs the schedule route.
+  const isApproved = application.status === "approved";
+  const canSchedule = hasAnyRole(roles, GRANTS_DISBURSE_ROLES);
+  const tSched = await getTranslations("grantsSchedule");
+  const existing = isApproved
+    ? (await getGrantInstallments()).data.filter((i) => i.grantId === params.id)
+    : [];
 
   const hasEvaluation =
     application.technicalScore != null || application.financialScore != null || !!application.recommendation;
@@ -233,16 +245,30 @@ export default async function ApplicationDetailPage(props: { params: Promise<{ i
           </p>
         </Card>)
       ) : null}
-      {application.status === "approved" && (
-        <Card title="Next Steps" padding>
-          <p style={{ color: "var(--ink2)", marginBottom: 12 }}>
-            This application has been approved. You can now schedule disbursement installments.
-          </p>
-          {/* GAP-GRANTS-APPLICATIONS-DETAIL-07: next/link, and the installments
-              page reads ?appId to scope to this application. */}
-          <Link href={`/grants/installments?appId=${params.id}`} className="btn primary">
-            View installments
-          </Link>
+      {isApproved && (
+        <Card title={tSched("existingTitle")} padding>
+          {existing.length > 0 ? (
+            <>
+              <ol style={{ margin: "0 0 12px", paddingInlineStart: 20 }}>
+                {[...existing]
+                  .sort((a, b) => a.installmentNo - b.installmentNo)
+                  .map((i) => (
+                    <li key={i.id}>
+                      {formatMoney(i.amount)} · {i.scheduledDate ? formatIndianDate(i.scheduledDate) : "—"} · <StatusPill status={i.status} />
+                    </li>
+                  ))}
+              </ol>
+              <Link href={`/grants/installments?appId=${params.id}`} className="btn primary">
+                {tSched("existingView")}
+              </Link>
+            </>
+          ) : canSchedule && application.amountApprovedMinor != null ? (
+            <InstallmentScheduleForm applicationId={params.id} approvedMinor={application.amountApprovedMinor} />
+          ) : (
+            <p style={{ color: "var(--ink2)", margin: 0 }}>
+              {canSchedule ? tSched("existingEmpty") : tSched("noPermission")}
+            </p>
+          )}
         </Card>
       )}
     </>

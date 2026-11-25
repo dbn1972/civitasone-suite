@@ -20788,5 +20788,42 @@
     "unbalanced": "Unbalanced",
     "cannotVerify": "Cannot verify",
     "difference": "Difference {amount}"
-  }
+  },
+
+    "grantsSchedule": {
+      "title": "Disbursement schedule",
+      "intro": "Split the sanctioned amount of {approved} into installments. The total cannot exceed the sanctioned amount.",
+      "installmentN": "Installment {n}",
+      "amount": "Amount (₹)",
+      "dueDate": "Due date",
+      "condition": "Release condition",
+      "conditionPlaceholder": "e.g. Utilisation certificate for previous tranche",
+      "remove": "Remove installment {n}",
+      "addInstallment": "Add installment",
+      "total": "Schedule total",
+      "save": "Create schedule",
+      "saving": "Saving…",
+      "amountInvalid": "Enter every installment amount in rupees, up to two decimals.",
+      "overApproved": "The schedule total {total} exceeds the sanctioned amount {approved}.",
+      "datesOrder": "Due dates must be in the same order as the installments.",
+      "submitted": "Schedule submitted. It will appear in the installments list shortly.",
+      "asyncNote": "Creation is processed in the background; the schedule appears after a short delay.",
+      "existingTitle": "Installment schedule",
+      "existingEmpty": "No installments have been scheduled for this application yet.",
+      "existingView": "Open installments register",
+      "noPermission": "Only grant and finance officers can create a disbursement schedule."
+    },
+    "grantsBank": {
+      "title": "Link bank account",
+      "intro": "Record the grantee's payout account. For data protection only the last four digits of the account number are stored, together with the IFSC.",
+      "last4": "Account number (last 4 digits)",
+      "ifsc": "IFSC code",
+      "bankName": "Bank name",
+      "save": "Link bank account",
+      "saving": "Saving…",
+      "last4Invalid": "Enter exactly the last 4 digits of the account number.",
+      "ifscInvalid": "Enter a valid 11-character IFSC code, for example SBIN0001234.",
+      "submitted": "Bank account ending {masked} submitted for linking. It will be available for payouts shortly.",
+      "readNote": "Only the last four digits of the account number are ever stored."
+    }
 }
