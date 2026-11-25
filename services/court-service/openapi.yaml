@@ -277,6 +277,8 @@ components:
         id: { type: string, format: uuid }
         causeListId: { type: string, format: uuid }
         caseId: { type: string, format: uuid }
+        hearingId: { type: [string, "null"], format: uuid, description: Optional exact link to a hearing of the case (GAP-COURT-CAUSE-LIST-04). }
+        hearingScheduledDate: { type: [string, "null"], description: Scheduled date of the linked hearing. }
         itemNumber: { type: integer }
         slot: { type: string }
         courtroom: { type: string }

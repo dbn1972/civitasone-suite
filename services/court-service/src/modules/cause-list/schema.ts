@@ -40,6 +40,8 @@ export const causeListItems = courtSchema.table("cause_list_items", {
   tenantId:    uuid("tenant_id").notNull(),
   causeListId: uuid("cause_list_id").notNull(),
   caseId:      uuid("case_id").notNull(),
+  /** Optional exact link to a hearing (0021_cause_list_item_hearing_link.sql); NULL = derive purpose. */
+  hearingId:   uuid("hearing_id"),
   itemNumber:  integer("item_number"),
   slot:        varchar("slot", { length: 32 }),
   courtroom:   varchar("courtroom", { length: 64 }),

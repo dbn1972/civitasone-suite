@@ -19,6 +19,7 @@ type ListCasePayload = {
   causeListId: string;
   tenantId: string;
   caseId: string;
+  hearingId?: string;
   itemNumber: number;
   slot: string;
   courtroom: string;
@@ -75,6 +76,7 @@ export function registerCauseListConsumers(
           tenantId: p.tenantId,
           causeListId: p.causeListId,
           caseId: p.caseId,
+          hearingId: p.hearingId ?? null,
           itemNumber: p.itemNumber,
           slot: p.slot,
           courtroom: p.courtroom,
@@ -90,7 +92,7 @@ export function registerCauseListConsumers(
         // existence pre-check (commands.ts) — the common case is now an honest
         // 404 there, before this insert ever runs.
         if (repo.isForeignKeyViolation(e)) {
-          throw new NonRetryableError("CAUSELIST_CASE_NOT_FOUND: referenced case does not exist");
+          throw new NonRetryableError("CAUSELIST_CASE_NOT_FOUND: referenced case or hearing does not exist");
         }
         throw e;
       }

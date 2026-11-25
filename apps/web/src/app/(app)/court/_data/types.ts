@@ -196,6 +196,10 @@ export interface CauseListItem {
   listDate: string | null;
   /** Purpose of the item's hearing on the list date (GAP-COURT-CAUSE-LIST-04); null/absent when none. */
   purpose?: string | null;
+  /** Optional exact link to a hearing of the case (GAP-COURT-CAUSE-LIST-04); null/absent = unlinked. */
+  hearingId?: string | null;
+  /** Scheduled date (ISO) of the linked hearing; null/absent when unlinked. */
+  hearingScheduledDate?: string | null;
   version: number;
 }
 

@@ -89,4 +89,21 @@ describe("listItemsWithPurpose", () => {
     expect(await listItemsWithPurpose(TENANT, LIST)).toEqual([]);
     expect(selectCalls).toBe(1);
   });
+
+  it("an item with an exact hearing_id link uses THAT hearing's purpose + date, beating the ambiguous derived value", async () => {
+    const H = "55555555-5555-4555-8555-555555555555";
+    const d = new Date("2026-07-11T05:00:00Z");
+    selects.push(
+      [{ ...item("i1", CASE_A, 1), hearingId: H }, item("i2", CASE_A, 2)],
+      // two different same-day purposes => derived is ambiguous (null)
+      [
+        { caseId: CASE_A, scheduledDate: d, purpose: "arguments", updatedAt: new Date() },
+        { caseId: CASE_A, scheduledDate: d, purpose: "evidence", updatedAt: new Date() },
+      ],
+      [{ id: H, purpose: "evidence", scheduledDate: d }],
+    );
+    const out = await listItemsWithPurpose(TENANT, LIST);
+    expect(out[0]).toMatchObject({ id: "i1", hearingId: H, purpose: "evidence", hearingScheduledDate: d.toISOString() });
+    expect(out[1]).toMatchObject({ id: "i2", purpose: null, hearingScheduledDate: null });
+  });
 });
