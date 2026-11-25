@@ -13043,6 +13043,7 @@
     "woRequestSubmitted": "Write-off request submitted. Reference {reference} - give it to the approving officer.",
     "wo_selfApproval": "You raised this write-off request, so you cannot approve it. Ask a different authorised officer.",
     "wo_alreadyDecided": "This write-off request has already been decided. Refresh the page to see its current state.",
+    "woRequestAssetNotFound": "This asset could not be found. Refresh the page and try again.",
     "wo_notFound": "No write-off request was found for that reference. Check it and try again.",
     "woApproveTitle": "Approve a write-off request",
     "woApproveIntro": "Approve a write-off raised by another officer. You cannot approve a request you raised yourself.",

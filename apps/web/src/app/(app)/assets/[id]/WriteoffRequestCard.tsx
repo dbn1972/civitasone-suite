@@ -24,7 +24,7 @@ export function WriteoffRequestCard({ assetId, assetCode }: { assetId: string; a
     setError(undefined);
     try {
       const r = await requestWriteoff(assetId, remarks);
-      if (!r.ok) { setError(r.key ? t(`wo_${r.key}`) : r.message); return; }
+      if (!r.ok) { setError(r.key === "notFound" ? t("woRequestAssetNotFound") : r.key ? t(`wo_${r.key}`) : r.message); return; }
       setReference(r.id);
       setOpen(false);
     } catch (e) {
