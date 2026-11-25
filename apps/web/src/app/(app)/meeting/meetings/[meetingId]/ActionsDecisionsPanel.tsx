@@ -562,7 +562,8 @@ function ActionDetail({
   const mayAck = mayAct && item.status === "assigned";
   const mayProgress = mayAct && PROGRESS_STATES.includes(item.status);
   const mayEvidence = mayAct && !settled && item.status !== "evidence_submitted";
-  const mayVerify = permissions.canVerify && item.status === "evidence_submitted";
+  const mayVerify = permissions.canVerify && item.status === "evidence_submitted" && !isAssignee;
+  const selfVerifyBlocked = permissions.canVerify && isAssignee && item.status === "evidence_submitted";
   const mayEdit = permissions.canUpdate && !settled;
   const directoryOk = permissions.employeeDirectory !== "none";
 
@@ -728,8 +729,11 @@ function ActionDetail({
               {ok ? t("verify") : t("returnToAssignee")}
             </button>
           ))}
-          <p style={{ flexBasis: "100%", margin: 0, fontSize: 12.5, color: "var(--ink2)" }}>{t("selfVerifyHint")}</p>
         </div>
+      )}
+
+      {selfVerifyBlocked && (
+        <p style={{ margin: 0, fontSize: 12.5, color: "var(--ink2)" }}>{t("selfVerifyHint")}</p>
       )}
 
       {mayEdit && (

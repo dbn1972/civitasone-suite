@@ -137,6 +137,22 @@ describe("ActionsDecisionsPanel", () => {
     await waitFor(() => expect(c.verifyActionItem).toHaveBeenCalledWith("a1", { verifierId: chair, verified: true }));
   });
 
+  it("a verifier who is also the assignee gets the self-verify hint and no Verify/Return buttons", () => {
+    mount({ actions: [item({ status: "evidence_submitted", evidenceNote: "Sanction letter attached" })], viewerId: ASSIGNEE, perms: { canVerify: true } });
+    fireEvent.click(screen.getByRole("button", { name: "Manage" }));
+    expect(screen.queryByRole("button", { name: "Verify completion" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Return to assignee" })).not.toBeInTheDocument();
+    expect(screen.getByText(/You cannot verify an item assigned to yourself/)).toBeInTheDocument();
+  });
+
+  it("a verifier who is not the assignee sees Verify/Return and no self-verify hint", () => {
+    mount({ actions: [item({ status: "evidence_submitted" })], viewerId: "33333333-3333-4333-8333-333333333333", perms: { canVerify: true } });
+    fireEvent.click(screen.getByRole("button", { name: "Manage" }));
+    expect(screen.getByRole("button", { name: "Verify completion" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Return to assignee" })).toBeInTheDocument();
+    expect(screen.queryByText(/You cannot verify an item assigned to yourself/)).not.toBeInTheDocument();
+  });
+
   it("PATCH carries only the changed field plus version", async () => {
     mount({ perms: { canUpdate: true } });
     fireEvent.click(screen.getByRole("button", { name: "Manage" }));
