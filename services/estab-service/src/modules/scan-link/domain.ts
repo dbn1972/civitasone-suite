@@ -10,7 +10,7 @@ export function fileAcceptsDocuments(status: string): boolean {
 }
 
 /** Classifications never offered through the lookup (subject/file-no would leak to document-service callers). */
-export const LOOKUP_EXCLUDED_CLASSIFICATIONS = ["top_secret", "secret"] as const;
+export const LOOKUP_EXCLUDED_CLASSIFICATIONS = ["top_secret", "secret", "confidential"] as const;
 
 /** Linking to these classifications is refused (TARGET_CLASSIFIED) until a clearance-based path is a product decision. */
 export function linkRefusedForClassification(c: string): boolean {

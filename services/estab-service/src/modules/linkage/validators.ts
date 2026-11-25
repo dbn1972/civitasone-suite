@@ -9,7 +9,9 @@ export const fileFromModuleBody = z.object({
   refId:          z.string().uuid(),
   subject:        z.string().min(3).max(500),
   dept:           z.string().min(1),
-  classification: z.enum(["top_secret", "secret", "confidential", "public"]).default("confidential"),
+  // D12 (owner-approved default Ordinary): was "confidential", which with the D14 gate would hide every
+  // module-raised approval file from its own approvers. Confidential+ must now be asked for explicitly.
+  classification: z.enum(["top_secret", "secret", "confidential", "restricted", "public"]).default("public"),
   priority:       z.enum(["normal", "urgent", "immediate"]).default("normal"),
   // Optional: the server derives the initiator from the authenticated session. A supplied value
   // is only accepted when it equals the caller's own employee id (no raising in another officer's name).

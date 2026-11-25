@@ -10,6 +10,8 @@ export const FILE_CLASSIFICATIONS = ["top_secret", "secret", "confidential", "re
 /** D14: Confidential and above may be viewed/created only by these roles (on top of desk clearance). */
 export const CLASSIFIED_ACCESS_ROLES = ["knowledge_admin", "estab_admin", "super_admin"] as const;
 
+export const CLASSIFIED_TIERS = ["confidential", "secret", "top_secret"] as const;
+
 export function isConfidentialOrAbove(classification: string): boolean {
   return classification === "confidential" || classification === "secret" || classification === "top_secret";
 }

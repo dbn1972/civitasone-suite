@@ -6,6 +6,8 @@ import { queue } from "../../shared/infra.js";
 import { isAccessAllowed } from "../operators/eligibility.js";
 import { idParam, lookupQuery, listScannedQuery, clearanceQuery } from "./validators.js";
 import { rankCandidates } from "./domain.js";
+import { roleMayAccessClassification } from "../files/domain.js";
+import { assertRoleMayAccess } from "../files/classAccess.js";
 import * as repo from "./repo.js";
 
 const ESTAB_ROLES = ["estab_officer", "estab_admin", "estab_deputy_secretary", "super_admin"];
@@ -38,6 +40,9 @@ export async function scanLinkRoutes(app: FastifyInstance): Promise<void> {
     }
     const file = await repo.findFileHeader(q.fileId, ctx.tenantId);
     if (!file) return reply.send({ data: { allowed: false, reason: "TARGET_NOT_FOUND" } });
+    if (!roleMayAccessClassification(q.roles, file.classification)) {
+      return reply.send({ data: { allowed: false, reason: "CLASSIFIED" } });
+    }
     if (!(await isAccessAllowed(ctx.tenantId, q.userId, file.classification))) {
       await queue.publish("audit.event.record", {
         messageId: randomUUID(), type: "audit.event.record",
@@ -76,6 +81,7 @@ export async function scanLinkRoutes(app: FastifyInstance): Promise<void> {
     const { state, limit } = listScannedQuery.parse(req.query);
     const file = await repo.findFileHeader(id, ctx.tenantId);
     if (!file) throw new HttpError(404, "NOT_FOUND", "file not found");
+    await assertRoleMayAccess(ctx, file.classification, "scanned_documents_denied_role", id);
     if (!(await isAccessAllowed(ctx.tenantId, ctx.actorId, file.classification))) {
       await queue.publish("audit.event.record", {
         messageId: randomUUID(), type: "audit.event.record",

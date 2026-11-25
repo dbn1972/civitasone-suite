@@ -238,13 +238,13 @@ export async function fileExists(tenantId: string, fileId: string): Promise<bool
 export async function listInwardPage(tenantId: string, limit: number, page: repo.RegisterPage) {
   const [rows, total] = await Promise.all([
     repo.listInwardByTenant(tenantId, limit, page),
-    repo.countInwardByTenant(tenantId, page.q),
+    repo.countInwardByTenant(tenantId, page.q, page.hideClassified),
   ]);
   return { rows, total };
 }
 
-export async function listNotings(tenantId: string, limit: number) {
-  return repo.listNotingsByTenant(tenantId, limit);
+export async function listNotings(tenantId: string, limit: number, hideClassified = false) {
+  return repo.listNotingsByTenant(tenantId, limit, hideClassified);
 }
 
 export async function listDispatch(tenantId: string, limit: number, page: repo.RegisterPage = {}) {
@@ -273,8 +273,8 @@ export async function searchFiles(tenantId: string, q: string, limit: number) {
 }
 
 /** Duplicate-subject pre-check (CSMOP one-subject-one-file, R9). */
-export async function findSimilarOpenFiles(tenantId: string, subject: string, limit: number) {
-  return repo.findSimilarOpenFiles(tenantId, subject, limit);
+export async function findSimilarOpenFiles(tenantId: string, subject: string, limit: number, hideClassified = false) {
+  return repo.findSimilarOpenFiles(tenantId, subject, limit, hideClassified);
 }
 
 /** GAP-ESTAB-HANDOVER-03: files held by a specific officer: live (non-terminal) and what a handover moves. */
@@ -283,8 +283,8 @@ export async function countFilesByHolder(tenantId: string, officerId: string): P
 }
 
 /** GAP-ESTAB-INBOX-01: files held by an officer under any of the ids they are known by ("My Desk"). */
-export async function listFilesByHolder(tenantId: string, holderIds: readonly string[], limit = 100, offset = 0): Promise<FileRow[]> {
-  return repo.listFilesByHolder(tenantId, holderIds, limit, offset);
+export async function listFilesByHolder(tenantId: string, holderIds: readonly string[], limit = 100, offset = 0, hideClassified = false): Promise<FileRow[]> {
+  return repo.listFilesByHolder(tenantId, holderIds, limit, offset, hideClassified);
 }
 
 /**

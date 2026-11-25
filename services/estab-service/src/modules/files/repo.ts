@@ -67,13 +67,14 @@ export async function allocateDakNo(tx: Exec, tenantId: string, year: number): P
  * Find active/draft files whose subject closely matches a candidate subject
  * (CSMOP one-subject-one-file). Used to warn before opening a duplicate file.
  */
-export async function findSimilarOpenFiles(tenantId: string, subject: string, limit: number): Promise<Array<{ id: string; fileNo: string; subject: string; status: string }>> {
+export async function findSimilarOpenFiles(tenantId: string, subject: string, limit: number, hideClassified = false): Promise<Array<{ id: string; fileNo: string; subject: string; status: string }>> {
   const rows = await db.transaction((tx) => tx.execute(sql`
     SELECT id, file_no, subject, status
       FROM files.estab_files
      WHERE tenant_id = ${tenantId}::uuid
        AND status IN ('draft','active')
        AND lower(btrim(subject)) = lower(btrim(${subject}))
+       AND (${!hideClassified} OR classification NOT IN ('confidential','secret','top_secret'))
      ORDER BY created_at DESC
      LIMIT ${limit}
   `));
@@ -239,7 +240,7 @@ export async function countFilesByHolder(tenantId: string, officerId: string): P
  * Runs inside db.transaction for RLS GUC injection.
  */
 export async function listFilesByHolder(
-  tenantId: string, holderIds: readonly string[], limit = 100, offset = 0,
+  tenantId: string, holderIds: readonly string[], limit = 100, offset = 0, hideClassified = false,
 ): Promise<FileRow[]> {
   if (holderIds.length === 0) return [];
   return db.transaction((tx) =>
@@ -247,6 +248,7 @@ export async function listFilesByHolder(
       eq(estabFiles.tenantId, tenantId),
       inArray(estabFiles.currentWith, [...holderIds]),
       sql`${estabFiles.status} NOT IN ('archived', 'disposed')`,
+      hideClassified ? sql`${estabFiles.classification} NOT IN ('confidential','secret','top_secret')` : undefined,
     )).orderBy(desc(estabFiles.createdAt), asc(estabFiles.id)).limit(limit).offset(offset),
   );
 }
@@ -287,22 +289,30 @@ export async function searchFiles(tenantId: string, q: string, limit: number): P
 
 // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
 // before this read — a bare db.select() runs with no RLS GUC set.
-export async function listNotingsByTenant(tenantId: string, limit: number): Promise<NotingRow[]> {
-  return db.transaction((tx) => tx.select().from(estabNotings).where(eq(estabNotings.tenantId, tenantId))
+export async function listNotingsByTenant(tenantId: string, limit: number, hideClassified = false): Promise<NotingRow[]> {
+  return db.transaction((tx) => tx.select().from(estabNotings).where(and(
+    eq(estabNotings.tenantId, tenantId),
+    hideClassified
+      ? sql`${estabNotings.fileId} NOT IN (SELECT id FROM files.estab_files WHERE tenant_id = ${tenantId}::uuid AND classification IN ('confidential','secret','top_secret'))`
+      : undefined,
+  ))
     .orderBy(desc(estabNotings.createdAt)).limit(limit));
 }
 
-export type RegisterPage = { q?: string | undefined; offset?: number | undefined };
+export type RegisterPage = { q?: string | undefined; offset?: number | undefined; hideClassified?: boolean | undefined };
 
 /** `%q%` for ILIKE with the LIKE metacharacters in the user's text escaped. */
 function containsPattern(q: string): string {
   return `%${q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
 }
 
-function inwardWhere(tenantId: string, q?: string) {
+function inwardWhere(tenantId: string, q?: string, hideClassified = false) {
   const p = q ? containsPattern(q) : null;
   return and(
     eq(estabInward.tenantId, tenantId),
+    hideClassified
+      ? sql`${estabInward.classification} NOT IN ('confidential','secret','top_secret') AND (${estabInward.fileId} IS NULL OR ${estabInward.fileId} NOT IN (SELECT id FROM files.estab_files WHERE tenant_id = ${tenantId}::uuid AND classification IN ('confidential','secret','top_secret')))`
+      : undefined,
     p
       ? or(ilike(estabInward.dakNo, p), ilike(estabInward.barcode, p), ilike(estabInward.subject, p), ilike(estabInward.fromAddress, p))
       : undefined,
@@ -310,13 +320,13 @@ function inwardWhere(tenantId: string, q?: string) {
 }
 
 export async function listInwardByTenant(tenantId: string, limit: number, page: RegisterPage = {}) {
-  return db.transaction((tx) => tx.select().from(estabInward).where(inwardWhere(tenantId, page.q))
+  return db.transaction((tx) => tx.select().from(estabInward).where(inwardWhere(tenantId, page.q, page.hideClassified))
     .orderBy(desc(estabInward.receivedAt), desc(estabInward.id)).limit(limit).offset(page.offset ?? 0));
 }
 
-export async function countInwardByTenant(tenantId: string, q?: string): Promise<number> {
+export async function countInwardByTenant(tenantId: string, q?: string, hideClassified = false): Promise<number> {
   const [row] = await db.transaction((tx) => tx.select({ n: sql<number>`count(*)::int` }).from(estabInward)
-    .where(inwardWhere(tenantId, q)));
+    .where(inwardWhere(tenantId, q, hideClassified)));
   return row?.n ?? 0;
 }
 

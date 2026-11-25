@@ -236,7 +236,7 @@ describe("CSMOP — move gate (isMoveAllowed / clearance)", () => {
     const res = await app.inject({
       method: "PATCH",
       url: `/v1/estab/files/${fileId}/move`,
-      headers: { ...authHeaders(actor, OFFICER_ROLES, T), ...CT },
+      headers: { ...authHeaders(actor, ["estab_admin"], T), ...CT },
       payload: { toOfficer: target },
     });
     expect(res.statusCode).toBe(422);
