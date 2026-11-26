@@ -50,7 +50,7 @@ const CANON = [{ category: "pay_scale", eligibleForLeave: true }];
 
 const body = {
   employeeId: EMP, leaveTypeId: LEAVE_TYPE, allocId: ALLOC,
-  fromDate: "2026-08-10", toDate: "2026-08-14", daysApplied: 5, reason: "x",
+  fromDate: "2026-08-10", toDate: "2026-08-14", daysApplied: 5, reason: "Family function in the village",
 };
 const token = () => signToken({ sub: USER, tid: TENANT, roles: ["hr_admin"], sid: "s1" }, SECRET);
 

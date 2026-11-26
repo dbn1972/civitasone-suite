@@ -25,9 +25,11 @@ import { z } from "zod";
  * derived at display time rather than stored on the designation. The
  * designations table therefore labels it "Service Group (indicative)" and
  * prints these bands in a footnote. Whether to store the group per
- * designation instead (a schema change) or keep it derived is an open
- * product decision recorded in docs/gap-ledger/hr.md; do not present this as
- * an official classification until that is settled.
+ * designation instead (a schema change) or keep it derived was decided by the
+ * owner on 26 Nov 2026 (GAP-HR-DESIGNATIONS-01): it STAYS DERIVED and labelled
+ * "indicative", with no migration; HR is to confirm the band mapping below
+ * (Group C = levels 1-5, B = 6-9, A = 10-18, DoPT S.O. 3964(F)). Do not
+ * present it as an official classification until HR has confirmed it.
  *
  * If HR/legal later confirms a different or more precise mapping, update
  * SERVICE_GROUP_BANDS here — both screens read it, so they can't silently

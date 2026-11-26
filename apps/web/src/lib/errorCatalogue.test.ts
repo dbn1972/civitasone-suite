@@ -258,6 +258,9 @@ describe("WFH eligibility domain codes (GAP-HR-WFH-01)", () => {
   it.each([
     ["GAZETTED_NOT_ELIGIBLE", /pay level/i],
     ["WEEKLY_WFH_CAP_REACHED", /weekly work-from-home limit/i],
+    ["RETROSPECTIVE_WFH_NOT_ALLOWED", /past date/i],
+    ["RETROSPECTIVE_WFH_WINDOW_EXCEEDED", /up to 7 days back/i],
+    ["RETROSPECTIVE_WFH_REASON_REQUIRED", /needs a reason/i],
   ] as const)("%s (hrms-service 422) reads as its own policy reason in en and hi, never the generic validation copy", (code, enWhat) => {
     const generic = resolveHumanError({ status: 422, ctx: { locale: "en", hasFieldErrors: true } });
     const en = resolveHumanError({ status: 422, code, ctx: { locale: "en" } });

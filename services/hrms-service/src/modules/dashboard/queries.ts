@@ -3,7 +3,10 @@ import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import { db } from "../../shared/db.js";
 import { hrmsEmployees, hrmsDepartments } from "../employee/schema.js";
 import { hrmsLeaveApps, hrmsLeaveTypes } from "../leave/schema.js";
-import { hrmsAttendance } from "../attendance/schema.js";
+import { hrmsAttendance, hrmsWfhRequests } from "../attendance/schema.js";
+import { hrmsHolidays } from "../holidays/schema.js";
+import { isWeekend } from "../leave/rules-engine.js";
+import { computePresentTodayPct, type PresentTodayInput } from "./present-today.js";
 import { SERVING_STATUSES } from "../employee/status.js";
 
 /**
@@ -46,7 +49,7 @@ export async function getDashboard(tenantId: string, scopeEmployeeIds?: string[]
   const firstOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
 
   const {
-    headcountRow, headcountLastMonthRow, pendingRow, presentRow, attendanceTodayRow,
+    headcountRow, headcountLastMonthRow, pendingRow, attendanceTodayRow, presentTodayInputs,
     onLeaveRow, deptRows, employeeTypeRows, routingFailedRow, totalDeptsRow, servingRow,
   } =
     await db.transaction(async (tx) => {
@@ -75,16 +78,6 @@ export async function getDashboard(tenantId: string, scopeEmployeeIds?: string[]
           appScope,
         ));
 
-      const [presentRow] = await tx
-        .select({ count: sql<number>`count(*)::int` })
-        .from(hrmsAttendance)
-        .where(and(
-          eq(hrmsAttendance.tenantId, tenantId),
-          eq(hrmsAttendance.attendanceDate, today),
-          eq(hrmsAttendance.status, "present"),
-          attScope,
-        ));
-
       // GAP-HR-DASHBOARD-07: any attendance row at all for the tenant today
       // (regardless of status) -- distinguishes "feed hasn't synced yet"
       // (zero rows -> attendanceTodayPct should be null) from "feed synced,
@@ -97,6 +90,43 @@ export async function getDashboard(tenantId: string, scopeEmployeeIds?: string[]
           eq(hrmsAttendance.attendanceDate, today),
           attScope,
         ));
+
+      // GAP-HR-DASHBOARD-07 (owner decision 26 Nov 2026): "Present Today" =
+      // present / (headcount - on_leave), half_day = 0.5, WFH = present, and
+      // holiday / weekly-off days leave the denominator. This gathers the raw
+      // per-employee facts; the arithmetic is the pure computePresentTodayPct.
+      const workforce = await tx
+        .select({ id: hrmsEmployees.id, empStatus: hrmsEmployees.status, attStatus: hrmsAttendance.status })
+        .from(hrmsEmployees)
+        .leftJoin(hrmsAttendance, and(
+          eq(hrmsAttendance.employeeId, hrmsEmployees.id),
+          eq(hrmsAttendance.tenantId, tenantId),
+          eq(hrmsAttendance.attendanceDate, today),
+        ))
+        .where(and(eq(hrmsEmployees.tenantId, tenantId), ne(hrmsEmployees.status, "separated"), empScope));
+      const wfhToday = await tx
+        .select({ employeeId: hrmsWfhRequests.employeeId })
+        .from(hrmsWfhRequests)
+        .where(and(
+          eq(hrmsWfhRequests.tenantId, tenantId),
+          eq(hrmsWfhRequests.status, "approved"),
+          sql`${hrmsWfhRequests.fromDate} <= ${today}`,
+          sql`${hrmsWfhRequests.toDate} >= ${today}`,
+          scopeCond(hrmsWfhRequests.employeeId, scopeEmployeeIds),
+        ));
+      const [offDayRow] = await tx
+        .select({ count: sql<number>`count(*)::int` })
+        .from(hrmsHolidays)
+        .where(and(
+          eq(hrmsHolidays.tenantId, tenantId),
+          eq(hrmsHolidays.date, today),
+          inArray(hrmsHolidays.type, ["gazetted", "weekly_off"]),
+        ));
+      const presentTodayInputs: PresentTodayInput = {
+        employees: workforce.map((w) => ({ id: w.id, employeeStatus: w.empStatus, attendanceStatus: w.attStatus ?? null })),
+        wfhEmployeeIds: wfhToday.map((w) => w.employeeId),
+        nonWorkingDay: isWeekend(today) || (offDayRow?.count ?? 0) > 0,
+      };
 
       // GAP-HR-DASHBOARD-06: real total, unfiltered by isActive -- mirrors
       // employee/queries.ts's own unfiltered hrmsDepartments lookups (no
@@ -182,13 +212,12 @@ export async function getDashboard(tenantId: string, scopeEmployeeIds?: string[]
         ));
 
       return {
-        headcountRow, headcountLastMonthRow, pendingRow, presentRow, attendanceTodayRow,
+        headcountRow, headcountLastMonthRow, pendingRow, attendanceTodayRow, presentTodayInputs,
         onLeaveRow, deptRows, employeeTypeRows, routingFailedRow, totalDeptsRow, servingRow,
       };
     });
 
   const headcount = headcountRow?.count ?? 0;
-  const present = presentRow?.count ?? 0;
   const attendanceRowsToday = attendanceTodayRow?.count ?? 0;
 
   // Collapse to top 6 + "Others"
@@ -206,14 +235,12 @@ export async function getDashboard(tenantId: string, scopeEmployeeIds?: string[]
     headcount,
     headcountLastMonth: headcountLastMonthRow?.count ?? 0,
     // GAP-HR-DASHBOARD-07: null (never a fabricated 0%) when the tenant has
-    // no attendance rows synced for today at all. When rows do exist, this
-    // deliberately keeps the pre-existing present/headcount formula
-    // unchanged -- no test suite for this query existed before this fix to
-    // confirm a different denominator (e.g. excluding on_leave) was actually
-    // intended, so only the null-vs-zero bug is fixed here, not the formula.
+    // no attendance rows synced for today at all. Otherwise the owner-approved
+    // rule (present-today.ts): present / (headcount - on_leave), half_day 0.5,
+    // WFH counts as present, holiday / weekly-off excluded from the denominator.
     attendanceTodayPct: attendanceRowsToday === 0
       ? null
-      : (headcount > 0 ? Math.round((present / headcount) * 100) : 0),
+      : computePresentTodayPct(presentTodayInputs),
     pendingLeaves: pendingRow?.count ?? 0,
     onLeave: onLeaveRow?.count ?? 0,
     payrollDue: 0,

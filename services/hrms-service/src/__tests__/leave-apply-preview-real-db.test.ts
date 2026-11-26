@@ -168,7 +168,7 @@ describe("POST /v1/hrms/leave-requests/preview", () => {
     expect(allocAfterPreview[0]!.balance_days).toBe(8);
 
     // The real submit, using preview's own computedDays — proves they agree.
-    const submit = await post("/v1/hrms/leave-requests", selfToken, { ...PREVIEW_BODY, daysApplied: previewBody.computedDays, reason: "Personal work" });
+    const submit = await post("/v1/hrms/leave-requests", selfToken, { ...PREVIEW_BODY, daysApplied: previewBody.computedDays, reason: "Personal work at the district office" });
     expect(submit.statusCode).toBe(202);
     await drainQueue();
     const rowsAfterSubmit = await asTenant((tx) => tx`SELECT days_applied FROM leave.hrms_leave_apps WHERE tenant_id = ${TENANT}`);

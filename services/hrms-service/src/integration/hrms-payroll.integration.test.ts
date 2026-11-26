@@ -288,7 +288,7 @@ describe("Leave approval event shape — payroll LOP consumer contract", () => {
         leaveTypeId: "llllllll-0001-4000-8000-000000000001",
         fromDate: "2026-08-01",
         toDate: "2026-08-02",
-        reason: "Personal",
+        reason: "Personal work at the district office",
       },
     });
     // Must be 202 (accepted) or 400 (validation), never 500

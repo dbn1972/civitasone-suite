@@ -44,8 +44,14 @@ function KeyValueTable({ caption, rows }: { caption: string; rows: Array<{ label
 }
 
 /**
- * Attendance Rules Configuration — defines how the system marks attendance:
- * late, half-day, overtime, weekly-off, flexi-time.
+ * Attendance Rules Configuration — reference defaults for how attendance is marked.
+ *
+ * GAP-HR-ATTENDANCE-CONFIG-01 (owner decision, 26 Nov 2026): the page stays read-only with
+ * the "not verified" banner, and the rows that cannot be traced to any engine code are
+ * DROPPED rather than shown as policy: the late-mark trigger time, the late-marks -> CL
+ * deduction, both overtime rates (weekday / weekly-off) and the whole compensatory-off
+ * card. A repo-wide search of services/ and packages/ finds no such constants. A
+ * per-tenant setting can bring them back later; nothing is invented here.
  */
 export default async function AttendanceConfigPage() {
   const t = await getTranslations("attendanceConfig");
@@ -102,10 +108,8 @@ export default async function AttendanceConfigPage() {
             caption={t("cardLateMarkRules")}
             rows={[
               { label: t("lmGracePeriod"), value: t("lmGracePeriodTpl", { mins: d.lateMarkGraceMinutes }) },
-              { label: t("lmTrigger"), value: t("lmTriggerTpl", { value: formatClockTime12h(d.lateMarkTriggerTime) }) },
               { label: t("lmHalfDayIf"), value: t("lmHalfDayIfTpl", { value: formatClockTime12h(d.halfDayIfAfterTime) }) },
               { label: t("lmAbsentIf"), value: t("lmAbsentIfTpl", { value: formatClockTime12h(d.absentIfNoCheckInAfterTime) }) },
-              { label: t("lmDeduction"), value: t("lmDeductionTpl", { marks: d.lateMarksPerClDeducted }) },
             ]}
           />
         </Card>
@@ -115,22 +119,8 @@ export default async function AttendanceConfigPage() {
             caption={t("cardOvertimeRules")}
             rows={[
               { label: t("otEligible"), value: t("otEligibleTpl", { hours: d.otEligibleAfterHours }) },
-              { label: t("otRateWeekday"), value: t("otRateWeekdayTpl", { multiplier: d.otRateWeekdayMultiplier }) },
-              { label: t("otRateWeeklyOff"), value: t("otRateWeeklyOffTpl", { multiplier: d.otRateWeeklyOffMultiplier }) },
               { label: t("otMaxPerDay"), value: t("otMaxPerDayTpl", { hours: d.otMaxHoursPerDay }) },
               { label: t("otRequiresApproval"), value: t("otRequiresApprovalTpl", { approver: d.otApprovedBy }) },
-            ]}
-          />
-        </Card>
-
-        <Card title={t("cardCompOff")} padding>
-          <KeyValueTable
-            caption={t("cardCompOff")}
-            rows={[
-              { label: t("coEarnedWhen"), value: t("coEarnedWhenTpl", { rule: d.coEarnedRule }) },
-              { label: t("coMustAvail"), value: t("coMustAvailTpl", { days: d.coMustAvailWithinDays }) },
-              { label: t("coMaxAccumulation"), value: t("coMaxAccumulationTpl", { count: d.coMaxAccumulation }) },
-              { label: t("coApprovalRequired"), value: t("coApprovalRequiredTpl", { approver: d.coApprovedBy }) },
             ]}
           />
         </Card>

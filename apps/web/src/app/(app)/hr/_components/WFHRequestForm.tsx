@@ -52,6 +52,21 @@ interface WFHRequestFormProps {
    * page, which 403'd a plain `employee` submitting their own request).
    */
   redirectHref?: string;
+  /**
+   * GAP-HR-WFH-06 (owner decision, 26 Nov 2026): how many days back the filer may record WFH. 0 (the default)
+   * for an employee -- no back-dating at all; 7 for HR staff, who must then give a reason. The server enforces
+   * the same rule (422 RETROSPECTIVE_WFH_*); this only shapes the date picker and the reason check.
+   */
+  retroactiveDays?: number;
+}
+
+/** Retrospective entries need a reason of at least this many characters (mirrors the server). */
+const RETRO_MIN_REASON = 10;
+
+function shiftIso(iso: string, days: number): string {
+  const d = new Date(`${iso}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
 }
 
 type SubmitState = "idle" | "submitting" | "done" | "error";
@@ -61,6 +76,7 @@ export function WFHRequestForm({
   payLevel,
   weeklyWfhCount,
   redirectHref = "/hr/wfh",
+  retroactiveDays = 0,
 }: WFHRequestFormProps) {
   const router = useRouter();
   const t = useTranslations("wfhForm");
@@ -207,6 +223,8 @@ export function WFHRequestForm({
   const displayPhase = state === "error" ? "error" : asyncMutation.phase;
   const displayErrorMsg = state === "error" ? errorMsg : asyncMutation.error;
 
+  const earliestFrom = retroactiveDays > 0 ? shiftIso(todayIST(), -retroactiveDays) : todayIST();
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (isGazetted || weeklyCapReached) return; // belt-and-suspenders
@@ -219,6 +237,12 @@ export function WFHRequestForm({
     }
     if (toDate < fromDate) {
       setErrorMsg(t("errorToBeforeFrom"));
+      setState("error");
+      return;
+    }
+    // GAP-HR-WFH-06: a back-dated entry (HR only) needs a real reason.
+    if (retroactiveDays > 0 && fromDate < todayIST() && reason.trim().length < RETRO_MIN_REASON) {
+      setErrorMsg(t("errorRetroReasonRequired", { min: RETRO_MIN_REASON }));
       setState("error");
       return;
     }
@@ -322,15 +346,18 @@ export function WFHRequestForm({
             // 00:00 and 05:30 IST, so the min bound (and the matching To-date
             // min below) silently blocked "today" for the first 5.5 hours of
             // every IST day. todayIST() is the drop-in IST-correct equivalent.
-            min={todayIST()}
+            min={earliestFrom}
           />
+          {retroactiveDays > 0 && (
+            <span style={{ fontSize: 12, color: "var(--ink2)" }}>{t("hintRetro", { days: retroactiveDays })}</span>
+          )}
         </Field>
         <Field label={t("labelToDate")} required error={errFor("toDate")}>
           <Input
             type="date"
             value={toDate}
             onChange={(e) => { setToDate(e.target.value); clearClientError("toDate"); }}
-            min={fromDate || todayIST()}
+            min={fromDate || earliestFrom}
           />
         </Field>
       </div>

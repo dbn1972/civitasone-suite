@@ -162,8 +162,27 @@ export const confirmEmployeeBody = z.object({
   orderRef: z.string().min(1, "order reference is required").max(64),
   authority: z.string().max(128).optional(),
   remark: z.string().max(500).optional(),
+  // GAP-HR-CONFIRMATION-01 (owner decision): required (>= 10 chars) when the reporting manager has
+  // recorded no recommendation, or recorded not_recommended -- enforced at the route, which can read it.
+  overrideRemark: z.string().trim().max(500).optional(),
 });
 export type ConfirmEmployeeBody = z.infer<typeof confirmEmployeeBody>;
+
+/** GAP-HR-CONFIRMATION-01: minimum length of the HR override remark. */
+export const CONFIRMATION_OVERRIDE_MIN = 10;
+
+/** GAP-HR-CONFIRMATION-01: the reporting manager's probation-confirmation recommendation. */
+export const CONFIRMATION_RECOMMENDATIONS = ["recommended", "not_recommended"] as const;
+export const confirmationRecommendationBody = z.object({
+  recommendation: z.enum(CONFIRMATION_RECOMMENDATIONS),
+  // A "not recommended" must say why; a positive one may stay terse.
+  remark: z.string().trim().max(500).optional(),
+}).superRefine((v, ctx) => {
+  if (v.recommendation === "not_recommended" && (v.remark ?? "").length < 10) {
+    ctx.addIssue({ code: "custom", path: ["remark"], message: "state why the employee is not recommended (at least 10 characters)" });
+  }
+});
+export type ConfirmationRecommendationBody = z.infer<typeof confirmationRecommendationBody>;
 
 // GAP-HR-CONFIRMATION-05: probation-extension record. newEndDate must move
 // the probation end *later* than its current value -- checked at the route

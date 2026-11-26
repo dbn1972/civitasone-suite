@@ -174,7 +174,9 @@ async function doFlush(): Promise<FlushResult> {
     try {
       const res = await fetch(`/api/proxy${q.path}`, {
         method: q.method,
-        headers: { "content-type": "application/json", "x-idempotency-key": q.idempotencyKey, ...buildSyncHeaders() },
+        // x-queued-at: when the user actually made this request. The server uses it to grandfather a
+        // request queued before a newer validation rule (e.g. the leave-reason minimum) existed.
+        headers: { "content-type": "application/json", "x-idempotency-key": q.idempotencyKey, "x-queued-at": q.createdAt, ...buildSyncHeaders() },
         body: JSON.stringify(body),
         credentials: "same-origin",
         signal: controller.signal,

@@ -11,7 +11,8 @@ import {
 } from "./_components/ProbationConfirmationCard";
 import { daysUntilIST } from "@/lib/formatters";
 import { getTranslations } from "next-intl/server";
-import { HR_STAFF_ROLES } from "@/lib/auth/workRoles";
+import { HR_STAFF_ROLES, HR_STAFF_MANAGER_ROLES } from "@/lib/auth/workRoles";
+import { getSessionRoles } from "@/lib/auth/roleGuard";
 
 // GAP-HR-CONFIRMATION-07: the API caps at 500 rows and reports `hasMore` --
 // previously discarded by mapResponse, which only ever kept the `data` array.
@@ -52,10 +53,12 @@ export default async function ConfirmationPage() {
   const dateNotSet  = withDays.filter((d) => d === null).length;
   const timely      = Math.max(0, items.length - overdue - dueSoon - dateNotSet);
 
-  // GAP-HR-CONFIRMATION-03: hr_admin/hr_officer/super_admin per m7-list-
-  // routes.ts's own HR_ROLES for this endpoint -- keep in sync with that
-  // list if it ever changes.
-  const CONFIRMATIONS_ROLES = HR_STAFF_ROLES;
+  // GAP-HR-CONFIRMATION-03 / -01: hr_admin/hr_officer/super_admin plus the reporting manager (who records
+  // the recommendation) per m7-list-routes.ts's own role list for this endpoint -- keep in sync.
+  const CONFIRMATIONS_ROLES = HR_STAFF_MANAGER_ROLES;
+  const roles = getSessionRoles();
+  const canDecide = roles.some((r) => HR_STAFF_ROLES.includes(r));
+  const canRecommend = roles.includes("manager");
 
   return (
     <div className="page-main wrap">
@@ -94,7 +97,7 @@ export default async function ConfirmationPage() {
           </div>
         ) : (
           <div style={{ padding: 16 }}>
-            <ProbationConfirmationList rows={items} hasMore={hasMore} />
+            <ProbationConfirmationList rows={items} hasMore={hasMore} canDecide={canDecide} canRecommend={canRecommend} />
           </div>
         )}
       </Card>

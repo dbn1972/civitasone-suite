@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { PageHeader, StatGrid, StatCard, Card, DataTable, LoadErrorState } from "../../../_components/ds";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { DeputationCard, type DeputationRow } from "./_components/DeputationCard";
@@ -50,6 +51,8 @@ export default async function DeputationPage() {
         title={t("title")}
         subtitle={t("subtitle")}
         back="/hr" backLabel={t("backLabel")}
+        // GAP-HR-DEPUTATION-02: the entry point for a new deputation (HR_ROLES only, like the form itself).
+        actions={canManage ? <Link href="/hr/deputation/new" className="btn">{t("newDeputation")}</Link> : undefined}
       />
 
       <StatGrid>

@@ -110,6 +110,15 @@ vi.mock("../modules/attendance/wfh-eligibility.js", () => ({
 import { buildApp } from "../app.js";
 import { sqlClient } from "../shared/db.js";
 
+// Back-dated WFH is refused for an employee (GAP-HR-WFH-06), so the dates below must lie in the future whenever
+// this suite runs. The literals keep their weekday layout and are shifted by whole weeks to land >= 2 weeks ahead.
+const FUTURE_SHIFT_DAYS = (() => {
+  const anchor = Date.UTC(2026, 9, 1); // the earliest literal below
+  return Math.max(0, Math.ceil((Date.now() + 14 * 86_400_000 - anchor) / (7 * 86_400_000))) * 7;
+})();
+const d = (iso: string): string => new Date(Date.parse(`${iso}T00:00:00Z`) + FUTURE_SHIFT_DAYS * 86_400_000).toISOString().slice(0, 10);
+
+
 let app: FastifyInstance;
 beforeAll(async () => { app = await buildApp(); });
 afterAll(async () => { await app.close(); await sqlClient.end(); });
@@ -316,7 +325,7 @@ describe("GET /v1/hrms/overtime-requests — self-scoping", () => {
 });
 
 describe("POST /v1/hrms/wfh-requests — self-service IDOR", () => {
-  const body = { fromDate: "2026-10-01", toDate: "2026-10-02" };
+  const body = { fromDate: d("2026-10-01"), toDate: d("2026-10-02") };
 
   it("202 — employee submits a WFH request for THEMSELVES (actorId != employeeId)", async () => {
     resolveEmployeeForActorMock.mockResolvedValueOnce(empRow(EMP_SELF));

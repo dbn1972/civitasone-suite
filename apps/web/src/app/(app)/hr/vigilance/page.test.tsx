@@ -127,6 +127,8 @@ describe("VigilancePage", () => {
 
   // ── GAP-HR-VIGILANCE-01: charge text is masked until revealed ──────────────
   it("never puts the charge text on the page: the column is a masked control with a Reveal button", async () => {
+    // Reveal is the vigilance_officer's (owner decision, 26 Nov 2026) -- an HR role has no Reveal button.
+    mockRoles = ["vigilance_officer"];
     // Even if a backend that predates maskCharges sent the text, it is not forwarded to the table.
     fetchJsonMock.mockResolvedValue(apiResult(
       [{ ...rowFor("opened", 1), charges_summary: "Misconduct: took a bribe" }],
@@ -141,7 +143,33 @@ describe("VigilancePage", () => {
     expect(new URL(url, "http://x").searchParams.get("maskCharges")).toBe("true");
   });
 
+  it("an HR role (hr_admin / hr_officer) reads the masked register but is offered no Reveal control", async () => {
+    for (const role of ["hr_admin", "hr_officer"]) {
+      mockRoles = [role];
+      fetchJsonMock.mockResolvedValue(apiResult(
+        [{ ...rowFor("opened", 1), charges_summary: null, hasCharges: true }],
+        { chargeMemoStage: 1, underInquiry: 0, closed: 0, total: 1 },
+      ));
+      const ui = await VigilancePage({});
+      const { container, unmount } = render(ui);
+      expect(screen.queryByRole("button", { name: "Reveal" })).not.toBeInTheDocument();
+      expect(container.textContent).toContain("Restricted to vigilance officers");
+      unmount();
+    }
+  });
+
+  it("a vigilance_officer may open the register (VIGILANCE_LIST_ROLES) and super_admin keeps Reveal", async () => {
+    for (const role of ["vigilance_officer", "super_admin"]) {
+      mockRoles = [role];
+      fetchJsonMock.mockResolvedValue(apiResult([{ ...rowFor("opened", 1), charges_summary: null, hasCharges: true }], { chargeMemoStage: 1, underInquiry: 0, closed: 0, total: 1 }));
+      const { unmount } = render(await VigilancePage({}));
+      expect(screen.getByRole("button", { name: "Reveal" })).toBeInTheDocument();
+      unmount();
+    }
+  });
+
   it("a case with no charge text has nothing to reveal", async () => {
+    mockRoles = ["vigilance_officer"];
     fetchJsonMock.mockResolvedValue(apiResult(
       [{ ...rowFor("opened", 1), charges_summary: null, hasCharges: false }],
       { chargeMemoStage: 1, underInquiry: 0, closed: 0, total: 1 },

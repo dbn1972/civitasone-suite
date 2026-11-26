@@ -46,6 +46,17 @@ import type { DisciplinaryCaseRow } from "./schema.js";
 
 const HR_ROLES = ["hr_admin", "super_admin"];
 const VIGILANCE_ROLES = [...HR_ROLES, "hr_officer"];
+/**
+ * GAP-HR-VIGILANCE-01 (owner decision, 26 Nov 2026): allegation text is for the vigilance_officer role (and super_admin
+ * as audited break-glass) only. The case-detail and per-employee reads below therefore return `allegation: null` to
+ * every other role -- otherwise stripping reveal from the vigilance register would be bypassable with one GET.
+ * vigilance_officer may read those two routes (the read-audit is kept).
+ */
+const ALLEGATION_READ_ROLES = ["vigilance_officer", "super_admin"];
+const CASE_READ_ROLES = [...VIGILANCE_ROLES, "vigilance_officer"];
+function maskAllegation<T extends { allegation?: unknown }>(ctx: { roles: string[] }, row: T): T {
+  return ctx.roles.some((r) => ALLEGATION_READ_ROLES.includes(r)) ? row : { ...row, allegation: null };
+}
 const idParam = z.object({ id: z.string().uuid() });
 const caseParam = z.object({ caseId: z.string().uuid() });
 const suspParam = z.object({ suspId: z.string().uuid() });
@@ -188,18 +199,19 @@ export async function disciplinaryRoutes(app: FastifyInstance): Promise<void> {
 
   app.get("/v1/hrms/employees/:id/disciplinary-cases", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, VIGILANCE_ROLES);
+    requireRole(ctx, CASE_READ_ROLES);
     const { id } = idParam.parse(req.params);
-    return reply.send({ data: await repo.listCasesByEmployee(ctx.tenantId, id) });
+    const rows = await repo.listCasesByEmployee(ctx.tenantId, id);
+    return reply.send({ data: rows.map((r) => maskAllegation(ctx, r)) });
   });
 
   app.get("/v1/hrms/disciplinary-cases/:caseId", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, VIGILANCE_ROLES);
+    requireRole(ctx, CASE_READ_ROLES);
     const { caseId } = caseParam.parse(req.params);
     const c = await mustCase(ctx.tenantId, caseId);
     await auditCaseViewed(ctx, caseId);
-    return reply.send(c);
+    return reply.send(maskAllegation(ctx, c));
   });
 
   app.get("/v1/hrms/disciplinary-cases/:caseId/events", async (req, reply) => {

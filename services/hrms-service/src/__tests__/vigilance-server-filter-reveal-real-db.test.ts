@@ -9,9 +9,11 @@
  * oldest few being the only ones of their status, so they sit beyond the first
  * 200 of the unfiltered order.
  *
- * VIGILANCE-01: `maskCharges=true` withholds the charge text from the list, and
- * POST /v1/hrms/vigilance/:id/charges/reveal is the audited, reason-bearing,
- * fail-closed way to read it.
+ * VIGILANCE-01 (owner decision, 26 Nov 2026): the register is MASKED BY DEFAULT;
+ * only a `vigilance_officer` (or super_admin) may reveal a case's charge text, via
+ * POST /v1/hrms/vigilance/:id/charges/reveal (audited, reason-bearing, fail-closed);
+ * hr_admin / hr_officer read the masked register but cannot reveal; a dropped case
+ * leaves the register 180 days after it was dropped.
  *
  * Real DB (no mocks), same seeding precedent as
  * disciplinary-vigilance-pagination-real-db.test.ts.
@@ -39,7 +41,8 @@ function auth(roles: string[], sub = HR_OFFICER, tid = TENANT): { authorization:
 }
 const get = (qs: string, roles = ["hr_officer"]) =>
   app.inject({ method: "GET", url: `/v1/hrms/vigilance${qs}`, headers: auth(roles) });
-const reveal = (id: string, body: unknown, roles = ["hr_officer"], tid = TENANT) =>
+const VIG = ["vigilance_officer"];
+const reveal = (id: string, body: unknown, roles = VIG, tid = TENANT) =>
   app.inject({ method: "POST", url: `/v1/hrms/vigilance/${id}/charges/reveal`, headers: { ...auth(roles, HR_OFFICER, tid), "content-type": "application/json" }, payload: JSON.stringify(body) });
 
 let app: FastifyInstance;
@@ -51,6 +54,7 @@ const closedIds: string[] = [];
 const idsByNo: Record<string, string> = {};
 let minorId: string;
 let droppedId: string;
+let staleDroppedId: string;
 let otherTenantCaseId: string;
 
 async function auditRows(action: string): Promise<Array<{ actorId: string; payload: Record<string, unknown> }>> {
@@ -79,6 +83,9 @@ beforeAll(async () => {
   cases.push(penalty);
   droppedId = randomUUID();
   cases.push(row({ id: droppedId, caseNo: "VG-DROPPED-1", status: "dropped", createdAt: oldest }));
+  // Dropped 200 days ago: past the 180-day visibility window, so hidden even with includeDropped=true.
+  staleDroppedId = randomUUID();
+  cases.push(row({ id: staleDroppedId, caseNo: "VG-DROPPED-STALE", status: "dropped", createdAt: oldest, closedAt: new Date(Date.now() - 200 * 86_400_000) }));
   minorId = randomUUID();
   cases.push(row({ id: minorId, caseNo: "VG-MINOR-1", proceedingType: "minor" }));
   for (const c of cases) idsByNo[c.caseNo as string] = c.id as string;
@@ -133,7 +140,7 @@ describe("GET /v1/hrms/vigilance -- 250 cases (GAP-HR-VIGILANCE-04)", () => {
 
   it("stat cards are whole-tenant counts, not page counts", async () => {
     const { stats } = (await get("?limit=10")).json();
-    expect(stats).toMatchObject({ total: VISIBLE + 1, closed: N_CLOSED, dropped: 1, penaltyAndAppeal: 1, chargeMemoStage: N_OPENED });
+    expect(stats).toMatchObject({ total: VISIBLE + 2, closed: N_CLOSED, dropped: 2, penaltyAndAppeal: 1, chargeMemoStage: N_OPENED });
   });
 });
 
@@ -158,6 +165,13 @@ describe("GET /v1/hrms/vigilance -- server-side status filter (GAP-HR-VIGILANCE-
     expect((await get("?status=dropped")).json().data).toHaveLength(0);
     const shown = (await get("?status=dropped&includeDropped=true")).json();
     expect(shown.data.map((r: { id: string }) => r.id)).toEqual([droppedId]);
+  });
+
+  it("a case dropped more than 180 days ago is hidden even with includeDropped=true, and cannot be revealed", async () => {
+    const all = (await get("?includeDropped=true&limit=200&offset=200")).json().data.concat((await get("?includeDropped=true&limit=200")).json().data);
+    expect(all.some((r: { id: string }) => r.id === staleDroppedId)).toBe(false);
+    const reveal404 = await reveal(staleDroppedId, { reason: "Reviewing the charge for the hearing brief" });
+    expect(reveal404.statusCode).toBe(404);
   });
 
   it("rejects an unknown status (400)", async () => {
@@ -189,20 +203,32 @@ describe("GET /v1/hrms/vigilance -- server-side search (GAP-HR-VIGILANCE-04)", (
 });
 
 describe("charge-summary masking and audited reveal (GAP-HR-VIGILANCE-01)", () => {
-  it("by default the list is unchanged: a truncated summary, hasCharges true", async () => {
-    const row = (await get("?q=VG-OPEN-000")).json().data[0];
-    expect(typeof row.charges_summary).toBe("string");
-    expect(row.charges_summary.length).toBeLessThanOrEqual(81);
+  it("MASKED BY DEFAULT: with no maskCharges param the list carries no charge text, hasCharges true", async () => {
+    const res = await get("?q=VG-OPEN-000");
+    const row = res.json().data[0];
+    expect(row.charges_summary).toBeNull();
     expect(row.hasCharges).toBe(true);
+    expect(res.json().chargesMasked).toBe(true);
+    expect(res.body).not.toContain("ZEBRAWORD");
   });
 
-  it("maskCharges=true withholds the charge text from the response entirely", async () => {
-    const res = await get("?maskCharges=true&limit=200");
-    const body = res.json();
-    expect(body.chargesMasked).toBe(true);
-    expect(body.data.every((r: { charges_summary: unknown; hasCharges: boolean }) => r.charges_summary === null && r.hasCharges === true)).toBe(true);
-    expect(res.body).not.toContain("ZEBRAWORD");
-    expect(res.body).not.toContain("Confidential allegation");
+  it("an HR role cannot opt out of masking: maskCharges=false is ignored for hr_officer / hr_admin", async () => {
+    for (const roles of [["hr_officer"], ["hr_admin"]]) {
+      const res = await get("?q=VG-OPEN-000&maskCharges=false", roles);
+      expect(res.json().chargesMasked).toBe(true);
+      expect(res.json().data[0].charges_summary).toBeNull();
+      expect(res.body).not.toContain("ZEBRAWORD");
+    }
+  });
+
+  it("a vigilance_officer can read the register and may ask for the unmasked summary explicitly", async () => {
+    const masked = await get("?q=VG-OPEN-000", VIG);
+    expect(masked.statusCode).toBe(200);
+    expect(masked.json().data[0].charges_summary).toBeNull();
+    const open = (await get("?q=VG-OPEN-000&maskCharges=false", VIG)).json();
+    expect(open.chargesMasked).toBe(false);
+    expect(open.data[0].charges_summary.length).toBeLessThanOrEqual(81);
+    expect(open.data[0].charges_summary.startsWith("Confidential allegation text ZEBRAWORD")).toBe(true);
   });
 
   it("reveal returns the charge summary and writes an audit event with actor, case and reason -- not the text", async () => {
@@ -218,7 +244,7 @@ describe("charge-summary masking and audited reveal (GAP-HR-VIGILANCE-01)", () =
     const after = await auditRows("hrms.vigilance.charges_revealed");
     expect(after.length).toBe(before + 1);
     const evt = after[after.length - 1]!;
-    expect(evt.actorId).toBe(HR_OFFICER);
+    expect(evt.actorId).toBe(HR_OFFICER); // the token subject; the role is vigilance_officer
     expect(evt.payload).toMatchObject({ resourceType: "disciplinary_case", resourceId: id, field: "charges_summary", reason: "Reviewing the charge for the hearing brief" });
     expect(JSON.stringify(evt.payload)).not.toContain("ZEBRAWORD");
   });
@@ -230,7 +256,16 @@ describe("charge-summary masking and audited reveal (GAP-HR-VIGILANCE-01)", () =
     expect((await auditRows("hrms.vigilance.charges_revealed")).length).toBe(before);
   });
 
-  it("is HR-only (403), 404s an unknown id, a minor-proceeding case and another tenant's case", async () => {
+  it("hr_admin and hr_officer LOSE reveal (403) and nothing is audited; super_admin keeps it as audited break-glass", async () => {
+    const reason = { reason: "Reviewing the charge for the hearing brief" };
+    const before = (await auditRows("hrms.vigilance.charges_revealed")).length;
+    expect((await reveal(idsByNo["VG-OPEN-005"]!, reason, ["hr_officer"])).statusCode).toBe(403);
+    expect((await reveal(idsByNo["VG-OPEN-005"]!, reason, ["hr_admin"])).statusCode).toBe(403);
+    expect((await auditRows("hrms.vigilance.charges_revealed")).length).toBe(before);
+    expect((await reveal(idsByNo["VG-OPEN-005"]!, reason, ["super_admin"])).statusCode).toBe(200);
+  });
+
+  it("is vigilance-only (403 for manager/employee), 404s an unknown id, a minor-proceeding case and another tenant's case", async () => {
     const reason = { reason: "Reviewing the charge for the hearing brief" };
     expect((await reveal(idsByNo["VG-OPEN-003"]!, reason, ["manager"])).statusCode).toBe(403);
     expect((await reveal(idsByNo["VG-OPEN-003"]!, reason, ["employee"])).statusCode).toBe(403);

@@ -9,6 +9,9 @@ import { WFHRequestForm } from "../_components/WFHRequestForm";
 import { WfhRequestsTable, type WfhRow } from "../_components/WfhRequestsTable";
 import { HR_STAFF_MANAGER_ROLES, HR_STAFF_ROLES, WFH_REQUEST_FILER_ROLES } from "@/lib/auth/workRoles";
 
+/** GAP-HR-WFH-06: how far back HR may record a WFH day (mirrors the server, attendance/wfh-retro.ts). */
+const WFH_RETRO_MAX_DAYS = 7;
+
 /**
  * WfhPage — Work From Home requests: create (HR staff + employee roles; see
  * WFH_FILER_ROLES) + manager/HR approve-reject queue.
@@ -69,6 +72,8 @@ export default async function WfhPage() {
   // which also gives them a prefilled, picker-free form. A role that cannot file
   // at all (manager-only) gets no form.
   const canFile = roles.some((r: string) => WFH_FILER_ROLES.includes(r));
+  // GAP-HR-WFH-06 (owner decision): employees may not back-date; HR staff may record up to 7 days back, with a reason.
+  const canRecordRetro = roles.some((r: string) => HR_STAFF_ROLES.includes(r));
   const canFileForOthers = roles.some((r: string) => WFH_FILE_FOR_OTHERS_ROLES.includes(r));
   let prefillEmployeeId: string | undefined;
   let noLinkedProfile = false;
@@ -127,7 +132,7 @@ export default async function WfhPage() {
             {t("noLinkedProfileMessage")}
           </div>
         ) : (
-          <WFHRequestForm employeeId={prefillEmployeeId} redirectHref="/hr/wfh" />
+          <WFHRequestForm employeeId={prefillEmployeeId} redirectHref="/hr/wfh" retroactiveDays={canRecordRetro ? WFH_RETRO_MAX_DAYS : 0} />
         )}
       </Card>
       </div>

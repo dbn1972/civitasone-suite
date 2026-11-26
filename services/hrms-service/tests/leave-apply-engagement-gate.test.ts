@@ -56,7 +56,7 @@ const CANON = [
 
 const body = {
   employeeId: EMP, leaveTypeId: LEAVE_TYPE, allocId: ALLOC,
-  fromDate: "2026-07-06", toDate: "2026-07-06", daysApplied: 1, reason: "x",
+  fromDate: "2026-07-06", toDate: "2026-07-06", daysApplied: 1, reason: "Family function in the village",
 };
 const token = () => signToken({ sub: USER, tid: TENANT, roles: ["hr_admin"], sid: "s1" }, SECRET);
 

@@ -19,6 +19,22 @@ import { VIGILANCE_STATUS_GROUPS, type CaseStatus } from "../disciplinary/state-
 const VIGILANCE_ALL_STATUSES = Object.values(VIGILANCE_STATUS_GROUPS).flat() as [CaseStatus, ...CaseStatus[]];
 
 const HR_ROLES = ["hr_admin", "super_admin", "hr_officer"];
+/**
+ * GAP-HR-VIGILANCE-01 (owner decision, 26 Nov 2026): allegation text on the vigilance register.
+ *  - VIGILANCE_REVEAL_ROLES alone may reveal it (audited, reason-bearing, fail-closed). hr_admin and
+ *    hr_officer LOSE reveal; super_admin keeps it as the audited break-glass role.
+ *    `vigilance_officer` already exists in the Keycloak realm (infra/keycloak/civitasone-realm.json) and
+ *    audit-service uses it for the same data; assigning it to people is identity provisioning, not code.
+ *  - VIGILANCE_LIST_ROLES may read the (masked) register: the HR roles as before, plus vigilance_officer.
+ *  - the register is MASKED BY DEFAULT: charge text is withheld from the list unless the caller holds a
+ *    reveal role AND explicitly passes maskCharges=false.
+ *  - a dropped (exonerated / discontinued) case leaves the register VIGILANCE_DROPPED_VISIBLE_DAYS after
+ *    it was dropped, even with includeDropped=true. Hidden, not purged: the row, its audit trail and the
+ *    case-detail route are untouched.
+ */
+export const VIGILANCE_REVEAL_ROLES = ["vigilance_officer", "super_admin"];
+export const VIGILANCE_LIST_ROLES = [...HR_ROLES, "vigilance_officer"];
+export const VIGILANCE_DROPPED_VISIBLE_DAYS = 180;
 const READER_ROLES = [...HR_ROLES, "manager", "employee"];
 const ALL_ROLES = [...HR_ROLES, "manager", "employee"];
 
@@ -929,7 +945,7 @@ export async function hrmsGapRoutes(app: FastifyInstance): Promise<void> {
   // FORCE-RLS table (filtered to proceeding_type='major') and had the same
   // missing app.tenant_id gap, silently returning zero rows for every caller.
   app.get("/v1/hrms/vigilance", async (req, reply) => {
-    const ctx = resolveContext(req); requireRole(ctx, HR_ROLES);
+    const ctx = resolveContext(req); requireRole(ctx, VIGILANCE_LIST_ROLES);
     // GAP-HR-VIGILANCE-01 (PII/DPDP decision packet, interim containment):
     // a case that ended 'dropped' (exonerated/discontinued) is hidden from
     // this list by default — not deleted or redacted at the DB layer, just
@@ -951,18 +967,24 @@ export async function hrmsGapRoutes(app: FastifyInstance): Promise<void> {
     // GAP-HR-VIGILANCE-01: maskCharges=true withholds the charge text from the
     // list entirely (charges_summary null) -- the clear text is then only
     // obtainable through the audited reveal route below.
-    const { includeDropped, limit, offset, status, q, maskCharges } = z.object({
+    const { includeDropped, limit, offset, status, q, maskCharges: maskChargesRequested } = z.object({
       includeDropped: z.enum(["true", "false"]).optional().transform((v) => v === "true"),
-      maskCharges: z.enum(["true", "false"]).optional().transform((v) => v === "true"),
+      maskCharges: z.enum(["true", "false"]).optional().transform((v) => v !== "false"),
       limit: z.coerce.number().int().min(1).max(200).default(200),
       offset: z.coerce.number().int().min(0).default(0),
       status: z.enum(VIGILANCE_ALL_STATUSES).optional(),
       q: z.string().trim().min(1).max(100).optional(),
     }).parse(req.query);
+    // GAP-HR-VIGILANCE-01: masked by default; only a reveal-role caller who explicitly asks for
+    // maskCharges=false gets the (80-char) summary in the list. Everyone else always gets null.
+    const canRevealCharges = ctx.roles.some((r) => VIGILANCE_REVEAL_ROLES.includes(r));
+    const maskCharges = maskChargesRequested || !canRevealCharges;
     // Only compile-time constants and positional parameters reach this SQL.
     const params: unknown[] = [ctx.tenantId];
     const where = ["c.tenant_id = $1", "c.proceeding_type = 'major'"];
     if (!includeDropped) where.push("c.status <> 'dropped'");
+    // A dropped case ages out of the register 180 days after it was dropped (closed_at, else updated_at).
+    where.push(`NOT (c.status = 'dropped' AND COALESCE(c.closed_at, c.updated_at) < now() - interval '${VIGILANCE_DROPPED_VISIBLE_DAYS} days')`);
     if (status) { params.push(status); where.push(`c.status = $${params.length}`); }
     if (q) {
       params.push(`%${q.replace(/[\\%_]/g, (ch) => `\\${ch}`)}%`);
@@ -1081,10 +1103,10 @@ export async function hrmsGapRoutes(app: FastifyInstance): Promise<void> {
   // and reason, never the revealed text. What it returns is exactly what the
   // list would have shown (<= 80 chars); the full allegation stays on the
   // (separately read-audited) disciplinary case detail route.
-  // OWNER DECISION still open: which roles may reveal (today: the same HR roles
-  // that can already read the list) -- this route does not widen that.
+  // Owner decision (26 Nov 2026): ONLY VIGILANCE_REVEAL_ROLES may reveal -- hr_admin / hr_officer
+  // are refused 403 (they still read the masked register).
   app.post("/v1/hrms/vigilance/:id/charges/reveal", { config: { rateLimit: { max: 30, timeWindow: "1 minute" } } }, async (req, reply) => {
-    const ctx = resolveContext(req); requireRole(ctx, HR_ROLES);
+    const ctx = resolveContext(req); requireRole(ctx, VIGILANCE_REVEAL_ROLES);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
     const { reason } = z.object({
       reason: z.string().trim().min(10, "state why you need the charge text (at least 10 characters)").max(2000),
@@ -1095,6 +1117,7 @@ export async function hrmsGapRoutes(app: FastifyInstance): Promise<void> {
         SELECT CASE WHEN length(c.allegation) > 80 THEN LEFT(c.allegation, 80) || '…' ELSE c.allegation END AS charges_summary
         FROM disciplinary.hrms_disciplinary_cases c
         WHERE c.id = $1 AND c.tenant_id = $2 AND c.proceeding_type = 'major'
+          AND NOT (c.status = 'dropped' AND COALESCE(c.closed_at, c.updated_at) < now() - interval '${VIGILANCE_DROPPED_VISIBLE_DAYS} days')
       `, [id, ctx.tenantId]);
     });
     const row = found[0];

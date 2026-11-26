@@ -46,6 +46,13 @@ type EnrichedTask = WorkflowTask & {
 
 type Decision = "approve" | "reject";
 
+/**
+ * GAP-HR-LEAVE-APPROVALS-05 (owner decision, 26 Nov 2026): bulk APPROVE only -- never bulk reject (a rejection
+ * needs its own reason) -- capped at this many rows per action. Each decision is still its own audited
+ * POST /workflow/tasks/:id/complete (the same call as a single approval); a bulk action is just a loop over them.
+ */
+export const BULK_APPROVE_CAP = 10;
+
 /** Tasks requested per page. */
 const TASK_PAGE_SIZE = 50;
 /**
@@ -132,6 +139,12 @@ export function LeaveApprovalsPanel() {
   const [busy, setBusy] = useState(false);
   const [dialogError, setDialogError] = useState<string | undefined>();
   const formError = useFormError("leave application");
+
+  // Bulk approve (GAP-HR-LEAVE-APPROVALS-05)
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkResult, setBulkResult] = useState<{ ok: number; failed: { name: string; message: string }[] } | null>(null);
 
   const loadTasks = useCallback(async (signal?: AbortSignal, silent = false) => {
     const seq = ++loadSeqRef.current;
@@ -269,6 +282,44 @@ export function LeaveApprovalsPanel() {
     }
   }
 
+  /** Approve every selected row, ONE audited POST per row, sequentially; report per-row success / failure. */
+  async function bulkApprove(remark?: string) {
+    const rows = enriched.filter((r) => selected.has(r.id) && r.hasLeaveDetail).slice(0, BULK_APPROVE_CAP);
+    setBulkBusy(true);
+    const trimmed = remark?.trim();
+    const done: string[] = [];
+    const failed: { name: string; message: string }[] = [];
+    for (const row of rows) {
+      try {
+        const res = await fetch(`/api/proxy/v1/workflow/tasks/${row.id}/complete`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(trimmed ? { decision: "approve", reason: trimmed } : { decision: "approve" }),
+        });
+        if (res.ok) done.push(row.id);
+        else failed.push({ name: row.employeeName, message: (await formError.fromResponse(res, "save")).message });
+      } catch (caught) {
+        failed.push({ name: row.employeeName, message: formError.fromException("save", caught).message });
+      }
+    }
+    setBulkBusy(false);
+    setBulkOpen(false);
+    setBulkResult({ ok: done.length, failed });
+    // decided rows leave the list and the selection; a failed row stays (and stays selected) so it can be retried
+    setTasks((prev) => prev.filter((wt) => !done.includes(wt.id)));
+    setSelected((prev) => { const next = new Set(prev); for (const id of done) next.delete(id); return next; });
+    void loadTasks(undefined, true);
+  }
+
+  function toggleSelected(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else if (next.size < BULK_APPROVE_CAP) next.add(id);
+      return next;
+    });
+  }
+
   const columns: {
     key: keyof EnrichedTask & string;
     label: string;
@@ -276,6 +327,26 @@ export function LeaveApprovalsPanel() {
     sortable?: boolean;
     render?: (row: EnrichedTask) => React.ReactNode;
   }[] = [
+    {
+      key: "select",
+      label: t("colSelect"),
+      sortable: false,
+      render: (row) => {
+        const isSelected = selected.has(row.id);
+        const capReached = !isSelected && selected.size >= BULK_APPROVE_CAP;
+        return (
+          <input
+            type="checkbox"
+            checked={isSelected}
+            disabled={!row.hasLeaveDetail || capReached}
+            title={!row.hasLeaveDetail ? t("cannotDecideTitle") : capReached ? t("bulkCapReached", { cap: BULK_APPROVE_CAP }) : undefined}
+            aria-label={t("selectRowAria", { name: row.employeeName })}
+            onChange={() => toggleSelected(row.id)}
+            style={{ width: 20, height: 20 }}
+          />
+        );
+      },
+    },
     { key: "employeeName", label: t("colEmployee") },
     { key: "leaveType", label: t("colLeaveType") },
     { key: "dates", label: t("colDates") },
@@ -368,6 +439,24 @@ export function LeaveApprovalsPanel() {
               {t("truncatedNotice", { shown: enriched.length })}
             </p>
           )}
+          {selected.size > 0 && (
+            <div role="region" aria-label={t("bulkBarLabel")} style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", margin: "0 0 12px", padding: "10px 14px", borderRadius: 8, background: "var(--infobg)" }}>
+              <span style={{ fontSize: 13, fontWeight: 600 }}>{t("bulkSelected", { count: selected.size, cap: BULK_APPROVE_CAP })}</span>
+              <Button size="sm" onClick={() => setBulkOpen(true)}>{t("bulkApprove", { count: selected.size })}</Button>
+              <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}>{t("bulkClear")}</Button>
+              <span style={{ fontSize: 12, color: "var(--ink2)" }}>{t("bulkApproveOnlyNote")}</span>
+            </div>
+          )}
+          {bulkResult && (
+            <div role="status" aria-live="polite" style={{ margin: "0 0 12px", padding: "10px 14px", borderRadius: 8, background: bulkResult.failed.length ? "var(--warnbg)" : "var(--goodbg)", fontSize: 13 }}>
+              <strong>{t("bulkResultSummary", { ok: bulkResult.ok, failed: bulkResult.failed.length })}</strong>
+              {bulkResult.failed.length > 0 && (
+                <ul style={{ margin: "6px 0 0", paddingInlineStart: 18 }}>
+                  {bulkResult.failed.map((f, i) => <li key={`${f.name}-${i}`}>{t("bulkFailedItem", { name: f.name, message: f.message })}</li>)}
+                </ul>
+              )}
+            </div>
+          )}
           <DataTable<EnrichedTask>
             columns={columns}
             rows={enriched}
@@ -379,6 +468,18 @@ export function LeaveApprovalsPanel() {
           </>
         )}
       </Card>
+
+      <ConfirmDialog
+        open={bulkOpen}
+        title={t("bulkDialogTitle", { count: selected.size })}
+        optionalReason
+        reasonLabel={t("approveRemarksLabel")}
+        confirmLabel={t("bulkConfirmLabel", { count: selected.size })}
+        busy={bulkBusy}
+        description={t("bulkDialogDescription", { count: selected.size })}
+        onConfirm={(remark) => void bulkApprove(remark)}
+        onCancel={() => !bulkBusy && setBulkOpen(false)}
+      />
 
       <ConfirmDialog
         open={pending !== null}

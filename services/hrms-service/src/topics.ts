@@ -9,6 +9,8 @@ export const COMMANDS = {
   employeeConfirm:      "hrms.employee.confirm",
   // GAP-HR-CONFIRMATION-05: probation-extension audit record.
   employeeProbationExtend: "hrms.employee.probation.extend",
+  // GAP-HR-CONFIRMATION-01: the reporting manager's confirmation recommendation.
+  employeeConfirmationRecommend: "hrms.employee.confirmation_recommend",
   employeeTransfer:     "hrms.employee.transfer",
   employeeTransferSubmitApproval: "hrms.employee.transfer.submit_approval",
   employeePromotionSubmitApproval: "hrms.employee.promotion.submit_approval",

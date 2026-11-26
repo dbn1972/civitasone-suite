@@ -102,6 +102,15 @@ vi.mock("../src/modules/attendance/wfh-eligibility.js", () => ({
 
 import { buildApp } from "../src/app.js";
 
+// Back-dated WFH is refused for an employee (GAP-HR-WFH-06), so the dates below must lie in the future whenever
+// this suite runs. The literals keep their weekday layout and are shifted by whole weeks to land >= 2 weeks ahead.
+const FUTURE_SHIFT_DAYS = (() => {
+  const anchor = Date.UTC(2026, 9, 1); // the earliest literal below
+  return Math.max(0, Math.ceil((Date.now() + 14 * 86_400_000 - anchor) / (7 * 86_400_000))) * 7;
+})();
+const d = (iso: string): string => new Date(Date.parse(`${iso}T00:00:00Z`) + FUTURE_SHIFT_DAYS * 86_400_000).toISOString().slice(0, 10);
+
+
 const auth = (sub: string, roles: string[]) =>
   ({ authorization: `Bearer ${signToken({ sub, tid: TENANT, roles, sid: "s" }, SECRET)}` });
 
@@ -122,7 +131,7 @@ afterAll(async () => {
 });
 
 describe("POST /v1/hrms/wfh-requests", () => {
-  const validBody = { employeeId: REQUESTER, fromDate: "2026-10-05", toDate: "2026-10-06", reason: "Family care" };
+  const validBody = { employeeId: REQUESTER, fromDate: d("2026-10-05"), toDate: d("2026-10-06"), reason: "Family care" };
 
   it("202 — employee can file their own request", async () => {
     const app = await buildApp();
@@ -142,7 +151,7 @@ describe("POST /v1/hrms/wfh-requests", () => {
     const r = await app.inject({
       method: "POST", url: "/v1/hrms/wfh-requests",
       headers: { ...auth(REQUESTER, ["employee"]), "content-type": "application/json" },
-      payload: { ...validBody, fromDate: "2026-10-06", toDate: "2026-10-05" },
+      payload: { ...validBody, fromDate: d("2026-10-06"), toDate: d("2026-10-05") },
     });
     expect(r.statusCode).toBe(400);
     await app.close();
@@ -292,7 +301,7 @@ describe("PATCH /v1/hrms/wfh-requests/:id/approve|reject", () => {
 describe("POST /v1/hrms/shift-requests", () => {
   const validBody = {
     employeeId: REQUESTER, currentShift: "Morning Shift", requestedShift: "Evening Shift",
-    effectiveDate: "2026-10-05", reason: "Childcare",
+    effectiveDate: d("2026-10-05"), reason: "Childcare",
   };
 
   it("202 — employee can file their own request", async () => {

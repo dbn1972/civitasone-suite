@@ -43,6 +43,19 @@ describe("DeputationPage", () => {
     expect(screen.queryByRole("button", { name: "Cancel" })).not.toBeInTheDocument();
   });
 
+  // GAP-HR-DEPUTATION-02 (owner decision): "New deputation" at /hr/deputation/new, HR_ROLES only.
+  it.each(["hr_admin", "hr_officer", "super_admin"])("%s sees the New deputation link to /hr/deputation/new", async (role) => {
+    mockRoles = [role];
+    render(await DeputationPage());
+    expect(screen.getByRole("link", { name: "New deputation" })).toHaveAttribute("href", "/hr/deputation/new");
+  });
+
+  it.each(["manager", "employee", "payroll_admin"])("%s is not offered New deputation", async (role) => {
+    mockRoles = [role];
+    render(await DeputationPage());
+    expect(screen.queryByRole("link", { name: "New deputation" })).not.toBeInTheDocument();
+  });
+
   // GAP-HR-DEPUTATION-06: the back link is a message key now, not a literal.
   it("takes the back-link label from the deputation namespace", async () => {
     render(await DeputationPage());

@@ -17,6 +17,8 @@ export interface VigilanceRow extends Record<string, unknown> {
 
 interface Props {
   rows: VigilanceRow[];
+  /** Only the vigilance_officer role (and super_admin) may reveal charge text; others see a restricted notice. */
+  canReveal: boolean;
   labels: {
     caseRef: string;
     employee: string;
@@ -26,6 +28,8 @@ interface Props {
     inquiryOfficerAppointed: string;
     status: string;
     noCharges: string;
+    /** Shown instead of the Reveal control to a role that may read the register but not the allegation text. */
+    revealRestricted: string;
     emptyTitle: string;
     emptyMessage: string;
     caption: string;
@@ -51,7 +55,7 @@ const MASKED_CHARGES = "••••••••";
  * rows already loaded. Search and status filtering are server-side (the form on
  * the page), across every case.
  */
-export function VigilanceTable({ rows, labels }: Props) {
+export function VigilanceTable({ rows, labels, canReveal }: Props) {
   return (
     <DataTable<VigilanceRow>
       columns={[
@@ -63,7 +67,11 @@ export function VigilanceTable({ rows, labels }: Props) {
           label: labels.charges,
           sortable: false,
           render: (r) =>
-            r.hasCharges ? (
+            r.hasCharges && !canReveal ? (
+              <span title={labels.revealRestricted} style={{ color: "var(--mut)", fontSize: "0.8125rem" }}>
+                {MASKED_CHARGES} <span className="sr-only">{labels.revealRestricted}</span>
+              </span>
+            ) : r.hasCharges ? (
               // The whole row is a click target that opens the case page (DataTable's
               // row link). A click on Reveal -- or inside its reason dialog, whose
               // React events bubble through this tree even though the dialog is

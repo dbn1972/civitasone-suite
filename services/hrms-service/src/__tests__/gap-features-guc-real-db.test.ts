@@ -371,8 +371,10 @@ describe("Disciplinary cases & Vigilance — GUC fix (read-only lists; mutating 
     const disc = await app.inject({ method: "GET", url: "/v1/hrms/disciplinary-cases", headers: auth(TENANT_A, HR_A, ["hr_admin"]) });
     expect(disc.json().data.some((c: { charges_summary: string }) => c.charges_summary === "Alleged bribery")).toBe(true);
 
+    // The register is masked by default now (GAP-HR-VIGILANCE-01): the case is on it, with no charge text for an HR role.
     const vig = await app.inject({ method: "GET", url: "/v1/hrms/vigilance", headers: auth(TENANT_A, HR_A, ["hr_admin"]) });
-    expect(vig.json().data.some((c: { charges_summary: string; employee: string }) => c.charges_summary === "Alleged bribery" && c.employee === "Bob A")).toBe(true);
+    expect(vig.json().data.some((c: { charges_summary: string | null; employee: string; hasCharges: boolean }) => c.charges_summary === null && c.hasCharges === true && c.employee === "Bob A")).toBe(true);
+    expect(vig.body).not.toContain("Alleged bribery");
   });
 
   it("tenant B's disciplinary case is invisible on tenant A's lists (cross-tenant isolation)", async () => {

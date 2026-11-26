@@ -6,8 +6,8 @@ import { HttpError } from "../../shared/context.js";
 import { loadProbationMonthsResolver, defaultProbationEnd } from "./probation-period.js";
 import { syncEmployee } from "../../shared/global-search.js";
 import {
-  hrmsEmployees, hrmsDepartments, hrmsDesignations, hrmsProbationExtensions, hrmsPensionSchemeChanges,
-  type EmployeeRow, type EmployeeInsert, type ProbationExtensionInsert,
+  hrmsEmployees, hrmsDepartments, hrmsDesignations, hrmsProbationExtensions, hrmsConfirmationRecommendations, hrmsPensionSchemeChanges,
+  type EmployeeRow, type EmployeeInsert, type ProbationExtensionInsert, type ConfirmationRecommendationInsert,
 } from "./schema.js";
 
 /**
@@ -202,6 +202,35 @@ export async function insertEmployee(tx: Writer, row: EmployeeInsert): Promise<v
 // GAP-HR-CONFIRMATION-05
 export async function insertProbationExtension(tx: Writer, row: ProbationExtensionInsert): Promise<void> {
   await tx.insert(hrmsProbationExtensions).values(row);
+}
+
+/** GAP-HR-CONFIRMATION-01: record a manager's confirmation recommendation (history row). */
+export async function insertConfirmationRecommendation(tx: Writer, row: ConfirmationRecommendationInsert): Promise<void> {
+  await tx.insert(hrmsConfirmationRecommendations).values(row);
+}
+
+export interface LatestRecommendation { employeeId: string; recommendation: "recommended" | "not_recommended"; remark: string | null; recordedAt: Date }
+
+/**
+ * GAP-HR-CONFIRMATION-01: the CURRENT (latest) recommendation of each given employee. An employee with
+ * none recorded is simply absent from the map. One query for the whole batch.
+ */
+export async function findLatestConfirmationRecommendations(tenantId: string, employeeIds: string[]): Promise<Map<string, LatestRecommendation>> {
+  if (employeeIds.length === 0) return new Map();
+  const rows = await scopedRead((tx) => tx
+    .select({
+      employeeId: hrmsConfirmationRecommendations.employeeId, recommendation: hrmsConfirmationRecommendations.recommendation,
+      remark: hrmsConfirmationRecommendations.remark, createdAt: hrmsConfirmationRecommendations.createdAt,
+    })
+    .from(hrmsConfirmationRecommendations)
+    .where(and(eq(hrmsConfirmationRecommendations.tenantId, tenantId), inArray(hrmsConfirmationRecommendations.employeeId, employeeIds)))
+    .orderBy(desc(hrmsConfirmationRecommendations.createdAt)));
+  const out = new Map<string, LatestRecommendation>();
+  for (const r of rows ?? []) {
+    if (out.has(r.employeeId)) continue; // newest first
+    out.set(r.employeeId, { employeeId: r.employeeId, recommendation: r.recommendation as "recommended" | "not_recommended", remark: r.remark, recordedAt: r.createdAt });
+  }
+  return out;
 }
 
 /**

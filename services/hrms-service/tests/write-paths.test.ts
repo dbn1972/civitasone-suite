@@ -338,7 +338,7 @@ describe("CCS leave apply (CQRS) + approve authz", () => {
   // allocation leave year, so a Mon-Tue in FY 2026-27 on a 2026-27 allocation.
   it("apply returns 202 (CQRS accepted)", async () => {
     const r = await app.inject({ method: "POST", url: "/v1/hrms/leave-applications", headers: { ...HR, ...CT },
-      payload: { employeeId: empLeave, leaveTypeId: ltId, allocId, fromDate: "2027-01-04", toDate: "2027-01-05", daysApplied: 2, reason: "personal" } });
+      payload: { employeeId: empLeave, leaveTypeId: ltId, allocId, fromDate: "2027-01-04", toDate: "2027-01-05", daysApplied: 2, reason: "Personal work at the home town" } });
     expect(r.statusCode).toBe(202);
     expect(r.json().status).toBe("accepted");
   });
