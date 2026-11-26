@@ -23,26 +23,26 @@ import Page from "./page";
 describe("Identity hub — GAP-IDENTITY-HOME-01/02/03/04", () => {
   beforeEach(() => mockGet.mockReset());
 
-  it("HOME-04: description names no internal service", () => {
+  it("HOME-04: description names no internal service", async () => {
     sessionWithRoles(["tenant_admin"]);
-    render(<Page />);
+    render(await Page());
     expect(screen.queryByText(/identity-service/i)).not.toBeInTheDocument();
     expect(screen.getByText(/for this office/i)).toBeInTheDocument();
   });
 
-  it("HOME-02: a tenant_admin sees the MFA and SSO tiles", () => {
+  it("HOME-02: a tenant_admin sees the MFA and SSO tiles", async () => {
     sessionWithRoles(["tenant_admin"]);
-    render(<Page />);
+    render(await Page());
     expect(screen.getByText("MFA policy")).toBeInTheDocument();
     expect(screen.getByText("SSO / IdP")).toBeInTheDocument();
   });
 
-  it("HOME-02: the MFA/SSO tiles are hidden if a non-admin somehow renders the hub", () => {
+  it("HOME-02: the MFA/SSO tiles are hidden if a non-admin somehow renders the hub", async () => {
     // The layout gate already blocks non-admins; this proves the tile-level
     // role filter is wired too (defence-in-depth), by rendering the page body
     // directly with an employee session.
     sessionWithRoles(["employee"]);
-    render(<Page />);
+    render(await Page());
     expect(screen.queryByText("MFA policy")).not.toBeInTheDocument();
     expect(screen.queryByText("SSO / IdP")).not.toBeInTheDocument();
     // Non-role-gated tiles still render.
@@ -50,22 +50,22 @@ describe("Identity hub — GAP-IDENTITY-HOME-01/02/03/04", () => {
     expect(screen.getByText("WebAuthn")).toBeInTheDocument();
   });
 
-  it("HOME-03: no bare '(admin)' suffix on the MFA/SSO tiles", () => {
+  it("HOME-03: no bare '(admin)' suffix on the MFA/SSO tiles", async () => {
     sessionWithRoles(["tenant_admin"]);
-    render(<Page />);
+    render(await Page());
     expect(screen.queryByText(/\(admin\)/)).not.toBeInTheDocument();
   });
 
-  it("USERS-02 / API-KEYS-02: Users and API keys tiles point at the canonical tenant-admin routes", () => {
+  it("USERS-02 / API-KEYS-02: Users and API keys tiles point at the canonical tenant-admin routes", async () => {
     sessionWithRoles(["tenant_admin"]);
-    render(<Page />);
+    render(await Page());
     expect(screen.getByText("Users").closest("a")).toHaveAttribute("href", "/tenant-admin/users");
     expect(screen.getByText("API keys").closest("a")).toHaveAttribute("href", "/tenant-admin/api-keys");
   });
 
-  it("HOME-01: the seven tiles render distinct vector icons (not the all-same 📁 fallback / .notdef box)", () => {
+  it("HOME-01: the seven tiles render distinct vector icons (not the all-same 📁 fallback / .notdef box)", async () => {
     sessionWithRoles(["tenant_admin"]);
-    const { container } = render(<Page />);
+    const { container } = render(await Page());
     const iconBoxes = Array.from(container.querySelectorAll(".mtile .ic"));
     expect(iconBoxes.length).toBeGreaterThanOrEqual(7);
 
