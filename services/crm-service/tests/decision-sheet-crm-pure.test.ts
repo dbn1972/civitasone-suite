@@ -35,6 +35,16 @@ describe("C10 custom fields: fail-closed PII definition guard", () => {
     expect(sensitiveDefinitionError("PAN", { sensitive: "yes" })).not.toBeNull();
     expect(sensitiveDefinitionError("Aadhaar", { sensitive: true })).toBeNull();
   });
+  it.each(["aadhaarnumber", "aadhaar1", "pancard", "passportno", "pannumber", "drivinglicenceno", "bankaccountno", "voterid"])(
+    "refuses the concatenated name %s on create and on update (effective name)",
+    (name) => {
+      expect(isSensitiveFieldName(name)).toBe(true);
+      expect(sensitiveDefinitionError(name, { sensitive: false })).not.toBeNull(); // create
+      expect(sensitiveDefinitionError(name, undefined)).not.toBeNull(); // update: stored schema carries no flag
+    },
+  );
+  it.each(["company", "panel", "pantry", "expansion", "span", "companyname"])("still allows %s", (name) =>
+    expect(isSensitiveFieldName(name)).toBe(false));
   it("leaves ordinary fields alone", () => {
     expect(sensitiveDefinitionError("Preferred language", null)).toBeNull();
     expect(sensitiveDefinitionError("Preferred language", { sensitive: false })).toBeNull();

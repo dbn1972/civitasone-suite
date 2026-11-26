@@ -14,6 +14,11 @@
 const SENSITIVE_NAME_RE =
   /\b(aadhaar|aadhar|adhar|uidai|pan|passport|ration|voter|epic|driving|licen[cs]e|dl|bank|ifsc|kyc|ssn|tin)\b|\baccount\s*(no|num|number)\b|\bcard\s*(no|num|number)\b/i;
 
+/** Long, unambiguous identifier tokens: safe to match as substrings of the compacted name. */
+const COMPACT_LONG_RE = /(aadhaar|aadhar|adhar|uidai|passport|voter|ifsc|drivinglicen[cs]e|bankaccount|accountnumber|cardnumber)/;
+/** "pan" is too short to substring-match ("company"); only the explicit forms, anchored at the start. */
+const COMPACT_PAN_RE = /^pan(card|no|num|number)?\d*$|^pan(card|no|num|number)/;
+
 /** "aadhaarNumber" / "PAN_no" / "bank-account" -> lower words separated by single spaces. */
 export function normaliseFieldName(name: string): string {
   return name
@@ -26,7 +31,11 @@ export function normaliseFieldName(name: string): string {
 
 /** True when a custom-field NAME looks like it holds a government / financial identifier. */
 export function isSensitiveFieldName(name: string): boolean {
-  return SENSITIVE_NAME_RE.test(normaliseFieldName(name));
+  if (SENSITIVE_NAME_RE.test(normaliseFieldName(name))) return true;
+  // Lowercase-concatenated names ("aadhaarnumber", "aadhaar1", "pancard") have no word boundary to
+  // split on, so ALSO test the compacted name (lowercase, non-alphanumerics stripped).
+  const compact = name.toLowerCase().replace(/[^a-z0-9]+/g, "");
+  return COMPACT_LONG_RE.test(compact) || COMPACT_PAN_RE.test(compact);
 }
 
 export const SENSITIVE_FIELD_REQUIRED = "SENSITIVE_FIELD_REQUIRED";

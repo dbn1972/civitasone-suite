@@ -69,7 +69,14 @@ export async function pipelineRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, PIPELINE_WRITE_ROLES);
     const { id } = idParam.parse(req.params);
     const body = updatePipelineBody.parse(req.body);
-    await assertProductScopeIsCode(ctx.tenantId, body.product);
+    // Only a CHANGED product scope is validated: a legacy pipeline scoped by product NAME must stay
+    // editable when the editor resends the whole object with the unchanged value.
+    if (body.product !== undefined) {
+      const stored = await repo.findById(id, ctx.tenantId);
+      if (!stored || (stored.product ?? null) !== (body.product ?? null)) {
+        await assertProductScopeIsCode(ctx.tenantId, body.product);
+      }
+    }
 
     // GAP-CRM-PIPELINES-01: removing a stage from a saved pipeline must not silently
     // orphan the open deals sitting in it. When the update narrows the stage set, refuse

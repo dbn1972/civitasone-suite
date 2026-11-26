@@ -93,6 +93,20 @@ describe("C3 pipeline product scope is the product code", () => {
     expect(res.json().code).toBe("UNKNOWN_PRODUCT_CODE");
   });
 
+  it("keeps a legacy name-scoped pipeline editable: only a CHANGED product is validated", async () => {
+    const created = await call("POST", "/v1/crm/pipelines", ["crm_admin"], { name: "Legacy scoped", stages });
+    expect(created.statusCode).toBe(202);
+    await inTenant((tx) => tx`UPDATE crm.pipelines SET product = 'Learning Platform' WHERE tenant_id = ${TENANT} AND name = 'Legacy scoped'`);
+    const id = created.json().id as string;
+    const version = (await call("GET", `/v1/crm/pipelines/${id}`, ["crm_user"])).json().data.version as number;
+
+    const unchanged = await call("PATCH", `/v1/crm/pipelines/${id}`, ["crm_admin"], { name: "Legacy scoped 2", product: "Learning Platform", version });
+    expect(unchanged.statusCode).toBe(202);
+    const changed = await call("PATCH", `/v1/crm/pipelines/${id}`, ["crm_admin"], { product: "Some Other Name", version });
+    expect(changed.statusCode).toBe(422);
+    expect(changed.json().code).toBe("UNKNOWN_PRODUCT_CODE");
+  });
+
   it("accepts an existing catalogue product code", async () => {
     expect((await call("POST", "/v1/crm/products", ["crm_admin"], { code: "LMS-01", name: "Learning Platform", priceMinor: "100000" })).statusCode).toBe(202);
     const res = await call("POST", "/v1/crm/pipelines", ["crm_admin"], { name: "LMS pipeline", stages, product: "LMS-01" });
@@ -141,6 +155,20 @@ describe("C10 custom fields: fail-closed PII and the value store", () => {
     }
     const pan = await call("POST", "/v1/crm/custom-fields", ["crm_admin"], { entityType: "contacts", fieldName: "PAN", fieldType: "text", validationSchema: { sensitive: false } });
     expect(pan.statusCode).toBe(422);
+  });
+
+  it("refuses concatenated identifier names on create AND on update (effective name)", async () => {
+    for (const fieldName of ["aadhaarnumber", "aadhaar1", "pancard", "passportno"]) {
+      const res = await call("POST", "/v1/crm/custom-fields", ["crm_admin"], { entityType: "leads", fieldName, fieldType: "text", validationSchema: { sensitive: false } });
+      expect(res.statusCode, fieldName).toBe(422);
+    }
+    expect((await call("POST", "/v1/crm/custom-fields", ["crm_admin"], { entityType: "leads", fieldName: "Referrer note", fieldType: "text" })).statusCode).toBe(202);
+    const defs = (await call("GET", "/v1/crm/custom-fields/leads", ["crm_user"])).json().data as Array<{ id: string; fieldName: string }>;
+    const id = defs.find((d) => d.fieldName === "Referrer note")!.id;
+    for (const fieldName of ["aadhaarnumber", "pancard"]) {
+      const res = await call("PATCH", `/v1/crm/custom-fields/${id}`, ["crm_admin"], { fieldName });
+      expect(res.statusCode, `rename to ${fieldName}`).toBe(422);
+    }
   });
 
   it("stores values in crm.custom_field_values, encrypts sensitive ones and masks them for other roles", async () => {
