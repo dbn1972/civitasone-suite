@@ -2557,8 +2557,9 @@
       "post": "Post period",
       "posting": "Posting…",
       "submitted": "Period submitted. Figures will appear once processing completes.",
-      "campaignName": "Campaign name (optional)",
-      "campaignNamePlaceholder": "e.g. Diwali Outreach"
+      "campaignName": "Campaign name",
+      "campaignNamePlaceholder": "e.g. Diwali Outreach",
+      "campaignNameRequired": "Enter the campaign name."
     },
     "editOpportunity": {
       "title": "Edit Opportunity",
@@ -2648,7 +2649,7 @@
         },
         "onboarding": {
           "title": "Customer Onboarding",
-          "description": "Post-deal onboarding workflows"
+          "description": "Post-engagement onboarding workflows"
         },
         "grievances": {
           "title": "Grievances",
@@ -2716,7 +2717,7 @@
         },
         "qualificationFrameworks": {
           "title": "Qualification Frameworks",
-          "description": "Deal qualification criteria"
+          "description": "Engagement qualification criteria"
         },
         "leadReasonCodes": {
           "title": "Lead Stage Reasons",
@@ -16457,7 +16458,7 @@
   },
   "crmOnboardingList": {
     "retry": "Retry",
-    "colCustomerDeal": "Customer / Deal",
+    "colCustomerDeal": "Customer / Engagement",
     "unnamedCase": "Unnamed case",
     "ref": "Ref {id}",
     "stage": "Stage",
@@ -16478,7 +16479,7 @@
     "emptyTitle": "No onboarding cases",
     "emptyInStage": "No cases in the \"{stage}\" stage.",
     "emptyWithKyc": "No cases with KYC \"{status}\".",
-    "emptyDefault": "Cases appear here once a deal is won.",
+    "emptyDefault": "Cases appear here once an engagement is won.",
     "stage_initiated": "Initiated",
     "stage_documents_submitted": "Documents submitted",
     "stage_verification": "Verification",
@@ -16510,9 +16511,9 @@
     "loadErrorMessage": "This is usually temporary. Try again — we won't show an empty board as if there were nothing here.",
     "retry": "Retry",
     "noCloseDatesTitle": "No close dates",
-    "undatedEmptyMessage": "{count} {count, plural, one {deal has} other {deals have}} no expected close date, so none can be placed on the calendar. Add close dates to see them here.",
+    "undatedEmptyMessage": "{count} {count, plural, one {engagement has} other {engagements have}} no expected close date, so none can be placed on the calendar. Add close dates to see them here.",
     "noExpectedCloseDate": "No opportunities have an expected close date.",
-    "undatedNote": "{count} {count, plural, one {deal has} other {deals have}} no close date and {count, plural, one {is} other {are}} not shown here."
+    "undatedNote": "{count} {count, plural, one {engagement has} other {engagements have}} no close date and {count, plural, one {is} other {are}} not shown here."
   },
   "crmOverdueTaskAlerts": {
     "statLabel": "Overdue tasks",
@@ -16576,8 +16577,8 @@
     }
   },
   "crmPipelineEditor": {
-    "removeStageHint": "Removing a stage that still has open deals will be refused on save until those deals are moved.",
-    "deleteDescription": "Opportunities can no longer use this pipeline. If any open deals still sit in it, the delete will be refused and you’ll be told how many — move or close those deals first. This cannot be undone.",
+    "removeStageHint": "Removing a stage that still has open engagements will be refused on save until those engagements are moved.",
+    "deleteDescription": "Opportunities can no longer use this pipeline. If any open engagements still sit in it, the delete will be refused and you’ll be told how many — move or close those engagements first. This cannot be undone.",
     "stageMovedAnnouncement": "Moved stage {n} {dir, select, up {up} other {down}}. It is now stage {position}.",
     "gate": "Gate",
     "gateHelp": "Requires an explicit review (approval) before an opportunity can enter or pass this stage. Un-gated stages advance automatically when their mandatory fields are filled.",
@@ -16763,9 +16764,9 @@
     "colAccount": "Account",
     "colOpportunity": "Opportunity",
     "colCreated": "Created",
-    "opportunityLabel": "Opportunity (deal) id",
+    "opportunityLabel": "Opportunity (engagement) id",
     "opportunityAria": "Opportunity id",
-    "opportunityPlaceholder": "Link to a deal so the quote isn't orphaned",
+    "opportunityPlaceholder": "Link to an engagement so the quote isn't orphaned",
     "accountLabel": "Account id (optional)",
     "accountAria": "Account id",
     "accountPlaceholder": "Customer account",
@@ -17189,7 +17190,7 @@
     "enabledForLimit": "Enabled for limit {n}",
     "enabled": "Enabled",
     "paused": "Paused",
-    "legacyKeyAlert": "This limit was saved under the key “{key}”, which matches no deal. Choose the stage “{name}” again and save, then delete this old limit.",
+    "legacyKeyAlert": "This limit was saved under the key “{key}”, which matches no engagement. Choose the stage “{name}” again and save, then delete this old limit.",
     "allPipelinesOption": "{stage} — applies to all pipelines",
     "globalLimitNote": "This limit applies to every pipeline. Choose a pipeline to scope it, then pick the stage again."
   },
@@ -17399,7 +17400,7 @@
     "unavailableMessage": "The executive exception feed has nothing to show yet.",
     "subtitle": "Regional pipeline, exception counts, and drill-downs into the operational dashboards.",
     "pipelineByRegion": "Pipeline by region",
-    "regionEmptyMessage": "Active deals with a contact region appear here."
+    "regionEmptyMessage": "Active engagements with a contact region appear here."
   },
   "crmDashboardPage": {
     "moduleNote": "This module tracks vendor interactions, stakeholder engagements, and beneficiary contacts. Engagement and procurement pipeline tools live under Engagement Pipeline — it is not a commercial sales CRM.",
@@ -17726,8 +17727,8 @@
     "kycStatus": "KYC status",
     "account": "Account",
     "viewAccount": "View account",
-    "deal": "Deal",
-    "viewDeal": "View deal",
+    "deal": "Engagement",
+    "viewDeal": "View engagement",
     "kycReference": "KYC reference",
     "kycVerified": "KYC verified",
     "completed": "Completed",

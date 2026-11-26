@@ -51,6 +51,11 @@ export function PostPeriodForm({
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    // Decision C1: the campaign name comes from this feed, so the server refuses a post without it.
+    if (!campaignName.trim()) {
+      setError(t("campaignNameRequired"));
+      return;
+    }
     setBusy(true);
     setError(null);
     setMessage(null);
@@ -86,7 +91,7 @@ export function PostPeriodForm({
     <Card title={t("title")}>
       <form className="pad" style={{ display: "grid", gap: 12 }} onSubmit={(e) => void onSubmit(e)} aria-label={t("title")}>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12 }}>
-          <Field label={t("campaignName")}>
+          <Field label={t("campaignName")} required>
             <Input
               value={campaignName}
               maxLength={MAX_CAMPAIGN_NAME_LENGTH}

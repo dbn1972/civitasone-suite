@@ -40,9 +40,10 @@ const upsertBody = z.object({
   currency: z.string().length(3).default("INR"),
   periodStart: isoDate,
   periodEnd: isoDate.optional(),
-  // GAP-CRM-CAMPAIGNS-01: optional display name carried on the performance feed, so the
-  // ROI list / detail can show a campaign by name. Omitted = leave any stored name as is.
-  campaignName: z.string().trim().min(1).max(200).optional(),
+  // GAP-CRM-CAMPAIGNS-01 (owner decision C1, 2026-11-26): the campaign NAME comes from the
+  // performance-feed producer, so the producer MUST send it on every post. (The consumer still
+  // keeps a stored name when a legacy queued message carries none.)
+  campaignName: z.string().trim().min(1).max(200),
 }).refine(
   (b) => b.periodEnd === undefined || b.periodEnd >= b.periodStart,
   { message: "periodEnd must not precede periodStart" },
@@ -207,7 +208,7 @@ export async function campaignRoiRoutes(app: FastifyInstance): Promise<void> {
         currency: body.currency.toUpperCase(),
         periodStart: body.periodStart,
         periodEnd: body.periodEnd ?? null,
-        ...(body.campaignName ? { campaignName: body.campaignName } : {}),
+        campaignName: body.campaignName,
       }),
     );
   });

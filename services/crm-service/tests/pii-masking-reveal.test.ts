@@ -367,7 +367,7 @@ describe("F1-04 service-requests mask citizen phone/email server-side", () => {
 // ──────────────────────────────────────────────────────────────────────────
 // F1-03 Onboarding kycReference
 // ──────────────────────────────────────────────────────────────────────────
-describe("F1-03 onboarding mask kycReference (last 4) except KYC approvers", () => {
+describe("F1-03 onboarding mask kycReference (last 4) for every role; reveal is the only clear path (C12)", () => {
   const KYC_REF = "KYCPROV-ABCD1234";
 
   async function seedCase(tid: string): Promise<string> {
@@ -398,7 +398,7 @@ describe("F1-03 onboarding mask kycReference (last 4) except KYC approvers", () 
     expect(res.body).not.toContain(KYC_REF);
   });
 
-  it("crm_admin (KYC approver) sees the clear kycReference", async () => {
+  it("crm_admin (KYC approver) ALSO gets the masked kycReference; the clear value needs the audited reveal (decision C12)", async () => {
     const tid = randomUUID();
     const id = await seedCase(tid);
     const res = await app.inject({
@@ -406,7 +406,8 @@ describe("F1-03 onboarding mask kycReference (last 4) except KYC approvers", () 
       url: `/v1/crm/onboarding-cases/${id}`,
       headers: authHeaders(["crm_admin"], tid),
     });
-    expect(res.json().kycReference).toBe(KYC_REF);
+    expect(res.json().kycReference).toBe("••••1234");
+    expect(res.body).not.toContain(KYC_REF);
   });
 
   it("list masks kycReference for crm_user", async () => {

@@ -28,6 +28,8 @@ import { registerPublicLeadCaptureConsumer } from "./modules/leads/public-captur
 import { registerQualificationConsumer } from "./modules/leads/qualification-consumer.js";
 import { registerPipelineConsumers } from "./modules/pipelines/consumer.js";
 import { registerCustomFieldConsumers } from "./modules/custom-fields/consumer.js";
+import { registerCustomFieldValueConsumers } from "./modules/custom-fields/values-consumer.js";
+import { registerMastersConsumers } from "./modules/masters/masters-routes.js";
 import { registerTeamConsumers } from "./modules/teams/consumer.js";
 import { registerResidualF3Consumers } from "./modules/residual-f3/consumer.js";
 import { registerOnboardingConsumers } from "./modules/onboarding/consumer.js";
@@ -77,6 +79,8 @@ export function registerAllConsumers(queue: Queue): void {
   registerQualificationConsumer(queue);
   registerPipelineConsumers(queue);
   registerCustomFieldConsumers(queue);
+  registerCustomFieldValueConsumers(queue);
+  registerMastersConsumers(queue);
   registerTeamConsumers(queue);
   registerResidualF3Consumers(queue);
   registerOnboardingConsumers(queue);

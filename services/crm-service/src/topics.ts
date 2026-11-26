@@ -162,6 +162,18 @@ export const COMMANDS = {
   createGrievanceCategory: "crm.grievance_category.create",
   updateGrievanceCategory: "crm.grievance_category.update",
   deleteGrievanceCategory: "crm.grievance_category.delete",
+  /** Price-book segment / channel + business-line masters (decision sheet C5 / C6, 2026-11-26). */
+  createPriceBookSegment: "crm.price_book_segment.create",
+  updatePriceBookSegment: "crm.price_book_segment.update",
+  deletePriceBookSegment: "crm.price_book_segment.delete",
+  createPriceBookChannel: "crm.price_book_channel.create",
+  updatePriceBookChannel: "crm.price_book_channel.update",
+  deletePriceBookChannel: "crm.price_book_channel.delete",
+  createBusinessLine: "crm.business_line.create",
+  updateBusinessLine: "crm.business_line.update",
+  deleteBusinessLine: "crm.business_line.delete",
+  /** Upsert / clear the custom-field values of one record (decision sheet C10). */
+  setCustomFieldValues: "crm.custom_field_values.set",
   /** Set lead classification (temperature/priority/segment/product/region/expected value) (LQ-003). */
   classifyContact: "crm.contact.classify",
   /** Submit a qualification framework's answers for a lead -> compute outcome+score (LQ-001). */

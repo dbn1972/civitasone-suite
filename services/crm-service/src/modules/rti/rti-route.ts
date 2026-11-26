@@ -18,6 +18,7 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import { listQuery, windowOf, listEnvelope } from "../../shared/list-query.js";
 import { maskList, maskRecord, maskPiiQuery, rolesForRead } from "../../shared/pii-reveal.js";
 import * as repo from "./rti-repo.js";
+import { mergeAuthorities } from "./authorities.js";
 import { withCreateFailureAudit } from "../../shared/reference-numbers.js";
 
 const CRM_ROLES = ["crm_user", "crm_admin", "super_admin", "tenant_admin"];
@@ -131,6 +132,14 @@ export async function rtiRoutes(app: FastifyInstance): Promise<void> {
     }));
 
     return reply.code(201).send({ data: row });
+  });
+
+  // GET /v1/crm/rti/authorities — C7: public-authority picker source (register departments + built-ins).
+  app.get("/v1/crm/rti/authorities", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, CRM_ROLES);
+    const data = mergeAuthorities(await repo.distinctDepartments(ctx.tenantId));
+    return reply.send({ data, meta: { total: data.length } });
   });
 
   // GET /v1/crm/rti — list with filters, ordered by due_at ASC (soonest first)

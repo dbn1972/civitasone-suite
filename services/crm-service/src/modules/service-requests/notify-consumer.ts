@@ -50,6 +50,7 @@ import { db } from "../../shared/db.js";
 import { markProcessed, enqueue } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as activityRepo from "../activities/repo.js";
+import { DEFAULT_SR_RESOLUTION_EMAIL, DEFAULT_SR_TEMPLATE_NAME } from "./default-templates.js";
 
 const log = pino({ name: "crm-sr-notify-consumer" });
 const AUDIT = "audit.event.record";
@@ -57,7 +58,7 @@ const NOTIFICATION_URL = process.env.NOTIFICATION_SERVICE_URL ?? "http://localho
 /** activities.type is varchar(16). */
 const ACTIVITY_TYPE = "comm_delivery";
 /** The tenant template that carries the resolution notice (one per channel). */
-export const SR_RESOLUTION_TEMPLATE_NAME = "service_request_resolution";
+export const SR_RESOLUTION_TEMPLATE_NAME = DEFAULT_SR_TEMPLATE_NAME;
 
 type Channel = "sms" | "email";
 type Outcome = "sent" | "failed" | "no_template";
@@ -154,6 +155,38 @@ async function findResolutionTemplate(
   }
 }
 
+/**
+ * C9 (owner decision): a tenant with no deliverable EMAIL template gets the platform default
+ * provisioned into its own template list (editable by the tenant admin), then the lookup is
+ * retried briefly because notification-service applies the create asynchronously. SMS is never
+ * auto-provisioned (DLT). Returns the template lookup after provisioning, or `missing` when
+ * provisioning was not possible (the honest `no_template` outcome is kept).
+ */
+async function provisionDefaultEmailTemplate(tenantId: string, correlationId: string): Promise<TemplateLookup> {
+  try {
+    const res = await fetch(`${NOTIFICATION_URL}/notifications/templates`, {
+      method: "POST",
+      headers: { "content-type": "application/json", ...internalHeaders(tenantId, correlationId) },
+      body: JSON.stringify(DEFAULT_SR_RESOLUTION_EMAIL),
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!res.ok) {
+      log.warn({ status: res.status }, "default SR email template provisioning non-ok");
+      return isTransientStatus(res.status) ? { kind: "transient_failure" } : { kind: "missing" };
+    }
+  } catch (err) {
+    log.error({ err }, "default SR email template provisioning failed");
+    return { kind: "transient_failure" };
+  }
+  for (let attempt = 0; attempt < 4; attempt++) {
+    await new Promise((r) => setTimeout(r, 750));
+    const again = await findResolutionTemplate(tenantId, "email", correlationId);
+    if (again.kind !== "missing") return again;
+  }
+  // Created but not yet visible: let the queue redeliver rather than record a lost notice.
+  return { kind: "transient_failure" };
+}
+
 async function callNotificationService(
   tenantId: string,
   channel: Channel,
@@ -248,7 +281,10 @@ async function processNotify(
 
   // Cross-service calls OUTSIDE any DB transaction.
   let outcome: Outcome;
-  const template = await findResolutionTemplate(p.tenantId, ch, msg.correlationId);
+  let template = await findResolutionTemplate(p.tenantId, ch, msg.correlationId);
+  if (template.kind === "missing" && ch === "email") {
+    template = await provisionDefaultEmailTemplate(p.tenantId, msg.correlationId);
+  }
   if (template.kind === "transient_failure") {
     // Leave the message UNPROCESSED and throw so the queue redelivers (retry /
     // DLQ), rather than recording a lost notice.

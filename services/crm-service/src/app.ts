@@ -16,6 +16,8 @@ import { activityRoutes } from "./modules/activities/routes.js";
 import { dashboardRoutes } from "./modules/dashboard/routes.js";
 import { pipelineRoutes } from "./modules/pipelines/routes.js";
 import { customFieldRoutes } from "./modules/custom-fields/routes.js";
+import { customFieldValueRoutes } from "./modules/custom-fields/values-routes.js";
+import { mastersRoutes } from "./modules/masters/masters-routes.js";
 import { leadScoreRoutes } from "./modules/leads/score-route.js";
 import { inboundLeadRoutes } from "./modules/leads/inbound-routes.js";
 import { completenessRoutes } from "./modules/leads/completeness-route.js";
@@ -133,6 +135,10 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(dashboardRoutes);
   await app.register(pipelineRoutes);
   await app.register(customFieldRoutes);
+  // Decision sheet C10: custom-field value store (values live in crm.custom_field_values).
+  await app.register(customFieldValueRoutes);
+  // Decision sheet C5 / C6: price-book segment + channel masters, business-line master.
+  await app.register(mastersRoutes);
   await app.register(leadScoreRoutes);
   await app.register(inboundLeadRoutes);
   await app.register(completenessRoutes);

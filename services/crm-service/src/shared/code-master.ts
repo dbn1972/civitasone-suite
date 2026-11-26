@@ -52,7 +52,12 @@ export interface CodeMasterConfig {
   /** Plural REST segment, e.g. "service-types". */
   path: string;
   /** Fully qualified table, e.g. "crm.service_types" (static, never user input). */
-  table: "crm.service_types" | "crm.grievance_categories";
+  table:
+    | "crm.service_types"
+    | "crm.grievance_categories"
+    | "crm.price_book_segments"
+    | "crm.price_book_channels"
+    | "crm.business_lines";
   /** Audit resource type / action prefix, e.g. "service_type". */
   resource: string;
   /** Human noun for error messages, e.g. "service type". */

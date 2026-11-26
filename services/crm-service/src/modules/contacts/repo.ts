@@ -29,6 +29,7 @@ function toView(r: ContactRow): ContactView {
     expectedValueMinor: r.expectedValueMinor === null || r.expectedValueMinor === undefined ? null : String(r.expectedValueMinor),
     leadStatus: r.leadStatus,
     leadSource: r.leadSource,
+    businessLine: r.businessLine ?? null,
     ownerId: r.ownerId,
     accountId: r.accountId,
     tags: (r.tags as string[]) ?? [],

@@ -49,6 +49,12 @@ let fetchMock: ReturnType<typeof vi.fn>;
 let sendResponse: () => { ok: boolean; status: number; json: () => Promise<unknown> };
 /** The tenant's notification templates; reset to both channels before every test. */
 let templates: Array<Record<string, unknown>>;
+/**
+ * Decision C9: what POST /notifications/templates (platform-default provisioning) does.
+ * "creates" = accepted, and the template is then visible (active); "refused" = 403.
+ */
+let provision: "creates" | "refused";
+let provisionedIds: string[];
 
 const okSend = () => ({ ok: true, status: 202, json: async () => ({ id: randomUUID(), status: "accepted" }) });
 const resolutionTemplates = () => [
@@ -67,6 +73,14 @@ function notificationServiceStub(url: unknown, opts?: { headers?: Record<string,
     h["x-service-secret"].length > 0;
   if (!authed) return Promise.resolve({ ok: false, status: 401, json: async () => ({}) });
   const path = String(url);
+  if (path.endsWith("/notifications/templates") && opts?.method === "POST") {
+    if (provision === "refused") return Promise.resolve({ ok: false, status: 403, json: async () => ({}) });
+    const spec = JSON.parse(opts?.body ?? "{}") as { name: string; channel: string };
+    const id = randomUUID();
+    provisionedIds.push(id);
+    templates = [...templates, { id, name: spec.name, channel: spec.channel, status: "active" }];
+    return Promise.resolve({ ok: true, status: 202, json: async () => ({ id, status: "accepted" }) });
+  }
   if (path.endsWith("/notifications/templates")) {
     return Promise.resolve({ ok: true, status: 200, json: async () => templates });
   }
@@ -92,6 +106,8 @@ beforeAll(() => {
 beforeEach(() => {
   sendResponse = okSend;
   templates = resolutionTemplates();
+  provision = "creates";
+  provisionedIds = [];
 });
 
 afterAll(async () => {
@@ -238,8 +254,35 @@ describe("F6-02: resolve -> citizen notification", () => {
     expect(body.templateId).toBe(SMS_TEMPLATE);
   });
 
-  it("records no_template (no send, honest outcome) when the tenant has not created the template", async () => {
+  it("provisions the platform-default EMAIL template into a tenant that has none, then sends through it (decision C9)", async () => {
     templates = []; // the tenant never created "service_request_resolution"
+    const id = await createSr({ citizenEmail: "asha@example.com" });
+    await req("PATCH", `/v1/crm/service-requests/${id}/status`, { status: "resolved", resolution: "Done" });
+    fetchMock.mockClear();
+    await runNotify(id, "resolved");
+
+    const created = fetchMock.mock.calls.filter(([u, o]) => String(u).endsWith("/notifications/templates") && (o as { method?: string })?.method === "POST");
+    expect(created).toHaveLength(1);
+    expect(JSON.parse((created[0]![1] as { body: string }).body)).toMatchObject({ name: "service_request_resolution", channel: "email" });
+    expect(sendCalls()).toHaveLength(1);
+    expect(JSON.parse((sendCalls()[0]![1] as { body: string }).body).templateId).toBe(provisionedIds[0]);
+    expect((await detail(id)).citizenNotification).toMatchObject({ channel: "email", outcome: "sent" });
+  });
+
+  it("never auto-provisions an SMS template (DLT): a phone-only citizen of a tenant with no template gets no_template", async () => {
+    templates = [];
+    const id = await createSr({ citizenPhone: "9876543210" });
+    await req("PATCH", `/v1/crm/service-requests/${id}/status`, { status: "resolved", resolution: "Done" });
+    fetchMock.mockClear();
+    await runNotify(id, "resolved");
+    expect(provisionedIds).toHaveLength(0);
+    expect(sendCalls()).toHaveLength(0);
+    expect((await detail(id)).citizenNotification).toMatchObject({ channel: "sms", outcome: "no_template" });
+  });
+
+  it("records no_template (no send, honest outcome) when the tenant has no template and the default cannot be provisioned", async () => {
+    templates = []; // the tenant never created "service_request_resolution"
+    provision = "refused";
     const id = await createSr({ citizenEmail: "asha@example.com" });
     const ref = (await req("GET", `/v1/crm/service-requests/${id}`)).json().data.referenceNo as string;
     await req("PATCH", `/v1/crm/service-requests/${id}/status`, { status: "resolved", resolution: "Done" });
@@ -256,6 +299,7 @@ describe("F6-02: resolve -> citizen notification", () => {
   });
 
   it("ignores a template that is not active or is for another channel", async () => {
+    provision = "refused"; // isolate the filter: no default is provisioned over the top
     templates = [
       { id: randomUUID(), name: "service_request_resolution", channel: "email", status: "draft" },
       { id: randomUUID(), name: "service_request_resolution", channel: "sms", status: "active" },
@@ -288,6 +332,7 @@ describe("F6-02: resolve -> citizen notification", () => {
   });
 
   it("does not use a template still awaiting approval or superseded (in_review / approved / superseded -> no_template)", async () => {
+    provision = "refused"; // isolate the filter: no default is provisioned over the top
     templates = [
       { id: randomUUID(), name: "service_request_resolution", channel: "email", status: "in_review" },
       { id: randomUUID(), name: "service_request_resolution", channel: "email", status: "approved" },

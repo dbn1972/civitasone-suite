@@ -7,6 +7,7 @@ import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 import * as repo from "./repo.js";
 import * as dealsRepo from "../deals/repo.js";
+import * as productsRepo from "../products/repo.js";
 
 const CRM_ROLES = ["crm_user", "crm_admin", "super_admin"];
 // GAP-CRM-HOME-01 (step 4) / GAP-CRM-PIPELINES-03: pipelines and their stage gates, mandatory
@@ -19,11 +20,26 @@ const CRM_ROLES = ["crm_user", "crm_admin", "super_admin"];
 // granted anything new here.
 const PIPELINE_WRITE_ROLES = ["crm_admin", "super_admin"];
 
+/**
+ * GAP-CRM-PIPELINES-04 (owner decision C3, 2026-11-26): a pipeline's `product` scope holds the
+ * product CODE (crm.products.code, unique per tenant). Pipeline scope is matched by exact string
+ * equality, so a name or free text would silently never match. A non-null scope is therefore
+ * refused (422 UNKNOWN_PRODUCT_CODE) unless it is an existing catalogue code in this tenant.
+ */
+async function assertProductScopeIsCode(tenantId: string, product: string | null | undefined): Promise<void> {
+  if (product === undefined || product === null) return;
+  const found = await productsRepo.findByCode(tenantId, product);
+  if (!found) {
+    throw new HttpError(422, "UNKNOWN_PRODUCT_CODE", `product scope must be an existing product code; "${product}" is not in the catalogue`);
+  }
+}
+
 export async function pipelineRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/crm/pipelines", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, PIPELINE_WRITE_ROLES);
     const body = createPipelineBody.parse(req.body);
+    await assertProductScopeIsCode(ctx.tenantId, body.product);
     return sendAccepted(reply, acceptedResponseSchema, await commands.createPipeline(ctx, body));
   });
 
@@ -53,6 +69,14 @@ export async function pipelineRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, PIPELINE_WRITE_ROLES);
     const { id } = idParam.parse(req.params);
     const body = updatePipelineBody.parse(req.body);
+    // Only a CHANGED product scope is validated: a legacy pipeline scoped by product NAME must stay
+    // editable when the editor resends the whole object with the unchanged value.
+    if (body.product !== undefined) {
+      const stored = await repo.findById(id, ctx.tenantId);
+      if (!stored || (stored.product ?? null) !== (body.product ?? null)) {
+        await assertProductScopeIsCode(ctx.tenantId, body.product);
+      }
+    }
 
     // GAP-CRM-PIPELINES-01: removing a stage from a saved pipeline must not silently
     // orphan the open deals sitting in it. When the update narrows the stage set, refuse

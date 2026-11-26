@@ -18,6 +18,10 @@ import { isActiveTenantUser } from "../../shared/identity-client.js";
 import { listDirectoryRoles } from "../../shared/user-directory.js";
 import { recipientsToVerify } from "../../shared/recipient-changes.js";
 
+// GAP-CRM-TASK-ESCALATION-03 (owner decision B2, 2026-11-26): the overdue-task list is TENANT-WIDE
+// for every CRM role for the pilot (the escalation target managers must see what they are
+// escalated). Team-scoped visibility is deliberately deferred; when it lands it narrows the read
+// query only (shared/team-scope.ts), not this role set.
 const CRM_ROLES = ["crm_user", "crm_admin", "super_admin", "tenant_admin"];
 const ADMIN_ROLES = ["crm_admin", "tenant_admin", "super_admin"];
 const AUDIT = "audit.event.record";

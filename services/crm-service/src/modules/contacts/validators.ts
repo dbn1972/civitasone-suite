@@ -36,6 +36,7 @@ const createContactObject = z.object({
   pincode: z.string().max(6).optional(),
   leadStatus: z.enum(["new", "contacted", "qualified", "unqualified", "disqualified", "customer"]).default("new"),
   leadSource: z.string().max(64).optional(),
+  businessLine: z.string().min(1).max(64).optional(),
   ownerId: z.string().uuid().optional(),
   accountId: z.string().uuid().optional(),
   tags: z.array(z.string()).max(20).optional(),
@@ -94,6 +95,7 @@ const clearableContactFields = {
   pan: z.string().max(10).nullable().optional(),
   pincode: z.string().max(6).nullable().optional(),
   leadSource: z.string().max(64).nullable().optional(),
+  businessLine: z.string().min(1).max(64).nullable().optional(),
 };
 
 /**
@@ -334,6 +336,7 @@ export const contactViewSchema = z.object({
   expectedValueMinor: z.string().nullable(),
   leadStatus: z.string(),
   leadSource: z.string().nullable(),
+  businessLine: z.string().nullable().optional(),
   ownerId: z.string().uuid().nullable(),
   accountId: z.string().uuid().nullable(),
   tags: z.array(z.string()),

@@ -33,7 +33,10 @@ export const KYC_APPROVER_ROLES = ["crm_admin", "super_admin", "tenant_admin"];
 
 /** True when the caller may see this resource's PII in the clear. */
 export function canReadPii(resourceType: ResourceType, roles: string[]): boolean {
-  const allow = resourceType === "onboarding" ? KYC_APPROVER_ROLES : CRM_PII_READ_ROLES;
+  // C12 (owner decision): the onboarding KYC reference may be a government document number, so
+  // NO role reads it in the clear from a plain GET; approvers use the audited reveal instead.
+  if (resourceType === "onboarding") return false;
+  const allow = CRM_PII_READ_ROLES;
   return allow.some((r) => roles.includes(r));
 }
 
@@ -100,9 +103,14 @@ export const SERVICE_REQUEST_MASKING_POLICY: MaskingPolicy = {
   citizenEmail: { strategy: emailStrategy, allowRoles: CRM_PII_READ_ROLES },
 };
 
-/** F1-03 onboarding: mask kyc reference (last 4) except for KYC approvers. */
+/**
+ * Onboarding: the kyc reference is masked (last 4) for EVERY role, KYC approvers included
+ * (GAP-CRM-ONBOARDING-DETAIL-05, owner decision C12, 2026-11-26: it may be a govt ID number).
+ * The clear value is only available through POST /v1/crm/pii/reveal, which is restricted to
+ * KYC_APPROVER_ROLES, requires a reason and writes a pii_reveal audit event.
+ */
 export const ONBOARDING_MASKING_POLICY: MaskingPolicy = {
-  kycReference: { strategy: last4Strategy, allowRoles: KYC_APPROVER_ROLES },
+  kycReference: { strategy: last4Strategy, allowRoles: [] },
 };
 
 export type ResourceType = "grievance" | "rti" | "service_request" | "onboarding" | "contact";

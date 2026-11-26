@@ -90,7 +90,7 @@ describe("Campaign detail page", () => {
   it("GAP-CRM-CAMPAIGNS-01: the post-period form is pre-filled with the campaign's name", async () => {
     mocked.mockResolvedValue({ data: campaign({ name: "Diwali Push" }), source: "api" });
     renderWithIntl(await Page({ params: Promise.resolve({ id: "7f3a1c2e-0000-4000-8000-000000000000" }) }));
-    expect(screen.getByLabelText("Campaign name (optional)")).toHaveValue("Diwali Push");
+    expect(screen.getByLabelText(/^Campaign name/)).toHaveValue("Diwali Push");
   });
 
   it("GAP-CRM-CAMPAIGNS-DETAIL-02: a 404 shows the empty state, no retry", async () => {

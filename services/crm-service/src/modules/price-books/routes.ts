@@ -11,6 +11,8 @@ import { COMMANDS } from "../../topics.js";
 import { ALLOWED_CURRENCIES } from "../deals/quotation-domain.js";
 import { resolveUserNames } from "../../shared/user-directory.js";
 import * as repo from "./repo.js";
+import { assertMasterValue } from "../../shared/master-values.js";
+import { normaliseGeography } from "../../shared/india-geography.js";
 
 const CRM_ROLES = ["crm_user", "crm_admin", "super_admin", "tenant_admin"];
 const ADMIN_ROLES = ["crm_admin", "super_admin", "tenant_admin"];
@@ -85,12 +87,39 @@ async function withUpdaterNames<T extends { updatedBy: string }>(
   return books.map((b) => ({ ...b, updatedByName: names.get(b.updatedBy) ?? null }));
 }
 
+/**
+ * GAP-CRM-PRICE-BOOKS-02 (owner decision C5, 2026-11-26): segment and channel come from the
+ * tenant-managed masters (crm.price_book_segments / crm.price_book_channels), geography from the
+ * existing India state / UT master. A mistyped scope value would create a book that can never
+ * resolve, so it is refused (422) instead of stored. Values are canonicalised to the master code;
+ * geography is stored as the ISO 3166-2:IN code. While a tenant's segment / channel master is
+ * still empty the field stays an open vocabulary (see shared/master-values.ts).
+ */
+async function canonicaliseScope<T extends { segment?: string | null | undefined; channel?: string | null | undefined; geography?: string | null | undefined }>(
+  tenantId: string,
+  body: T,
+): Promise<T> {
+  const out: T = { ...body };
+  if (body.segment !== undefined) out.segment = await assertMasterValue(tenantId, "crm.price_book_segments", "price book segment", body.segment);
+  if (body.channel !== undefined) out.channel = await assertMasterValue(tenantId, "crm.price_book_channels", "price book channel", body.channel);
+  if (body.geography !== undefined && body.geography !== null) {
+    const code = normaliseGeography(body.geography);
+    if (code === null) {
+      throw new HttpError(422, "UNKNOWN_GEOGRAPHY", `geography "${body.geography}" is not an Indian state / union territory (use the state code, e.g. OD, or its name)`);
+    }
+    out.geography = code;
+  }
+  return out;
+}
+
 export async function priceBookRoutes(app: FastifyInstance): Promise<void> {
   // Resolve must precede /:id so 'resolve' is not parsed as an id.
   app.get("/v1/crm/price-books/resolve", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, CRM_ROLES);
     const q = resolveQuery.parse(req.query ?? {});
+    // A state typed by name resolves like its stored code; anything else is matched as typed (legacy books).
+    if (q.geography !== undefined) q.geography = normaliseGeography(q.geography) ?? q.geography;
     const book = await repo.resolve(ctx.tenantId, q);
     if (!book) return reply.send({ data: null });
     const items = await repo.listItems(ctx.tenantId, book.id);
@@ -101,7 +130,7 @@ export async function priceBookRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/crm/price-books", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
-    const body = createBody.parse(req.body);
+    const body = await canonicaliseScope(ctx.tenantId, createBody.parse(req.body));
     const id = commandId(ctx, `${COMMANDS.createPriceBook}:${body.name}`);
     await queue.publish(COMMANDS.createPriceBook, {
       messageId: id, type: COMMANDS.createPriceBook, tenantId: ctx.tenantId, actorId: ctx.actorId,
@@ -161,7 +190,7 @@ export async function priceBookRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
     const { id } = idParam.parse(req.params);
-    const body = updateBody.parse(req.body);
+    const body = await canonicaliseScope(ctx.tenantId, updateBody.parse(req.body));
     const existing = await repo.findById(ctx.tenantId, id);
     if (!existing) throw new HttpError(404, "NOT_FOUND", "price book not found");
     const msgId = commandId(ctx, `${COMMANDS.updatePriceBook}:${id}`);

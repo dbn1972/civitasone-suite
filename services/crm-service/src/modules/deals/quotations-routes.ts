@@ -31,7 +31,7 @@ import {
 } from "./quotation-domain.js";
 import * as commands from "./quotation-commands.js";
 import * as approvalRepo from "./quotation-approval-repo.js";
-import { effectiveDiscountBps } from "./quotation-approval-domain.js";
+import { effectiveDiscountBps, effectiveDiscountThreshold } from "./quotation-approval-domain.js";
 import * as productRepo from "../products/repo.js";
 
 const CRM_ROLES = ["crm_user", "crm_admin", "super_admin", "tenant_admin"];
@@ -108,6 +108,49 @@ const SELECT_COLUMNS = sql`
 `;
 
 type QuotationRow = Record<string, unknown>;
+
+interface DiscountWarning {
+  code: "DISCOUNT_ABOVE_THRESHOLD";
+  discountBps: number;
+  thresholdBps: number;
+  thresholdSource: "configured" | "default";
+}
+
+/**
+ * GAP-CRM-QUOTATIONS-05 (C8): advisory create-time check. Scores the typed line prices against
+ * the price-book reference (lines without a productId are not scored) and returns a warning
+ * when the effective discount exceeds the tenant's (or default) threshold. Never throws.
+ */
+async function discountWarnings(
+  tenantId: string,
+  currency: string,
+  lines: ReadonlyArray<{ productId?: string | undefined; unitPriceMinor: string; quantity: number }>,
+): Promise<DiscountWarning[]> {
+  const productIds = [...new Set(lines.map((l) => l.productId).filter((v): v is string => !!v))];
+  if (productIds.length === 0) return [];
+  try {
+    const threshold = effectiveDiscountThreshold(await approvalRepo.getThreshold(tenantId, "discount"));
+    if (!threshold.enabled) return [];
+    const refs = await approvalRepo.referenceUnitPrices(tenantId, currency, productIds);
+    const discountBps = effectiveDiscountBps(
+      lines.map((l) => ({
+        refUnitMinor: l.productId ? (refs.get(l.productId) ?? null) : null,
+        unitPriceMinor: l.unitPriceMinor,
+        quantity: l.quantity,
+      })),
+    );
+    if (discountBps <= threshold.maxDiscountBps) return [];
+    return [{ code: "DISCOUNT_ABOVE_THRESHOLD", discountBps, thresholdBps: threshold.maxDiscountBps, thresholdSource: threshold.source }];
+  } catch {
+    return []; // advisory only: a lookup failure must never block creating a draft
+  }
+}
+
+function withWarnings<T extends { id: string }>(accepted: T, warnings: DiscountWarning[]): T {
+  if (warnings.length === 0) return accepted;
+  const prior = (accepted as { data?: Record<string, unknown> }).data ?? { id: accepted.id };
+  return { ...accepted, data: { ...prior, warnings } };
+}
 
 interface QuotationState {
   id: string;
@@ -331,10 +374,10 @@ export async function quotationRoutes(app: FastifyInstance): Promise<void> {
 
     const quotationId = commandId(ctx, COMMANDS.createQuotation);
     const money = resolveMoney(body.lineItems, body.totalMinor, "0");
-    return sendAccepted(
-      reply,
-      acceptedResponseSchema,
-      await commands.createQuotation(ctx, quotationId, {
+    // C8: creating is never blocked on discount (enforcement is at send), but the response
+    // WARNS when the typed prices already sit below the threshold against the price-book price.
+    const warnings = await discountWarnings(ctx.tenantId, body.currency.toUpperCase(), body.lineItems);
+    const createdAccepted = await commands.createQuotation(ctx, quotationId, {
         dealId: body.dealId ?? null,
         quoteRef: body.quoteRef,
         templateRef: body.templateRef,
@@ -346,8 +389,8 @@ export async function quotationRoutes(app: FastifyInstance): Promise<void> {
         supplierState: body.supplierState ?? null,
         validUntil: body.validUntil ?? null,
         lineItems: body.lineItems,
-      }),
-    );
+    });
+    return sendAccepted(reply, acceptedResponseSchema, withWarnings(createdAccepted, warnings));
   });
 
   app.post("/v1/crm/quotations/:id/new-version", async (req, reply) => {
@@ -404,8 +447,11 @@ export async function quotationRoutes(app: FastifyInstance): Promise<void> {
     // discount is DERIVED SERVER-SIDE from the line prices vs catalogue reference — client
     // input is never trusted — and compared to the configured threshold. A breach requires
     // an APPROVED discount approval whose recorded level covers the computed discount.
-    const discountThreshold = await approvalRepo.getThreshold(ctx.tenantId, "discount");
-    if (discountThreshold && discountThreshold.enabled) {
+    // C8 (owner decision): the reference is the price-book price, and a tenant with no
+    // configured threshold gets the platform default (DEFAULT_DISCOUNT_THRESHOLD_BPS) rather
+    // than an unguarded send. An admin-disabled threshold row still switches the gate off.
+    const discountThreshold = effectiveDiscountThreshold(await approvalRepo.getThreshold(ctx.tenantId, "discount"));
+    if (discountThreshold.enabled) {
       const computed = effectiveDiscountBps(await approvalRepo.referenceLines(ctx.tenantId, id));
       if (computed > discountThreshold.maxDiscountBps) {
         const approvedLevel = await approvalRepo.latestApprovedDiscountBps(ctx.tenantId, id);

@@ -65,6 +65,8 @@ export const contacts = crmSchema.table("contacts", {
   country: varchar("country", { length: 2 }).default("IN"),
   leadStatus: varchar("lead_status", { length: 24 }).notNull().default("new"),
   leadSource: varchar("lead_source", { length: 64 }),
+  // Decision sheet C6: the lead's business line (a tenant-configured master, crm.business_lines).
+  businessLine: varchar("business_line", { length: 64 }),
   ownerId: uuid("owner_id"),
   accountId: uuid("account_id"),
   tags: jsonb("tags").$type<string[]>().notNull().default([]),
@@ -165,6 +167,7 @@ export type ContactView = {
   expectedValueMinor: string | null;
   leadStatus: string;
   leadSource: string | null;
+  businessLine?: string | null;
   ownerId: string | null;
   accountId: string | null;
   tags: string[];
