@@ -24,17 +24,17 @@ describe("entity adapters: strict search", () => {
 
   it.each(ADAPTERS)("%s: non-ok resolves [] by default (back-compat)", async (_n, search) => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("x", { status: 500 }));
-    await expect(search("a", signal())).resolves.toEqual([]);
+    await expect(search("ab", signal())).resolves.toEqual([]);
   });
 
   it.each(ADAPTERS)("%s: non-ok throws with { strict: true }", async (_n, search) => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("x", { status: 503 }));
-    await expect(search("a", signal(), { strict: true })).rejects.toThrow(/entity lookup failed/);
+    await expect(search("ab", signal(), { strict: true })).rejects.toThrow(/entity lookup failed/);
   });
 
   it.each(ADAPTERS)("%s: a 200 with strict does not throw", async (_n, search) => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ data: [] }), { status: 200 }));
-    await expect(search("a", signal(), { strict: true })).resolves.toEqual([]);
+    await expect(search("ab", signal(), { strict: true })).resolves.toEqual([]);
   });
 });
 

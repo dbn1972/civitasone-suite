@@ -22,7 +22,7 @@ describe("ObligationsPanel", () => {
       const url = String(input);
       if (url.includes("/identity/users")) {
         return new Response(
-          JSON.stringify({ data: [{ id: "11111111-1111-1111-1111-111111111111", name: "Asha Officer" }] }),
+          JSON.stringify({ data: [{ id: "11111111-1111-1111-1111-111111111111", displayName: "Asha Officer" }] }),
           { status: 200 },
         );
       }
@@ -141,7 +141,7 @@ describe("ObligationsPanel", () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       if (String(input).includes("/identity/users")) {
         return new Response(
-          JSON.stringify({ data: [{ id: "11111111-1111-1111-1111-111111111111", name: "Asha Officer" }] }),
+          JSON.stringify({ data: [{ id: "11111111-1111-1111-1111-111111111111", displayName: "Asha Officer" }] }),
           { status: 200 },
         );
       }
