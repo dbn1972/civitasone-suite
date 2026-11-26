@@ -8,7 +8,7 @@ const GATEWAY = (process.env.CIVITASONE_API_BASE_URL ?? process.env.NEXT_PUBLIC_
 // V4-A-05: bound every upstream call (bank-file downloads are the slowest legitimate case).
 const UPSTREAM_TIMEOUT_MS = 60_000;
 
-const FORWARD = ["content-type", "accept", "x-correlation-id", "x-device-id", "x-device-trust-token", "x-step-up-token", "x-idempotency-key", "if-match"];
+const FORWARD = ["content-type", "accept", "x-correlation-id", "x-device-id", "x-device-trust-token", "x-step-up-token", "x-idempotency-key", "x-queued-at", "if-match"];
 
 export async function GET(req: Request, ctx: { params: Promise<{ path: string[] }> }) {
   return proxy(req, (await ctx.params).path, "GET");

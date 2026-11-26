@@ -7,7 +7,7 @@ import { employeesListSchema } from "@civitasone/schemas/web";
 import {sendValidated, sendAccepted } from "@civitasone/schemas/validate";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { PiiDecryptError } from "../../shared/pii-crypto.js";
-import { createEmployeeBody, confirmEmployeeBody, probationExtensionBody, idParam, loginLinkBody, updateEmployeeBody, employeeLocationBody, bulkEmployeeLocationBody, employeeListQuery, officerIdsQuery, SENSITIVE_UPDATE_FIELDS, NAME_CORRECTION_REASON_MESSAGE } from "./validators.js";
+import { createEmployeeBody, confirmEmployeeBody, confirmationRecommendationBody, CONFIRMATION_OVERRIDE_MIN, probationExtensionBody, idParam, loginLinkBody, updateEmployeeBody, employeeLocationBody, bulkEmployeeLocationBody, employeeListQuery, officerIdsQuery, SENSITIVE_UPDATE_FIELDS, NAME_CORRECTION_REASON_MESSAGE } from "./validators.js";
 import { assertKnownEngagementType } from "./engagement-policy.js";
 import { resolveEmployeeForActor } from "./actor-link.js";
 import { setEmployeeLoginLink } from "./login-link.js";
@@ -202,7 +202,44 @@ export async function employeeRoutes(app: FastifyInstance): Promise<void> {
     if (body.confirmationDate < emp.dateOfJoining) {
       throw new HttpError(400, "VALIDATION_FAILED", "confirmationDate cannot be before the employee's date of joining");
     }
+    // GAP-HR-CONFIRMATION-01 (owner decision, 26 Nov 2026): the reporting manager records a
+    // recommendation; HR confirms. Nothing is hard-blocked, but confirming with NO recommendation on
+    // record (or a "not recommended" one) needs an override remark, which lands in the audit event.
+    const recommendation = (await repo.findLatestConfirmationRecommendations(ctx.tenantId, [id])).get(id);
+    if (!recommendation || recommendation.recommendation === "not_recommended") {
+      if ((body.overrideRemark ?? "").trim().length < CONFIRMATION_OVERRIDE_MIN) {
+        throw new HttpError(
+          422,
+          "CONFIRMATION_OVERRIDE_REMARK_REQUIRED",
+          recommendation
+            ? `the reporting manager did not recommend this confirmation; give an override remark of at least ${CONFIRMATION_OVERRIDE_MIN} characters to confirm anyway`
+            : `no reporting-manager recommendation is on record; give an override remark of at least ${CONFIRMATION_OVERRIDE_MIN} characters to confirm anyway`,
+        );
+      }
+    }
     return sendAccepted(reply, acceptedResponseSchema, await commands.confirmEmployee(ctx, id, body));
+  });
+
+  // GAP-HR-CONFIRMATION-01: the REPORTING MANAGER records the probation-confirmation recommendation
+  // (recommended | not_recommended + remark). Only the employee's own reporting manager -- the actor
+  // must be linked to the employee record that hrms_employees.manager_id points at -- not any manager
+  // and not HR (HR's own step is the confirm above, with an override remark when this is missing).
+  // 202 + consumer: a history row is appended, so a manager can change their mind with the earlier one kept.
+  app.post("/v1/hrms/employees/:id/confirmation-recommendation", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ["manager"]);
+    const { id } = idParam.parse(req.params);
+    const body = confirmationRecommendationBody.parse(req.body);
+    const emp = await repo.findById(id, ctx.tenantId);
+    if (!emp) throw new HttpError(404, "NOT_FOUND", "employee not found");
+    const actorEmp = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId);
+    if (!actorEmp || emp.managerId !== actorEmp.id) {
+      throw new HttpError(403, "NOT_REPORTING_MANAGER", "only the employee's reporting manager can record a confirmation recommendation");
+    }
+    if (emp.status !== "probation") {
+      throw new HttpError(409, "INVALID_STATUS_TRANSITION", `a confirmation recommendation can only be recorded for an employee on probation (status '${emp.status}')`);
+    }
+    return sendAccepted(reply, acceptedResponseSchema, await commands.recommendConfirmation(ctx, id, body));
   });
 
   // GAP-HR-CONFIRMATION-05: record a probation extension. Same HR_ROLES gate

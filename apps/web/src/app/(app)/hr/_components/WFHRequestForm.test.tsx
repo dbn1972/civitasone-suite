@@ -437,3 +437,54 @@ describe("WFHRequestForm — server policy refusals (GAP-HR-WFH-01)", () => {
     expect(alert.textContent).not.toMatch(/GAZETTED_NOT_ELIGIBLE|422|raw server text/);
   });
 });
+
+
+/**
+ * GAP-HR-WFH-06 (owner decision, 26 Nov 2026): an employee cannot record WFH retrospectively; HR may, up to 7
+ * days back, with a reason. The server enforces it (422 RETROSPECTIVE_WFH_*); the form shapes the date picker.
+ */
+describe("WFHRequestForm — retrospective WFH (GAP-HR-WFH-06)", () => {
+  afterEach(() => vi.unstubAllGlobals());
+  const EMP = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee";
+
+  function stubEligible() {
+    const fetchMock = vi.fn(async (_url: string, init?: { method?: string }) => {
+      if (init?.method === "POST") return new Response(JSON.stringify({ id: "w1" }), { status: 202 });
+      return new Response(JSON.stringify({ payLevel: 8, maxPayLevel: 9, enforceGazettedExclusion: true, weeklyWfhCount: 0 }), { status: 200 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    return fetchMock;
+  }
+  const iso = (offsetDays: number) => {
+    const d = new Date(Date.now() + 5.5 * 3600_000);
+    d.setUTCDate(d.getUTCDate() + offsetDays);
+    return d.toISOString().slice(0, 10);
+  };
+
+  it("an employee's From-date picker starts today: no back-dating, no retro hint", async () => {
+    stubEligible();
+    render(<WFHRequestForm employeeId={EMP} />);
+    await waitFor(() => expect(screen.queryByTestId("paylevel-warning")).toBeNull());
+    expect(screen.getByLabelText(/^from date/i)).toHaveAttribute("min", iso(0));
+    expect(screen.queryByText(/up to 7 days back/i)).not.toBeInTheDocument();
+  });
+
+  it("HR (retroactiveDays=7) can pick a date 7 days back, and is told the rule", async () => {
+    stubEligible();
+    render(<WFHRequestForm employeeId={EMP} retroactiveDays={7} />);
+    await waitFor(() => expect(screen.queryByTestId("paylevel-warning")).toBeNull());
+    expect(screen.getByLabelText(/^from date/i)).toHaveAttribute("min", iso(-7));
+    expect(screen.getByText(/up to 7 days back, with a reason/i)).toBeInTheDocument();
+  });
+
+  it("a back-dated entry without a reason of 10+ characters is stopped before anything is sent", async () => {
+    const fetchMock = stubEligible();
+    render(<WFHRequestForm employeeId={EMP} retroactiveDays={7} />);
+    await waitFor(() => expect(screen.queryByTestId("paylevel-warning")).toBeNull());
+    fireEvent.change(screen.getByLabelText(/^from date/i), { target: { value: iso(-2) } });
+    fireEvent.change(screen.getByLabelText(/^to date/i), { target: { value: iso(-2) } });
+    fireEvent.click(screen.getByRole("button", { name: /submit request/i }));
+    expect(await screen.findByText(/back-dated entry needs a reason of at least 10 characters/i)).toBeInTheDocument();
+    expect(fetchMock.mock.calls.some((c) => (c[1] as { method?: string } | undefined)?.method === "POST")).toBe(false);
+  });
+});

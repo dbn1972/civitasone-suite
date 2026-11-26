@@ -11,7 +11,7 @@ import { scopedRead} from "../../shared/db.js";
 import { hrmsEmployees } from "../employee/schema.js";
 import { resolveEmployeeForActor } from "../employee/actor-link.js";
 import { resolveLeaveReadScope } from "../../shared/self-scope.js";
-import { createLeaveTypeBody, allocateLeaveBody, applyLeaveBody, idParam, rejectLeaveBody, leaveTenantConfigBody } from "./validators.js";
+import { createLeaveTypeBody, allocateLeaveBody, applyLeaveBody, leaveReasonRefusal, idParam, rejectLeaveBody, leaveTenantConfigBody } from "./validators.js";
 import { validateLeaveRequest, getHolidaysInRange, countWorkingDaysExcludingHolidays, countCalendarDays, LEAVE_POLICIES, type EmployeeType, type LeaveCategory } from "./rules-engine.js";
 import { loadTypeResolver, leaveEligible } from "../employee/engagement-policy.js";
 import * as repo from "./repo.js";
@@ -364,7 +364,7 @@ export async function leaveRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/hrms/leave-applications", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ALL_ROLES);
-    const body = applyLeaveBody.parse(req.body);
+    const body = parseApplyForSubmit(req);
     // UAT T-EDGE TE-09: one application per X-Idempotency-Key (same body replays the first
     // answer, another body is a 422). The rules run inside, so a replay is not refused as an
     // overlap with the application it created itself.
@@ -380,7 +380,7 @@ export async function leaveRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/hrms/leave-requests", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ALL_ROLES);
-    const body = applyLeaveBody.parse(req.body);
+    const body = parseApplyForSubmit(req);
     return sendAccepted(reply, acceptedResponseSchema, await idempotentCreate(ctx, "hrms.leave.apply", body, async () => {
       const computedDays = await enforceCcsLeaveRules(ctx, body, req);
       const applyBody = computedDays != null ? { ...body, daysApplied: computedDays } : body;
@@ -623,6 +623,18 @@ export async function leaveRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.setErrorHandler(errorHandler);
+}
+
+/**
+ * The two SUBMIT routes (POST /leave-applications and /leave-requests) parse the body AND enforce the
+ * 20-character reason minimum (GAP-HR-LEAVE-APPLY-04). The preview route does not: it runs while the
+ * applicant is still typing the reason.
+ */
+function parseApplyForSubmit(req: FastifyRequest): ReturnType<typeof applyLeaveBody.parse> {
+  const body = applyLeaveBody.parse(req.body);
+  const refusal = leaveReasonRefusal(body.reason, req.headers["x-queued-at"]);
+  if (refusal) throw new ZodError([{ code: "custom", path: ["reason"], message: refusal }]);
+  return body;
 }
 
 function errorHandler(err: unknown, req: any, reply: any): void {

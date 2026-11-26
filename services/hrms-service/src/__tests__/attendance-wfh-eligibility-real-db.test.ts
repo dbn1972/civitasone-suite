@@ -11,6 +11,16 @@ import { sqlClient } from "../shared/db.js";
 import { queue } from "../shared/infra.js";
 import { registerPolicySettingsConsumers } from "../modules/policy-settings/consumer.js";
 
+// Back-dated WFH is refused for an employee (GAP-HR-WFH-06), so every date below must lie in the
+// future whenever this suite runs. The literals keep their weekday layout (comments name them) and
+// are shifted by whole weeks to land at least two weeks ahead of today.
+const SHIFT_DAYS = (() => {
+  const anchor = Date.UTC(2026, 2, 2); // the earliest literal below, a Monday
+  return Math.max(0, Math.ceil((Date.now() + 14 * 86_400_000 - anchor) / (7 * 86_400_000))) * 7;
+})();
+const d = (iso: string): string => new Date(Date.parse(`${iso}T00:00:00Z`) + SHIFT_DAYS * 86_400_000).toISOString().slice(0, 10);
+
+
 registerPolicySettingsConsumers(queue);
 const drain = (): Promise<void> => (queue as unknown as { drain: () => Promise<void> }).drain();
 
@@ -62,21 +72,21 @@ const wfh = (sub: string, employeeId: string, day: string) => app.inject({
 
 describe("WFH gazetted exclusion (GAP-HR-WFH-01)", () => {
   it("rejects a Level 12 employee's own request with GAZETTED_NOT_ELIGIBLE (422)", async () => {
-    const r = await wfh(E_L12, E_L12, "2026-11-02");
+    const r = await wfh(E_L12, E_L12, d("2026-11-02"));
     expect(r.statusCode).toBe(422);
     expect(r.json().code).toBe("GAZETTED_NOT_ELIGIBLE");
   });
   it("allows Level 8, and an UNCLASSIFIED (level 0) designation is never blocked", async () => {
-    expect((await wfh(E_L8, E_L8, "2026-11-02")).statusCode).toBe(202);
-    expect((await wfh(E_L0, E_L0, "2026-11-02")).statusCode).toBe(202);
+    expect((await wfh(E_L8, E_L8, d("2026-11-02"))).statusCode).toBe(202);
+    expect((await wfh(E_L0, E_L0, d("2026-11-02"))).statusCode).toBe(202);
   });
   it("Level 10 is the boundary: excluded (Group A is Levels 10-18); Level 9 is still eligible", async () => {
     await asTenant((tx) => tx`UPDATE employee.hrms_designations SET level = 10 WHERE id = ${D_L12}`);
-    const ten = await wfh(E_L12, E_L12, "2026-11-09");
+    const ten = await wfh(E_L12, E_L12, d("2026-11-09"));
     expect(ten.statusCode).toBe(422);
     expect(ten.json().code).toBe("GAZETTED_NOT_ELIGIBLE");
     await asTenant((tx) => tx`UPDATE employee.hrms_designations SET level = 9 WHERE id = ${D_L12}`);
-    expect((await wfh(E_L12, E_L12, "2026-11-09")).statusCode).toBe(202);
+    expect((await wfh(E_L12, E_L12, d("2026-11-09"))).statusCode).toBe(202);
     await asTenant((tx) => tx`UPDATE employee.hrms_designations SET level = 12 WHERE id = ${D_L12}`);
   });
   it("GET /wfh-eligibility reports the level, gazetted flag and this week's count; employees can only ask about themselves", async () => {
@@ -98,11 +108,11 @@ describe("WFH gazetted exclusion (GAP-HR-WFH-01)", () => {
     const ok = await app.inject({ method: "PUT", url: "/v1/hrms/policy-settings/wfh_eligibility", headers: as(HR, ["hr_admin"]), payload: { enforceGazettedExclusion: true, maxPayLevel: 12 } });
     expect(ok.statusCode).toBe(202);
     await drain();
-    expect((await wfh(E_L12, E_L12, "2026-11-16")).statusCode).toBe(202);
+    expect((await wfh(E_L12, E_L12, d("2026-11-16"))).statusCode).toBe(202);
     const off = await app.inject({ method: "PUT", url: "/v1/hrms/policy-settings/wfh_eligibility", headers: as(HR, ["hr_admin"]), payload: { enforceGazettedExclusion: false, maxPayLevel: 10 } });
     expect(off.statusCode).toBe(202);
     await drain();
-    expect((await wfh(E_L12, E_L12, "2026-11-23")).statusCode).toBe(202);
+    expect((await wfh(E_L12, E_L12, d("2026-11-23"))).statusCode).toBe(202);
     const list = await app.inject({ method: "GET", url: "/v1/hrms/policy-settings", headers: as(HR, ["hr_officer"]) });
     const row = list.json().data.find((p: { key: string }) => p.key === "wfh_eligibility");
     expect(row).toMatchObject({ isDefault: false, value: { enforceGazettedExclusion: false, maxPayLevel: 10 } });

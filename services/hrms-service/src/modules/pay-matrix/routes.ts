@@ -8,12 +8,13 @@ import { scopedRead } from "../../shared/db.js";
 import { hrmsDesignations, hrmsEmployees } from "../employee/schema.js";
 import { hrmsServiceBookEntries } from "../service-book/schema.js";
 import { eq, and } from "drizzle-orm";
+import { buildPayMatrix } from "./generate.js";
 
 /**
  * GAP-HR-PAY-MATRIX-01 (HIGH, statutory pay risk): this table is a COMPUTED
  * APPROXIMATION, not the notified 7th CPC pay matrix. It seeds cell 1 per
  * level from ENTRY_PAY_PAISE and multiplies each subsequent cell by 1.03,
- * rounded up to the next Rs 100 -- a generic reconstruction of the
+ * rounded to the nearest Rs 100 -- a generic reconstruction of the
  * statutory 3% annual-increment rule, not a transcription of the actual
  * gazette-notified cell values or per-level cell counts. It has never been
  * verified against the official table (not available in this snapshot).
@@ -41,7 +42,7 @@ import { eq, and } from "drizzle-orm";
  *
  * 7th CPC pay matrix — generated from the official cell-1 entry pay per level
  * using the statutory annual-increment rule: each subsequent cell = previous
- * x 1.03, rounded UP to the next Rs 100. Cell (index-point) counts per the
+ * x 1.03, rounded to the nearest Rs 100. Cell (index-point) counts per the
  * 7th CPC matrix. All values in paise (Rs x 100).
  */
 export function isPayMatrixOfficial(): boolean {
@@ -57,7 +58,7 @@ export function isPayMatrixOfficial(): boolean {
  * computed.
  */
 export const PAY_MATRIX_COMPUTED_NOTICE =
-  "COMPUTED, NOT OFFICIAL: these figures come from entry pay compounded at 3% per cell and rounded up to the next Rs 100. " +
+  "COMPUTED, NOT OFFICIAL: these figures come from entry pay compounded at 3% per cell and rounded to the nearest Rs 100. " +
   "They are not the notified 7th CPC pay matrix and must not be treated as statutory pay. " +
   "A live annual increment stays blocked until HR/finance loads and signs off the official table.";
 
@@ -65,30 +66,6 @@ function matrixProvenance(): { official: boolean; matrixSource: "official" | "co
   return isPayMatrixOfficial()
     ? { official: true, matrixSource: "official" }
     : { official: false, matrixSource: "computed", notice: PAY_MATRIX_COMPUTED_NOTICE };
-}
-const ENTRY_PAY_PAISE: Record<number, number> = {
-  1: 1800000, 2: 1990000, 3: 2170000, 4: 2550000, 5: 2920000, 6: 3540000,
-  7: 4490000, 8: 4760000, 9: 5310000, 10: 5610000, 11: 6770000, 12: 7880000,
-  13: 12310000, 14: 14420000, 15: 18220000, 16: 20540000, 17: 22500000, 18: 25000000,
-};
-const CELL_COUNT: Record<number, number> = {
-  1: 40, 2: 40, 3: 40, 4: 40, 5: 40, 6: 40, 7: 40, 8: 40, 9: 40, 10: 40,
-  11: 40, 12: 40, 13: 19, 14: 18, 15: 13, 16: 9, 17: 1, 18: 1,
-};
-function buildPayMatrix(): Record<number, number[]> {
-  const m: Record<number, number[]> = {};
-  for (const lvlStr of Object.keys(ENTRY_PAY_PAISE)) {
-    const lvl = Number(lvlStr);
-    const n = CELL_COUNT[lvl] ?? 40;
-    const cells: number[] = [];
-    let cur = ENTRY_PAY_PAISE[lvl] ?? 0;
-    for (let i = 0; i < n; i++) {
-      cells.push(cur);
-      cur = Math.ceil((cur * 1.03) / 10000) * 10000; // +3%, round up to next Rs 100
-    }
-    m[lvl] = cells;
-  }
-  return m;
 }
 const PAY_MATRIX: Record<number, number[]> = buildPayMatrix();
 
@@ -215,7 +192,7 @@ export async function payMatrixRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(
         409,
         "PAY_MATRIX_NOT_OFFICIAL",
-        "Live annual increments are blocked: this system's 7th CPC pay matrix is a computed approximation (entry pay x 1.03 per cell, rounded up to the next Rs 100), not the notified table, and has not been confirmed against the official gazette values (GAP-HR-PAY-MATRIX-01). Run with dryRun: true to preview, or have HR/finance load the official matrix before running a live increment.",
+        "Live annual increments are blocked: this system's 7th CPC pay matrix is a computed approximation (entry pay x 1.03 per cell, rounded to the nearest Rs 100), not the notified table, and has not been confirmed against the official gazette values (GAP-HR-PAY-MATRIX-01). Run with dryRun: true to preview, or have HR/finance load the official matrix before running a live increment.",
       );
     }
 

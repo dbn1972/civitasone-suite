@@ -67,6 +67,10 @@ const FORWARD_HEADERS = [
   "x-tenant-id",
   "x-actor-id",
   "x-idempotency-key",
+  // GAP-HR-LEAVE-APPLY-04: when a replayed offline request was made (web requestQueue); hrms-service
+  // grandfathers a leave request queued before its 20-character reason minimum existed. A client can
+  // forge it, which only skips that one length check -- never an authz or tenant decision.
+  "x-queued-at",
 ] as const;
 
 // Actively strip these from every inbound request before forwarding, regardless of FORWARD_HEADERS.

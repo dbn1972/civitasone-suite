@@ -19,7 +19,7 @@ const ROW: VigilanceRow = {
 const LABELS = {
   caseRef: "Case Ref", employee: "Employee", department: "Department", charges: "Charge Summary",
   inquiryOfficer: "Inquiry Officer", inquiryOfficerAppointed: "Inquiry Officer Appointed", status: "Status",
-  noCharges: "—", emptyTitle: "None", emptyMessage: "None here", caption: "Register",
+  noCharges: "—", revealRestricted: "Restricted to vigilance officers", emptyTitle: "None", emptyMessage: "None here", caption: "Register",
 };
 const CHARGE_TEXT = "Took an unauthorised payment from a contractor";
 
@@ -34,7 +34,7 @@ describe("VigilanceTable charge summary (GAP-HR-VIGILANCE-01)", () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(JSON.stringify({ data: { value: CHARGE_TEXT } }), { status: 200 }),
     );
-    const { container } = render(<VigilanceTable rows={[ROW]} labels={LABELS} />);
+    const { container } = render(<VigilanceTable rows={[ROW]} labels={LABELS} canReveal />);
 
     // Masked, and nothing fetched, on first paint.
     expect(container.textContent).toContain("••••••••");
@@ -63,7 +63,7 @@ describe("VigilanceTable charge summary (GAP-HR-VIGILANCE-01)", () => {
 
   it("will not reveal without a reason of at least 10 characters", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch");
-    render(<VigilanceTable rows={[ROW]} labels={LABELS} />);
+    render(<VigilanceTable rows={[ROW]} labels={LABELS} canReveal />);
     fireEvent.click(screen.getByRole("button", { name: "Reveal" }));
     fireEvent.change(await screen.findByLabelText(/Reason for revealing/i), { target: { value: "too short" } });
     const confirm = screen.getAllByRole("button", { name: "Reveal" }).pop()!;
@@ -74,7 +74,7 @@ describe("VigilanceTable charge summary (GAP-HR-VIGILANCE-01)", () => {
 
   it("a refused reveal (403) keeps the text masked and shows a plain message", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ code: "FORBIDDEN" }), { status: 403 }));
-    const { container } = render(<VigilanceTable rows={[ROW]} labels={LABELS} />);
+    const { container } = render(<VigilanceTable rows={[ROW]} labels={LABELS} canReveal />);
     fireEvent.click(screen.getByRole("button", { name: "Reveal" }));
     fireEvent.change(await screen.findByLabelText(/Reason for revealing/i), { target: { value: "Preparing the hearing brief" } });
     fireEvent.click(screen.getAllByRole("button", { name: "Reveal" }).pop()!);
@@ -84,19 +84,19 @@ describe("VigilanceTable charge summary (GAP-HR-VIGILANCE-01)", () => {
   });
 
   it("a case with no charge text shows a dash and offers no Reveal", () => {
-    render(<VigilanceTable rows={[{ ...ROW, hasCharges: false }]} labels={LABELS} />);
+    render(<VigilanceTable rows={[{ ...ROW, hasCharges: false }]} labels={LABELS} canReveal />);
     expect(screen.queryByRole("button", { name: "Reveal" })).not.toBeInTheDocument();
   });
 
   it("each row links to the shared case page with ?from=vigilance", () => {
-    render(<VigilanceTable rows={[ROW]} labels={LABELS} />);
+    render(<VigilanceTable rows={[ROW]} labels={LABELS} canReveal />);
     expect(screen.getByRole("link", { name: "Open VC/1" })).toHaveAttribute("href", `/hr/disciplinary/${CASE_ID}?from=vigilance`);
     expect(within(screen.getByRole("table")).getAllByRole("row")).toHaveLength(2);
   });
 
   it("using Reveal (button, reason dialog, confirm) never also navigates to the case page via the row click", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ data: { value: CHARGE_TEXT } }), { status: 200 }));
-    render(<VigilanceTable rows={[ROW]} labels={LABELS} />);
+    render(<VigilanceTable rows={[ROW]} labels={LABELS} canReveal />);
     fireEvent.click(screen.getByRole("button", { name: "Reveal" }));
     fireEvent.change(await screen.findByLabelText(/Reason for revealing/i), { target: { value: "Preparing the hearing brief" } });
     fireEvent.click(screen.getAllByRole("button", { name: "Reveal" }).pop()!);
@@ -106,5 +106,17 @@ describe("VigilanceTable charge summary (GAP-HR-VIGILANCE-01)", () => {
     // ...while clicking elsewhere on the row still opens the case.
     fireEvent.click(screen.getByText("Alpha Officer"));
     expect(push).toHaveBeenCalledWith(`/hr/disciplinary/${CASE_ID}?from=vigilance`);
+  });
+});
+
+// GAP-HR-VIGILANCE-01 (owner decision, 26 Nov 2026): HR roles lose reveal.
+describe("VigilanceTable reveal is restricted (GAP-HR-VIGILANCE-01)", () => {
+  it("a role that may read the register but not reveal (hr_admin / hr_officer) sees no Reveal control", () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+    const { container } = render(<VigilanceTable rows={[ROW]} labels={LABELS} canReveal={false} />);
+    expect(screen.queryByRole("button", { name: "Reveal" })).not.toBeInTheDocument();
+    expect(container.textContent).toContain("••••••••");
+    expect(container.textContent).toContain("Restricted to vigilance officers");
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

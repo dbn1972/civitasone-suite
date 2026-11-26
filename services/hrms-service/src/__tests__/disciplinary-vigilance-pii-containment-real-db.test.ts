@@ -187,21 +187,29 @@ describe("GET /v1/hrms/vigilance (GAP-HR-VIGILANCE-01)", () => {
     const rows = res.json().data as Array<Record<string, unknown>>;
     const row = rows.find((r) => r.id === droppedCaseId);
     expect(row).toBeTruthy();
-    // even when explicitly included, it's still the truncated summary, not
-    // the full text field name.
+    // even when explicitly included, the register is MASKED BY DEFAULT now
+    // (owner decision 26 Nov 2026): no charge text at all for an HR role.
     expect(row?.charges).toBeUndefined();
-    expect(typeof row?.charges_summary).toBe("string");
+    expect(row?.charges_summary).toBeNull();
+    expect(row?.hasCharges).toBe(true);
   });
 
-  it("truncates charges_summary the same way the disciplinary list does", async () => {
-    const res = await app.inject({
+  it("an HR role gets NO charge text; a vigilance_officer who asks for it unmasked gets the truncated summary, never the full text", async () => {
+    const hr = await app.inject({
       method: "GET", url: "/v1/hrms/vigilance",
       headers: auth(HR_OFFICER_ACTOR, ["hr_officer"]),
     });
-    const bodyText = res.body;
-    expect(bodyText.includes(FULL_ALLEGATION)).toBe(false);
-    const rows = res.json().data as Array<Record<string, unknown>>;
-    const row = rows.find((r) => r.id === longAllegationCaseId);
+    expect(hr.body.includes(FULL_ALLEGATION)).toBe(false);
+    const hrRow = (hr.json().data as Array<Record<string, unknown>>).find((r) => r.id === longAllegationCaseId);
+    expect(hrRow?.charges_summary).toBeNull();
+
+    const vig = await app.inject({
+      method: "GET", url: "/v1/hrms/vigilance?maskCharges=false",
+      headers: auth(HR_OFFICER_ACTOR, ["vigilance_officer"]),
+    });
+    expect(vig.statusCode).toBe(200);
+    expect(vig.body.includes(FULL_ALLEGATION)).toBe(false);
+    const row = (vig.json().data as Array<Record<string, unknown>>).find((r) => r.id === longAllegationCaseId);
     const summary = row?.charges_summary as string;
     expect(summary.length).toBeLessThanOrEqual(81);
   });

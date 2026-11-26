@@ -307,6 +307,41 @@ export const DOMAIN_CODE_MESSAGES: Record<string, DomainMessage> = {
     },
     actions: ["retry", "help"],
   },
+  // GAP-HR-WFH-06 (owner decision, 26 Nov 2026): retrospective work from home. An employee may not back-date;
+  // HR may record up to 7 days back, with a reason.
+  RETROSPECTIVE_WFH_NOT_ALLOWED: {
+    en: {
+      what: "Work from home can't be requested for a past date.",
+      next: "Choose today or a later date. If you already worked from home on an earlier day, ask HR to record it.",
+    },
+    hi: {
+      what: "बीती तिथि के लिए घर से कार्य का अनुरोध नहीं किया जा सकता।",
+      next: "आज या बाद की तिथि चुनें। यदि आपने पहले किसी दिन घर से कार्य किया था तो एचआर से उसे दर्ज करने को कहें।",
+    },
+    actions: ["back", "help"],
+  },
+  RETROSPECTIVE_WFH_WINDOW_EXCEEDED: {
+    en: {
+      what: "Work from home can only be recorded up to 7 days back.",
+      next: "Choose a date within the last 7 days, or raise it with your HR head.",
+    },
+    hi: {
+      what: "घर से कार्य अधिकतम 7 दिन पीछे तक ही दर्ज किया जा सकता है।",
+      next: "पिछले 7 दिनों के भीतर की तिथि चुनें, या अपने एचआर प्रमुख से बात करें।",
+    },
+    actions: ["back", "help"],
+  },
+  RETROSPECTIVE_WFH_REASON_REQUIRED: {
+    en: {
+      what: "A back-dated work-from-home entry needs a reason.",
+      next: "Add a reason of at least 10 characters explaining why it is being recorded late.",
+    },
+    hi: {
+      what: "बीती तिथि की घर से कार्य प्रविष्टि के लिए कारण आवश्यक है।",
+      next: "देर से दर्ज करने का कारण कम से कम 10 अक्षरों में लिखें।",
+    },
+    actions: ["retry", "help"],
+  },
   // GAP-CHANGE-DETAIL-05: admin-service change domain codes
   // (services/admin-service/src/modules/change/domain.ts). Each is a specific,
   // actionable governance reason that must read differently from a generic

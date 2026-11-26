@@ -44,7 +44,7 @@ const emp = (over: Record<string, unknown> = {}) => ({
   dateOfJoining: addDays(today, -2), employeeType: "permanent", basicMinor: 0, ...over,
 });
 const leave = (over: Record<string, unknown> = {}) => ({
-  employeeId: empId, leaveTypeId: typeId, allocId, fromDate: addDays(today, 30), toDate: addDays(today, 30), daysApplied: 1, reason: "UAT-TEDGE b21 leave", ...over,
+  employeeId: empId, leaveTypeId: typeId, allocId, fromDate: addDays(today, 30), toDate: addDays(today, 30), daysApplied: 1, reason: "UAT-TEDGE b21 leave request", ...over,
 });
 
 beforeAll(async () => {

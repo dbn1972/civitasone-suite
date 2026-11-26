@@ -5,7 +5,7 @@ import { queue, cache } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
 import { HttpError } from "../../shared/context.js";
 import { isMaskedValue } from "../../shared/pii-mask.js";
-import type { CreateEmployeeBody, ConfirmEmployeeBody, UpdateEmployeeBody, ProbationExtensionBody } from "./validators.js";
+import type { CreateEmployeeBody, ConfirmEmployeeBody, UpdateEmployeeBody, ProbationExtensionBody, ConfirmationRecommendationBody } from "./validators.js";
 import type { TransferBody, SeparateBody, PromotionBody } from "../lifecycle/validators.js";
 import { scopedRead } from "../../shared/db.js";
 import { enqueue } from "../../shared/outbox.js";
@@ -126,6 +126,17 @@ export async function confirmEmployee(ctx: RequestContext, id: string, body: Con
     payload: { ...body, id, tenantId: ctx.tenantId },
   });
   await cache.invalidate(cache.makeKey(ctx.tenantId, "employee", id));
+  return { id, status: "accepted", correlationId: ctx.correlationId };
+}
+
+// GAP-HR-CONFIRMATION-01: the reporting manager's recommendation. A fresh messageId per call -- a manager
+// changing their mind is a new history row, not a replay.
+export async function recommendConfirmation(ctx: RequestContext, id: string, body: ConfirmationRecommendationBody): Promise<Accepted> {
+  await queue.publish(COMMANDS.employeeConfirmationRecommend, {
+    messageId: randomUUID(), type: COMMANDS.employeeConfirmationRecommend,
+    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+    payload: { ...body, id, tenantId: ctx.tenantId },
+  });
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }
 

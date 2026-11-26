@@ -151,7 +151,7 @@ export function registerEmployeeConsumers(rawQueue: Queue): void {
 
   queue.subscribe(COMMANDS.employeeConfirm, async (msg) => {
     const p = msg.payload as {
-      id: string; tenantId: string; confirmationDate: string;
+      id: string; tenantId: string; confirmationDate: string; overrideRemark?: string;
       orderRef: string; authority?: string; remark?: string;
     };
     await db.transaction(async (tx) => {
@@ -202,11 +202,31 @@ export function registerEmployeeConsumers(rawQueue: Queue): void {
         recordedBy: msg.actorId,
         documentRef: p.orderRef,
       });
-      await audit(tx, msg, "confirm", "employee", p.id, { orderRef: p.orderRef, authority: p.authority, remark: p.remark });
+      await audit(tx, msg, "confirm", "employee", p.id, { orderRef: p.orderRef, authority: p.authority, remark: p.remark, overrideRemark: p.overrideRemark ?? null });
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "employee", p.id));
     // M1: status change visible in list
     await cache.invalidateResource(msg.tenantId, "employee");
+  });
+
+  // GAP-HR-CONFIRMATION-01: the reporting manager's confirmation recommendation. The route has already
+  // checked the actor is the employee's reporting manager and that the employee is on probation; this
+  // re-checks the status (the consumer is async) and appends a history row.
+  queue.subscribe(COMMANDS.employeeConfirmationRecommend, async (msg) => {
+    const p = msg.payload as { id: string; tenantId: string; recommendation: "recommended" | "not_recommended"; remark?: string };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const emp = await repo.findByIdTx(tx, p.id, p.tenantId);
+      if (!emp) throw new HttpError(404, "NOT_FOUND", `employee ${p.id} not found`);
+      if (emp.status !== "probation") {
+        throw new HttpError(409, "EMPLOYEE_STATUS_CONFLICT", `employee ${p.id} is no longer on probation; recommendation not recorded`);
+      }
+      await repo.insertConfirmationRecommendation(tx, {
+        tenantId: p.tenantId, employeeId: p.id, recommendation: p.recommendation, remark: p.remark ?? null,
+        recordedBy: msg.actorId, createdBy: msg.actorId, updatedBy: msg.actorId,
+      });
+      await audit(tx, msg, "confirmation_recommend", "employee", p.id, { recommendation: p.recommendation, remark: p.remark ?? null });
+    });
   });
 
   // GAP-HR-CONFIRMATION-05: probation-extension record. previousEndDate is

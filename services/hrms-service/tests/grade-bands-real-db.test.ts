@@ -17,6 +17,15 @@ import { registerPolicySettingsConsumers } from "../src/modules/policy-settings/
 import { registerGradeBandConsumers } from "../src/modules/grade-bands/consumer.js";
 import { registerF3_employee_Consumers } from "../src/modules/employee/f3-consumer.js";
 
+// Back-dated WFH is refused for an employee (GAP-HR-WFH-06), so the dates below must lie in the future whenever
+// this suite runs. The literals keep their weekday layout and are shifted by whole weeks to land >= 2 weeks ahead.
+const FUTURE_SHIFT_DAYS = (() => {
+  const anchor = Date.UTC(2026, 9, 1); // the earliest literal below
+  return Math.max(0, Math.ceil((Date.now() + 14 * 86_400_000 - anchor) / (7 * 86_400_000))) * 7;
+})();
+const futureDay = (iso: string): string => new Date(Date.parse(`${iso}T00:00:00Z`) + FUTURE_SHIFT_DAYS * 86_400_000).toISOString().slice(0, 10);
+
+
 registerPolicySettingsConsumers(queue);
 registerGradeBandConsumers(queue);
 registerF3_employee_Consumers(queue);
@@ -129,7 +138,7 @@ describe("government tenant (pay_scale left at its default 'cpc7') behaves exact
     expect(Object.keys(e)).not.toContain("gradeBand");
     const el = await app.inject({ method: "GET", url: `/v1/hrms/wfh-eligibility?employeeId=${emp}`, headers: as(GOV, ["employee"], emp) });
     expect(el.json()).toMatchObject({ payLevel: 12, maxPayLevel: 9, gazetted: true, payScale: "cpc7", bandRank: null });
-    const req = await app.inject({ method: "POST", url: "/v1/hrms/wfh-requests", headers: as(GOV, ["employee"], emp), payload: { employeeId: emp, fromDate: "2026-11-02", toDate: "2026-11-02" } });
+    const req = await app.inject({ method: "POST", url: "/v1/hrms/wfh-requests", headers: as(GOV, ["employee"], emp), payload: { employeeId: emp, fromDate: futureDay("2026-11-02"), toDate: futureDay("2026-11-02") } });
     expect(req.statusCode).toBe(422);
     expect(req.json()).toMatchObject({ code: "GAZETTED_NOT_ELIGIBLE", message: "work from home is not available at pay Level 12 (eligible up to Level 9)" });
   });
@@ -326,13 +335,13 @@ describe("rank consumers on a band tenant", () => {
 
   it("WFH: a tenant-chosen maxBandRank excludes by band rank and never by the CPC level", async () => {
     await putPolicy(BAND, "wfh_eligibility", { enforceGazettedExclusion: true, maxPayLevel: 9, maxBandRank: 30 });
-    const m2 = await app.inject({ method: "POST", url: "/v1/hrms/wfh-requests", headers: as(BAND, ["employee"], eM2), payload: { employeeId: eM2, fromDate: "2026-11-02", toDate: "2026-11-02" } });
+    const m2 = await app.inject({ method: "POST", url: "/v1/hrms/wfh-requests", headers: as(BAND, ["employee"], eM2), payload: { employeeId: eM2, fromDate: futureDay("2026-11-02"), toDate: futureDay("2026-11-02") } });
     expect(m2.statusCode).toBe(422);
     expect(m2.json().code).toBe("GAZETTED_NOT_ELIGIBLE");
     expect(m2.json().message).toContain("M2");
-    expect((await app.inject({ method: "POST", url: "/v1/hrms/wfh-requests", headers: as(BAND, ["employee"], eC2), payload: { employeeId: eC2, fromDate: "2026-11-02", toDate: "2026-11-02" } })).statusCode).toBe(202);
+    expect((await app.inject({ method: "POST", url: "/v1/hrms/wfh-requests", headers: as(BAND, ["employee"], eC2), payload: { employeeId: eC2, fromDate: futureDay("2026-11-02"), toDate: futureDay("2026-11-02") } })).statusCode).toBe(202);
     // Level 12 on a band tenant: unclassified by band, so allowed (the CPC level is not consulted)
-    expect((await app.inject({ method: "POST", url: "/v1/hrms/wfh-requests", headers: as(BAND, ["employee"], eNone), payload: { employeeId: eNone, fromDate: "2026-11-02", toDate: "2026-11-02" } })).statusCode).toBe(202);
+    expect((await app.inject({ method: "POST", url: "/v1/hrms/wfh-requests", headers: as(BAND, ["employee"], eNone), payload: { employeeId: eNone, fromDate: futureDay("2026-11-02"), toDate: futureDay("2026-11-02") } })).statusCode).toBe(202);
     const el = await app.inject({ method: "GET", url: `/v1/hrms/wfh-eligibility?employeeId=${eM2}`, headers: as(BAND, ["employee"], eM2) });
     expect(el.json()).toMatchObject({ gazetted: true, maxBandRank: 30, bandRank: 40 });
   });

@@ -105,3 +105,23 @@ export type RejectLeaveBody = z.infer<typeof rejectLeaveBody>;
 export const leaveQueryParams = z.object({
   empId: z.string().uuid().optional(),
 });
+
+/**
+ * GAP-HR-LEAVE-APPLY-04 (owner decision, 26 Nov 2026): the server enforces the same 20-character
+ * minimum reason the apply form always required client-side. A request that was queued OFFLINE
+ * before this rule shipped is grandfathered: the web replay stamps it with `x-queued-at` (when the
+ * user made it) and a stamp earlier than LEAVE_REASON_ENFORCED_FROM is let through unchanged.
+ * Anything queued after the cut-over -- or no stamp at all -- must comply.
+ */
+export const LEAVE_REASON_MIN_LENGTH = 20;
+export const LEAVE_REASON_ENFORCED_FROM = "2026-11-27T00:00:00.000Z";
+
+export function leaveReasonRefusal(reason: string | undefined, queuedAtHeader: string | string[] | undefined): string | null {
+  if ((reason ?? "").trim().length >= LEAVE_REASON_MIN_LENGTH) return null;
+  const raw = Array.isArray(queuedAtHeader) ? queuedAtHeader[0] : queuedAtHeader;
+  if (raw) {
+    const queuedAt = Date.parse(raw);
+    if (Number.isFinite(queuedAt) && queuedAt < Date.parse(LEAVE_REASON_ENFORCED_FROM)) return null;
+  }
+  return `reason must be at least ${LEAVE_REASON_MIN_LENGTH} characters`;
+}

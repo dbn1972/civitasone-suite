@@ -39,10 +39,12 @@ export type ConfirmationRow = {
   probationEnd: string;
   dueDate: string;
   managerRecommendation?: "recommended" | "not_recommended" | "pending" | null;
+  /** The reporting manager's remark on the current recommendation (GAP-HR-CONFIRMATION-01). */
+  managerRecommendationRemark?: string | null;
   status: string;
 } & Record<string, unknown>;
 
-type LocalAction = "default" | "confirmed" | "extended";
+type LocalAction = "default" | "confirmed" | "extended" | "recommended";
 
 function dueMeta(days: number): { label: string; color: string } {
   if (days < 0)   return { label: `${Math.abs(days)}d overdue`, color: "var(--bad)" };
@@ -58,15 +60,13 @@ const REC_CONFIG: Record<string, { label: string; badge: string; color: string; 
   pending:         { label: "Awaiting Manager", badge: "⏳", color: "var(--warn)", bg: "var(--warnbg)" },
 };
 
-// GAP-HR-CONFIRMATION-01 (interim, pending an owner decision): hrms-service has
-// no manager-recommendation store or endpoint yet (who records it, and whether
-// Confirm is blocked without it, is an undecided policy -- see
-// docs/gap-ledger/hr.md), so GET /v1/hrms/confirmations never sends
-// `managerRecommendation`. The card used to default that absence to "pending",
-// i.e. it told every HR user a manager was "Awaiting" a recommendation nobody
-// has any way to give. An ABSENT value is now shown as what it is -- no
-// recommendation on record -- and only an explicit "pending" from the API reads
-// "Awaiting Manager". Confirm/Extend are unchanged (not gated on it).
+// GAP-HR-CONFIRMATION-01 (owner decision, 26 Nov 2026): the REPORTING MANAGER records the
+// recommendation (the "Recommend" action below, POST .../confirmation-recommendation); HR confirms, and
+// when no recommendation is on record -- or it is "not recommended" -- must give an override remark
+// (>= 10 characters, required by the server too). Nothing is hard-blocked. The API sends "pending" until
+// a manager has recorded one; an older API that sends nothing is shown as "no recommendation on record".
+/** Minimum characters of an HR override remark / a "not recommended" reason (mirrors the server). */
+const MIN_OVERRIDE = 10;
 const REC_NOT_RECORDED = { badge: "—", color: "var(--mut)", bg: "var(--bg)" };
 
 // GAP-HR-CONFIRMATION-02: today's date in IST, for the confirmation-date
@@ -76,7 +76,7 @@ function todayIsoIST(): string {
   return new Date(Date.now() + 5.5 * 60 * 60 * 1000).toISOString().slice(0, 10);
 }
 
-function ProbationCard({ row }: { row: ConfirmationRow }) {
+function ProbationCard({ row, canDecide, canRecommend }: { row: ConfirmationRow; canDecide: boolean; canRecommend: boolean }) {
   const [action, setAction] = useState<LocalAction>("default");
   const router = useRouter();
   const tv = useTranslations("hrFormErrors");
@@ -94,6 +94,9 @@ function ProbationCard({ row }: { row: ConfirmationRow }) {
   // (default today IST) instead of an implicit "now". Remark stays optional,
   // carried through ConfirmDialog's own built-in reason field below.
   const [confirmDate, setConfirmDate] = useState(todayIsoIST());
+  // GAP-HR-CONFIRMATION-01: confirming without a positive manager recommendation needs an override remark.
+  const needsOverride = row.managerRecommendation !== "recommended";
+  const [overrideRemark, setOverrideRemark] = useState("");
   const [orderRef, setOrderRef] = useState("");
   // Inline field errors only appear after the first confirm/extend attempt.
   const [confirmTried, setConfirmTried] = useState(false);
@@ -109,6 +112,7 @@ function ProbationCard({ row }: { row: ConfirmationRow }) {
       if (!orderRef.trim()) throw new Error("Order reference is required.");
       const schemaErrs = translateFormErrors(validateConfirm({ confirmationDate: confirmDate, orderRef }), tv);
       if (schemaErrs.orderRef || schemaErrs.confirmationDate) throw new Error((schemaErrs.orderRef ?? schemaErrs.confirmationDate) as string);
+      if (needsOverride && overrideRemark.trim().length < MIN_OVERRIDE) throw new Error(t("overrideRemarkRequired", { min: MIN_OVERRIDE }));
       const res = await fetch(`/api/proxy/v1/hrms/employees/${row.id}/confirm`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
@@ -116,6 +120,7 @@ function ProbationCard({ row }: { row: ConfirmationRow }) {
           confirmationDate: confirmDate,
           orderRef: orderRef.trim(),
           remark: remark?.trim() || undefined,
+          overrideRemark: needsOverride ? overrideRemark.trim() : undefined,
         }),
       });
       if (!res.ok) {
@@ -175,6 +180,33 @@ function ProbationCard({ row }: { row: ConfirmationRow }) {
     },
   });
 
+  // GAP-HR-CONFIRMATION-01: the reporting manager's recommendation. 202 + consumer; the list is re-fetched.
+  const [recChoice, setRecChoice] = useState<"recommended" | "not_recommended">("recommended");
+  const recFormError = useFormError("confirmation recommendation");
+  const {
+    open: recOpen, busy: recBusy, error: recError,
+    trigger: triggerRec, cancel: cancelRec, confirm: doRec,
+  } = useConfirmAction({
+    onConfirm: async (remark) => {
+      if (recChoice === "not_recommended" && (remark?.trim().length ?? 0) < MIN_OVERRIDE) {
+        throw new Error(t("recNotRecommendedNeedsReason", { min: MIN_OVERRIDE }));
+      }
+      const res = await fetch(`/api/proxy/v1/hrms/employees/${row.id}/confirmation-recommendation`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ recommendation: recChoice, remark: remark?.trim() || undefined }),
+      });
+      if (!res.ok) {
+        const resolved = await recFormError.fromResponse(res, "save");
+        throw UserFacingError.from(resolved);
+      }
+    },
+    onSuccess: () => {
+      setAction("recommended");
+      router.refresh();
+    },
+  });
+
   // SEC CRITICAL (status-integrity fix): this used to be a deny-list
   // (row.status !== "confirmed" && row.status !== "extended") that let the
   // Confirm button show up for a terminated/separated/retired employee too
@@ -186,9 +218,9 @@ function ProbationCard({ row }: { row: ConfirmationRow }) {
   // safer than enumerating every status that should be excluded, and it
   // already covers "extended" too (not a real backend status — see file
   // header comment — so it could never equal row.status anyway).
-  const isActionable =
-    action === "default" &&
-    row.status === "probation";
+  const isProbationer = row.status === "probation";
+  const isActionable = action === "default" && isProbationer && canDecide;
+  const canRecommendNow = isProbationer && canRecommend && action !== "confirmed";
 
   return (
     <article
@@ -225,12 +257,12 @@ function ProbationCard({ row }: { row: ConfirmationRow }) {
             role="status"
             style={{
               padding: "3px 12px", borderRadius: 20, fontSize: "0.75rem", fontWeight: 600,
-              background: action === "confirmed" ? "var(--goodbg)" : "var(--warnbg)",
-              color:      action === "confirmed" ? "var(--good)" : "var(--warn)",
+              background: action === "extended" ? "var(--warnbg)" : "var(--goodbg)",
+              color:      action === "extended" ? "var(--warn)" : "var(--good)",
             }}
           >
-            <span aria-hidden="true">{action === "confirmed" ? "✅" : "🔄"}</span>{" "}
-            {action === "confirmed" ? "Confirmation submitted" : "Extension submitted"}
+            <span aria-hidden="true">{action === "extended" ? "🔄" : "✅"}</span>{" "}
+            {action === "confirmed" ? "Confirmation submitted" : action === "recommended" ? t("recSubmitted") : "Extension submitted"}
           </span>
         ) : (
           <StatusPill status={row.status} />
@@ -295,6 +327,18 @@ function ProbationCard({ row }: { row: ConfirmationRow }) {
           <span>{rec.label}</span>
         </div>
 
+        {row.managerRecommendationRemark && (
+          <p style={{ flexBasis: "100%", margin: 0, fontSize: "0.75rem", color: "var(--ink2)" }}>
+            {t("recRemarkPrefix")} {row.managerRecommendationRemark}
+          </p>
+        )}
+
+        {canRecommendNow && (
+          <Button variant="secondary" size="sm" onClick={() => triggerRec()} aria-label={t("recommendAria", { name: row.employee })}>
+            {t("recommendButton")}
+          </Button>
+        )}
+
         {isActionable && (
           <div style={{ display: "flex", gap: 8 }}>
             <Button
@@ -342,6 +386,15 @@ function ProbationCard({ row }: { row: ConfirmationRow }) {
                   placeholder="e.g. CONFIRM/2026/014"
                 />
               </Field>
+              {needsOverride && (
+                <Field
+                  label={t("overrideRemarkLabel")}
+                  required
+                  hint={row.managerRecommendation === "not_recommended" ? t("overrideNotRecommended") : t("overrideNoRecommendation")}
+                >
+                  <Input value={overrideRemark} onChange={(e) => setOverrideRemark(e.target.value)} maxLength={500} />
+                </Field>
+              )}
             </div>
           }
           confirmLabel="Confirm service"
@@ -390,6 +443,31 @@ function ProbationCard({ row }: { row: ConfirmationRow }) {
           onConfirm={(reason) => void doExtend(reason)}
           onCancel={cancelExtend}
         />
+
+        <ConfirmDialog
+          open={recOpen}
+          title={t("recommendTitle", { name: row.employee })}
+          description={
+            <div style={{ display: "grid", gap: 10 }}>
+              <p style={{ margin: 0 }}>{t("recommendDescription")}</p>
+              <Field label={t("recChoiceLabel")} required>
+                <Select value={recChoice} onChange={(e) => setRecChoice(e.target.value as "recommended" | "not_recommended")}>
+                  <option value="recommended">{t("recOptionRecommended")}</option>
+                  <option value="not_recommended">{t("recOptionNotRecommended")}</option>
+                </Select>
+              </Field>
+            </div>
+          }
+          confirmLabel={t("recConfirmLabel")}
+          requireReason
+          reasonLabel={t("recRemarkLabel")}
+          minReasonLength={0}
+          maxReasonLength={500}
+          busy={recBusy}
+          errorMessage={recError}
+          onConfirm={(remark) => void doRec(remark)}
+          onCancel={cancelRec}
+        />
       </div>
     </article>
   );
@@ -399,6 +477,10 @@ type Bucket = "all" | "overdue" | "due_soon" | "timely" | "not_set";
 
 interface ListProps {
   rows: ConfirmationRow[];
+  /** HR staff: may Confirm / Extend. Defaults to true (the previous behaviour). */
+  canDecide?: boolean;
+  /** The reporting manager: may record a recommendation. Defaults to false. */
+  canRecommend?: boolean;
   /** GAP-HR-CONFIRMATION-07: the API caps at 500 rows; surface truncation honestly instead of silently dropping the rest. */
   hasMore?: boolean;
 }
@@ -407,7 +489,7 @@ interface ListProps {
 // overdue ones need to float to the top rather than relying on API order
 // (joining date), which is only a proxy for due date and is wrong whenever
 // confirmationDate overrides it.
-export function ProbationConfirmationList({ rows, hasMore }: ListProps) {
+export function ProbationConfirmationList({ rows, hasMore, canDecide = true, canRecommend = false }: ListProps) {
   const t = useTranslations("confirmation");
   const [search, setSearch] = useState("");
   const [bucket, setBucket] = useState<Bucket>("all");
@@ -498,7 +580,7 @@ export function ProbationConfirmationList({ rows, hasMore }: ListProps) {
           }}
         >
           {filtered.map((row) => (
-            <ProbationCard key={row.id} row={row} />
+            <ProbationCard key={row.id} row={row} canDecide={canDecide} canRecommend={canRecommend} />
           ))}
         </div>
       )}

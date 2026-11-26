@@ -246,6 +246,26 @@ export type ProbationExtensionRow = typeof hrmsProbationExtensions.$inferSelect;
 export type ProbationExtensionInsert = typeof hrmsProbationExtensions.$inferInsert;
 
 /**
+ * GAP-HR-CONFIRMATION-01 (migration 0272): the reporting manager's probation-confirmation
+ * recommendation. A history -- the CURRENT recommendation is the row with the latest created_at.
+ */
+export const hrmsConfirmationRecommendations = employeeSchema.table("hrms_confirmation_recommendations", {
+  id:             uuid("id").primaryKey().defaultRandom(),
+  tenantId:       uuid("tenant_id").notNull(),
+  employeeId:     uuid("employee_id").notNull(),
+  recommendation: varchar("recommendation", { length: 20 }).notNull(),
+  remark:         text("remark"),
+  recordedBy:     uuid("recorded_by").notNull(),
+  createdAt:      timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt:      timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  createdBy:      uuid("created_by").notNull(),
+  updatedBy:      uuid("updated_by").notNull(),
+  version:        integer("version").notNull().default(1),
+});
+export type ConfirmationRecommendationRow = typeof hrmsConfirmationRecommendations.$inferSelect;
+export type ConfirmationRecommendationInsert = typeof hrmsConfirmationRecommendations.$inferInsert;
+
+/**
  * UAT b18 D1 (migration 0261): maker-checker, effective-dated pension scheme
  * changes. See pension-scheme-routes.ts.
  */
@@ -281,4 +301,4 @@ export const hrmsPensionSchemeChanges = employeeSchema.table("hrms_pension_schem
 });
 export type PensionSchemeChangeRow = typeof hrmsPensionSchemeChanges.$inferSelect;
 
-export const schema = { hrmsDepartments, hrmsDesignations, hrmsEmployees, hrmsEmployeeDocs, hrmsEmployeeNominees, hrmsEmployeeAddresses, hrmsProbationExtensions, hrmsPensionSchemeChanges };
+export const schema = { hrmsDepartments, hrmsDesignations, hrmsEmployees, hrmsEmployeeDocs, hrmsEmployeeNominees, hrmsEmployeeAddresses, hrmsProbationExtensions, hrmsConfirmationRecommendations, hrmsPensionSchemeChanges };

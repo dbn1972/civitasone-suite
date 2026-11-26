@@ -7,7 +7,7 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ refresh: vi.fn() }),
 }));
 
-import { LeaveApprovalsPanel } from "./LeaveApprovalsPanel";
+import { LeaveApprovalsPanel, BULK_APPROVE_CAP } from "./LeaveApprovalsPanel";
 
 const TASK = { id: "task-1", instanceId: "inst-1", name: "Leave approval", status: "pending", refType: "leave_app", refId: "leave-1" };
 const LEAVE = { id: "leave-1", employeeName: "Asha Verma", leaveType: "Casual Leave", fromDate: "2026-09-01", toDate: "2026-09-02", days: 2, reason: "Family function" };
@@ -539,5 +539,95 @@ describe("LeaveApprovalsPanel — no enrichment refetch after a decision (GAP-HR
 
     expect(leaveUrls).toHaveLength(1);
     expect(screen.getByText("Unknown employee")).toBeInTheDocument();
+  });
+});
+
+
+// GAP-HR-LEAVE-APPROVALS-05 (owner decision, 26 Nov 2026): approve-only bulk, capped at 10, every decision its own
+// audited POST /workflow/tasks/:id/complete.
+describe("LeaveApprovalsPanel — bulk approve (GAP-HR-LEAVE-APPROVALS-05)", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  const N = 12;
+  const names = ["Asha Verma", "Bharat Nair", "Chitra Rao", "Dev Malhotra", "Esha Kapoor", "Farhan Sheikh", "Gita Menon", "Harish Patil", "Indu Bhat", "Jatin Sethi", "Kavita Joshi", "Lakshman Iyer"];
+  const tasks = Array.from({ length: N }, (_, i) => ({ id: `task-${i}`, instanceId: `inst-${i}`, name: "Leave approval", status: "pending", refType: "leave_app", refId: `leave-${i}` }));
+  const leaves = Array.from({ length: N }, (_, i) => ({ id: `leave-${i}`, employeeName: names[i]!, leaveType: "Casual Leave", fromDate: "2026-12-01", toDate: "2026-12-02", days: 2, reason: "Family function in the village" }));
+
+  function bulkFetch(failTaskId?: string) {
+    const posts: { url: string; body: unknown }[] = [];
+    const fn = vi.fn(async (url: string, init?: RequestInit) => {
+      if (url.includes("/workflow/tasks?")) return { ok: true, status: 200, json: async () => ({ data: tasks }) } as Response;
+      if (url.includes("/hrms/leave-requests")) return { ok: true, status: 200, json: async () => ({ data: leaves }) } as Response;
+      if (url.endsWith("/complete")) {
+        posts.push({ url, body: init?.body ? JSON.parse(String(init.body)) : undefined });
+        if (failTaskId && url.includes(failTaskId)) return { ok: false, status: 409, text: async () => JSON.stringify({ code: "TASK_NOT_PENDING" }) } as Response;
+        return { ok: true, status: 202, text: async () => "{}" } as Response;
+      }
+      return { ok: false, status: 404, text: async () => "{}" } as Response;
+    });
+    return { fn, posts };
+  }
+
+  it("the cap is 10", () => { expect(BULK_APPROVE_CAP).toBe(10); });
+
+  it("ticking rows shows an approve-only bulk bar; no bulk reject exists", async () => {
+    const { fn } = bulkFetch();
+    vi.stubGlobal("fetch", fn);
+    renderPanel();
+    fireEvent.click(await screen.findByRole("checkbox", { name: "Select Asha Verma's request for bulk approval" }));
+    expect(screen.getByRole("region", { name: "Bulk approval" })).toHaveTextContent("1 selected (up to 10 per action)");
+    expect(screen.getByRole("button", { name: "Approve 1 selected" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /reject .*selected/i })).not.toBeInTheDocument();
+    expect(screen.getByText(/approve-only/i)).toBeInTheDocument();
+  });
+
+  it("at most 10 rows can be selected: the rest are disabled, and unticking frees a slot", async () => {
+    const { fn } = bulkFetch();
+    vi.stubGlobal("fetch", fn);
+    renderPanel();
+    await screen.findByRole("checkbox", { name: "Select Asha Verma's request for bulk approval" });
+    // the table shows 15 rows per page, so all 12 are on page 1
+    for (let i = 0; i < 10; i++) fireEvent.click(screen.getByRole("checkbox", { name: `Select ${names[i]}'s request for bulk approval` }));
+    expect(screen.getByRole("region", { name: "Bulk approval" })).toHaveTextContent("10 selected");
+    const eleventh = screen.getByRole("checkbox", { name: `Select ${names[10]}'s request for bulk approval` });
+    expect(eleventh).toBeDisabled();
+    fireEvent.click(screen.getByRole("checkbox", { name: `Select ${names[0]}'s request for bulk approval` }));
+    expect(eleventh).toBeEnabled();
+  });
+
+  it("approving selected rows issues one separate POST /complete per row, each approve-only, carrying the shared remark", async () => {
+    const { fn, posts } = bulkFetch();
+    vi.stubGlobal("fetch", fn);
+    renderPanel();
+    for (const n of [names[0]!, names[1]!, names[2]!]) fireEvent.click(await screen.findByRole("checkbox", { name: `Select ${n}'s request for bulk approval` }));
+    fireEvent.click(screen.getByRole("button", { name: "Approve 3 selected" }));
+    await screen.findByRole("alertdialog");
+    fireEvent.change(screen.getByLabelText(/approval remarks/i), { target: { value: "Cleared with the department head" } });
+    fireEvent.click(screen.getByRole("button", { name: "Approve 3" }));
+
+    await waitFor(() => expect(posts).toHaveLength(3));
+    expect(posts.map((p) => p.url).sort()).toEqual([
+      "/api/proxy/v1/workflow/tasks/task-0/complete", "/api/proxy/v1/workflow/tasks/task-1/complete", "/api/proxy/v1/workflow/tasks/task-2/complete",
+    ]);
+    for (const p of posts) expect(p.body).toEqual({ decision: "approve", reason: "Cleared with the department head" });
+    expect(await screen.findByText(/3 requests approved, none failed/)).toBeInTheDocument();
+    // the approved rows leave the selection, so the bulk bar closes
+    expect(screen.queryByRole("region", { name: "Bulk approval" })).not.toBeInTheDocument();
+  });
+
+  it("a row that cannot be approved is reported by name, stays in the list and stays selected; the others still go through", async () => {
+    const { fn, posts } = bulkFetch("task-1");
+    vi.stubGlobal("fetch", fn);
+    renderPanel();
+    for (const n of [names[0]!, names[1]!]) fireEvent.click(await screen.findByRole("checkbox", { name: `Select ${n}'s request for bulk approval` }));
+    fireEvent.click(screen.getByRole("button", { name: "Approve 2 selected" }));
+    await screen.findByRole("alertdialog");
+    fireEvent.click(screen.getByRole("button", { name: "Approve 2" }));
+    await waitFor(() => expect(posts).toHaveLength(2));
+    const summary = await screen.findByText(/1 request approved, 1 failed/);
+    expect(summary).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Bulk approval" })).toHaveTextContent("1 selected");
+    expect(screen.getByRole("checkbox", { name: "Select Bharat Nair's request for bulk approval" })).toBeChecked();
+    expect(screen.getByText(/^Bharat Nair: /)).toBeInTheDocument();
   });
 });

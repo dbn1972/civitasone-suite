@@ -5,10 +5,9 @@
  *  - GAP-HR-DASHBOARD-07: attendanceTodayPct must be `null` (an honest
  *    "we don't know yet"), never a fabricated `0%`, when the tenant has zero
  *    hrms_attendance rows for today at all (feed not synced). When rows DO
- *    exist, the pre-existing present/headcount formula is deliberately left
- *    unchanged (no prior test suite existed to confirm a different
- *    denominator — e.g. excluding on_leave — was actually intended, so only
- *    the null-vs-zero bug is fixed here).
+ *    exist, the owner-approved rule applies (dashboard/present-today.ts):
+ *    present / (headcount - on_leave), half_day 0.5, WFH present, holiday /
+ *    weekly-off excluded from the denominator.
  *  - GAP-HR-DASHBOARD-06: totalDepartments must be a real, unfiltered count
  *    of this tenant's hrms_departments rows — distinct from
  *    departmentBreakdown, which only lists departments that have at least
@@ -20,6 +19,7 @@ import { signToken } from "@civitasone/auth";
 import { withRawTenantGuc } from "@civitasone/db";
 import { buildApp } from "../app.js";
 import { sqlClient } from "../shared/db.js";
+import { isWeekend } from "../modules/leave/rules-engine.js";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const SEED_ACTOR = "facade00-0d45-4000-8000-0000000000ff";
@@ -167,9 +167,10 @@ describe("GET /v1/hrms/dashboard — GAP-HR-DASHBOARD-07 (attendanceTodayPct nul
     const { status, body } = await getDashboard(HR_TOKEN_B);
     expect(status).toBe(200);
     expect(body.headcount).toBe(4);
-    // 2 present out of 4 headcount (unchanged pre-existing formula -- see
-    // this file's header comment on why the denominator was not changed).
-    expect(body.attendanceTodayPct).toBe(50);
+    // Owner rule: the on_leave employee (B3) leaves the denominator, so 2
+    // present / (4 headcount - 1 on_leave) = 67%. On a weekend the employee
+    // with no row (B4) is a non-working-day absentee and leaves too -> 2/2.
+    expect(body.attendanceTodayPct).toBe(isWeekend(TODAY) ? 100 : 67);
   });
 });
 

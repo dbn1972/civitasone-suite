@@ -265,7 +265,7 @@ describe("F. Leave Application with Reporting Officer", () => {
     const r = await app.inject({
       method: "POST", url: "/v1/hrms/leave-applications",
       headers: { ...AUTH, ...CT },
-      payload: { employeeId: EMP1, leaveTypeId: leaveTypeIds.clLeaveTypeId, allocId: "eeeeeeee-0001-0000-0000-000000000009", fromDate: "2026-10-01", toDate: "2026-10-03", daysApplied: 3, reason: "Personal work" },
+      payload: { employeeId: EMP1, leaveTypeId: leaveTypeIds.clLeaveTypeId, allocId: "eeeeeeee-0001-0000-0000-000000000009", fromDate: "2026-10-01", toDate: "2026-10-03", daysApplied: 3, reason: "Personal work at the district office" },
     });
     expect(r.statusCode).toBe(202);
     expect(r.json().id).toBeDefined();

@@ -136,7 +136,9 @@ describe("PATCH /v1/hrms/employees/:id/confirm — GAP-HR-CONFIRMATION-02", () =
     const r = await app.inject({
       method: "PATCH", url: `/v1/hrms/employees/${id}/confirm`,
       headers: auth(),
-      payload: { confirmationDate: "2026-01-15", orderRef: "CONFIRM/2026/902", remark: "Satisfactory service record" },
+      payload: { confirmationDate: "2026-01-15", orderRef: "CONFIRM/2026/902", remark: "Satisfactory service record",
+        // GAP-HR-CONFIRMATION-01: no reporting-manager recommendation is on record for this employee.
+        overrideRemark: "Reporting manager unavailable; HOD confirms satisfactory service" },
     });
     expect(r.statusCode).toBe(202);
     await drain();
@@ -165,7 +167,7 @@ describe("PATCH /v1/hrms/employees/:id/probation-extension — GAP-HR-CONFIRMATI
     const id = await seedEmployee("Already Confirmed Case", "2024-01-01");
     await app.inject({
       method: "PATCH", url: `/v1/hrms/employees/${id}/confirm`,
-      headers: auth(), payload: { confirmationDate: "2026-01-15", orderRef: "CONFIRM/2026/903" },
+      headers: auth(), payload: { confirmationDate: "2026-01-15", orderRef: "CONFIRM/2026/903", overrideRemark: "No manager recommendation on record; HOD approves" },
     });
     await drain();
 

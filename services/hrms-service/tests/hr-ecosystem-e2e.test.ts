@@ -226,7 +226,7 @@ describe("4. Leave Management", () => {
 
   it("4.3 Apply for casual leave (CQRS)", async () => {
     const r = await app.inject({ method: "POST", url: "/v1/hrms/leave-applications", headers: { ...AUTH, ...CT },
-      payload: { employeeId: EMP1, leaveTypeId: leaveTypeIds.clLeaveTypeId, allocId: "eeeeeeee-0001-0000-0000-000000000009", fromDate: "2026-10-15", toDate: "2026-10-16", daysApplied: 2, reason: "Personal" } });
+      payload: { employeeId: EMP1, leaveTypeId: leaveTypeIds.clLeaveTypeId, allocId: "eeeeeeee-0001-0000-0000-000000000009", fromDate: "2026-10-15", toDate: "2026-10-16", daysApplied: 2, reason: "Personal work at the district office" } });
     expect(r.statusCode).toBe(202);
   });
 

@@ -44,6 +44,15 @@ import { hrmsWfhRequests, hrmsShiftChangeRequests } from "../src/modules/attenda
 import { registerF3_attendance_Consumers } from "../src/modules/attendance/f3-consumer.js";
 import { COMMANDS } from "../src/topics.js";
 
+// Back-dated WFH is refused for an employee (GAP-HR-WFH-06), so the dates below must lie in the future whenever
+// this suite runs. The literals keep their weekday layout and are shifted by whole weeks to land >= 2 weeks ahead.
+const FUTURE_SHIFT_DAYS = (() => {
+  const anchor = Date.UTC(2026, 9, 1); // the earliest literal below
+  return Math.max(0, Math.ceil((Date.now() + 14 * 86_400_000 - anchor) / (7 * 86_400_000))) * 7;
+})();
+const d = (iso: string): string => new Date(Date.parse(`${iso}T00:00:00Z`) + FUTURE_SHIFT_DAYS * 86_400_000).toISOString().slice(0, 10);
+
+
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 
 // Only this module's F3 consumer is registered (mirrors geo-attendance-e2e.test.ts) --
@@ -148,7 +157,7 @@ describe("WFH requests — end-to-end (real DB)", () => {
       const create = await app.inject({
         method: "POST", url: "/v1/hrms/wfh-requests",
         headers: { ...authHeader(requesterSub, tenantId, ["employee"]), "content-type": "application/json" },
-        payload: { employeeId: requesterId, fromDate: "2026-10-05", toDate: "2026-10-06", reason: "Family care" },
+        payload: { employeeId: requesterId, fromDate: d("2026-10-05"), toDate: d("2026-10-06"), reason: "Family care" },
       });
       expect(create.statusCode).toBe(202);
       const id = create.json().id as string;
@@ -157,8 +166,8 @@ describe("WFH requests — end-to-end (real DB)", () => {
       const row = await getWfhRequest(tenantId, id);
       expect(row?.status).toBe("pending");
       expect(row?.employeeId).toBe(requesterId);
-      expect(row?.fromDate).toBe("2026-10-05");
-      expect(row?.toDate).toBe("2026-10-06");
+      expect(row?.fromDate).toBe(d("2026-10-05"));
+      expect(row?.toDate).toBe(d("2026-10-06"));
     } finally {
       await cleanup(tenantId, [requesterId, managerId]);
     }
@@ -170,7 +179,7 @@ describe("WFH requests — end-to-end (real DB)", () => {
       const create = await app.inject({
         method: "POST", url: "/v1/hrms/wfh-requests",
         headers: { ...authHeader(requesterSub, tenantId, ["employee"]), "content-type": "application/json" },
-        payload: { employeeId: requesterId, fromDate: "2026-10-05", toDate: "2026-10-06" },
+        payload: { employeeId: requesterId, fromDate: d("2026-10-05"), toDate: d("2026-10-06") },
       });
       const id = create.json().id as string;
       await drainF3();
@@ -194,7 +203,7 @@ describe("WFH requests — end-to-end (real DB)", () => {
       const create = await app.inject({
         method: "POST", url: "/v1/hrms/wfh-requests",
         headers: { ...authHeader(requesterSub, tenantId, ["employee"]), "content-type": "application/json" },
-        payload: { employeeId: requesterId, fromDate: "2026-10-05", toDate: "2026-10-06" },
+        payload: { employeeId: requesterId, fromDate: d("2026-10-05"), toDate: d("2026-10-06") },
       });
       const id = create.json().id as string;
       await drainF3();
@@ -226,7 +235,7 @@ describe("WFH requests — end-to-end (real DB)", () => {
       const create = await app.inject({
         method: "POST", url: "/v1/hrms/wfh-requests",
         headers: { ...authHeader(requesterSub, tenantId, ["employee"]), "content-type": "application/json" },
-        payload: { employeeId: requesterId, fromDate: "2026-10-05", toDate: "2026-10-06" },
+        payload: { employeeId: requesterId, fromDate: d("2026-10-05"), toDate: d("2026-10-06") },
       });
       expect(create.statusCode).toBe(202);
       const id = create.json().id as string;
@@ -254,7 +263,7 @@ describe("WFH requests — end-to-end (real DB)", () => {
       const create = await app.inject({
         method: "POST", url: "/v1/hrms/wfh-requests",
         headers: { ...authHeader(requesterSub, tenantId, ["employee"]), "content-type": "application/json" },
-        payload: { employeeId: requesterId, fromDate: "2026-10-05", toDate: "2026-10-06" },
+        payload: { employeeId: requesterId, fromDate: d("2026-10-05"), toDate: d("2026-10-06") },
       });
       const id = create.json().id as string;
       await drainF3();
@@ -281,7 +290,7 @@ describe("WFH requests — end-to-end (real DB)", () => {
       const create = await app.inject({
         method: "POST", url: "/v1/hrms/wfh-requests",
         headers: { ...authHeader(requesterSub, tenantId, ["employee"]), "content-type": "application/json" },
-        payload: { employeeId: requesterId, fromDate: "2026-10-05", toDate: "2026-10-06" },
+        payload: { employeeId: requesterId, fromDate: d("2026-10-05"), toDate: d("2026-10-06") },
       });
       const id = create.json().id as string;
       await drainF3();
@@ -313,7 +322,7 @@ describe("WFH requests — end-to-end (real DB)", () => {
       await runWithTenant(tenantId, () => db.transaction(async (tx) => {
         await tx.insert(hrmsWfhRequests).values({
           id: reqId, tenantId, employeeId: requesterId,
-          fromDate: "2026-10-05", toDate: "2026-10-06",
+          fromDate: d("2026-10-05"), toDate: d("2026-10-06"),
           status: "approved", approvedBy: managerId, approvedAt: new Date(),
           createdBy: requesterId, updatedBy: requesterId,
         });
@@ -342,7 +351,7 @@ describe("WFH requests — end-to-end (real DB)", () => {
       const create = await app.inject({
         method: "POST", url: "/v1/hrms/wfh-requests",
         headers: { ...authHeader(requesterSub, tenantId, ["employee"]), "content-type": "application/json" },
-        payload: { employeeId: requesterId, fromDate: "2026-10-05", toDate: "2026-10-06" },
+        payload: { employeeId: requesterId, fromDate: d("2026-10-05"), toDate: d("2026-10-06") },
       });
       expect(create.statusCode).toBe(202);
       await drainF3();
@@ -387,7 +396,7 @@ describe("Shift-change requests — end-to-end (real DB)", () => {
         headers: { ...authHeader(requesterSub, tenantId, ["employee"]), "content-type": "application/json" },
         payload: {
           employeeId: requesterId, currentShift: "Morning Shift", requestedShift: "Evening Shift",
-          effectiveDate: "2026-10-05", reason: "Childcare",
+          effectiveDate: d("2026-10-05"), reason: "Childcare",
         },
       });
       expect(create.statusCode).toBe(202);
@@ -412,7 +421,7 @@ describe("Shift-change requests — end-to-end (real DB)", () => {
         headers: { ...authHeader(requesterSub, tenantId, ["employee"]), "content-type": "application/json" },
         payload: {
           employeeId: requesterId, currentShift: "Morning Shift", requestedShift: "Evening Shift",
-          effectiveDate: "2026-10-05",
+          effectiveDate: d("2026-10-05"),
         },
       });
       const id = create.json().id as string;
@@ -439,7 +448,7 @@ describe("Shift-change requests — end-to-end (real DB)", () => {
         headers: { ...authHeader(requesterSub, tenantId, ["employee"]), "content-type": "application/json" },
         payload: {
           employeeId: requesterId, currentShift: "Morning Shift", requestedShift: "Evening Shift",
-          effectiveDate: "2026-10-05",
+          effectiveDate: d("2026-10-05"),
         },
       });
       const id = create.json().id as string;
@@ -468,7 +477,7 @@ describe("Shift-change requests — end-to-end (real DB)", () => {
         headers: { ...authHeader(requesterSub, tenantId, ["employee"]), "content-type": "application/json" },
         payload: {
           employeeId: requesterId, currentShift: "Morning Shift", requestedShift: "Evening Shift",
-          effectiveDate: "2026-10-05",
+          effectiveDate: d("2026-10-05"),
         },
       });
       const id = create.json().id as string;
@@ -498,7 +507,7 @@ describe("Shift-change requests — end-to-end (real DB)", () => {
         headers: { ...authHeader(requesterSub, tenantId, ["employee"]), "content-type": "application/json" },
         payload: {
           employeeId: requesterId, currentShift: "Morning Shift", requestedShift: "Evening Shift",
-          effectiveDate: "2026-10-05",
+          effectiveDate: d("2026-10-05"),
         },
       });
       const id = create.json().id as string;
@@ -531,7 +540,7 @@ describe("Shift-change requests — end-to-end (real DB)", () => {
       await runWithTenant(tenantId, () => db.transaction(async (tx) => {
         await tx.insert(hrmsShiftChangeRequests).values({
           id: reqId, tenantId, employeeId: requesterId,
-          currentShift: "Morning Shift", requestedShift: "Evening Shift", effectiveDate: "2026-10-05",
+          currentShift: "Morning Shift", requestedShift: "Evening Shift", effectiveDate: d("2026-10-05"),
           status: "rejected", rejectionReason: "already decided",
           createdBy: requesterId, updatedBy: requesterId,
         });

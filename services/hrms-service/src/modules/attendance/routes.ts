@@ -16,6 +16,8 @@ import { resolveEmployeeForActor } from "../employee/actor-link.js";
 import { resolveSelfOrReportsScopedEmployeeId } from "../../shared/self-scope.js";
 import { getPolicy } from "../policy-settings/repo.js";
 import { isGazettedForWfh, resolveEmployeePayLevel } from "./wfh-eligibility.js";
+import { istToday } from "@civitasone/schemas/validators";
+import { wfhRetrospectiveRefusal } from "./wfh-retro.js";
 import { WFH_WEEKLY_DAY_CAP, findWfhWeeklyOverflow, isValidIsoDate, isoWeekBounds, wfhDaysUsedInWeek } from "./wfh-week-cap.js";
 import { scopedRead } from "../../shared/db.js";
 import { batchEmployees } from "../../shared/batch-resolve.js";
@@ -767,6 +769,15 @@ export async function attendanceRoutes(app: FastifyInstance): Promise<void> {
     }).parse(req.body);
     // IDOR guard: employees may only submit WFH requests for themselves.
     await assertSelfOrHr(ctx, body.employeeId, "create WFH requests");
+
+    // GAP-HR-WFH-06 (owner decision): no back-dating by the employee; HR may
+    // record up to 7 days back, with a reason. Server-enforced -- the form's
+    // date `min` is only a hint.
+    const retro = wfhRetrospectiveRefusal({
+      fromDate: body.fromDate, todayIst: istToday(),
+      actorIsHr: ctx.roles.some((r) => HR_ROLES.includes(r)), reason: body.reason,
+    });
+    if (retro) throw new HttpError(422, retro.code, retro.message);
 
     // GAP-HR-WFH-01. Two DoPT WFH rules, both enforced server-side:
     //  (1) gazetted staff are excluded: the employee's designation `level` is the

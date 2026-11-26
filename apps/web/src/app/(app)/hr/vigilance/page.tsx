@@ -6,15 +6,15 @@ import { getTranslations } from "next-intl/server";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { PermissionDenied } from "../../../_components/PermissionDenied";
 import { toHumanError } from "@/lib/messages";
-import { HR_STAFF_ROLES } from "@/lib/auth/workRoles";
+import { VIGILANCE_LIST_ROLES, VIGILANCE_REVEAL_ROLES } from "@/lib/auth/workRoles";
 import { humanizeStatus } from "@/lib/formatters";
 import { VigilanceTable, type VigilanceRow } from "./VigilanceTable";
 
 /**
  * Mirrors services/hrms-service/src/modules/gap-features/routes.ts's
- * HR_ROLES guard on GET /v1/hrms/vigilance exactly.
+ * VIGILANCE_LIST_ROLES guard on GET /v1/hrms/vigilance exactly.
  */
-const VIGILANCE_ROLES = HR_STAFF_ROLES;
+const VIGILANCE_ROLES = VIGILANCE_LIST_ROLES;
 
 // GAP-HR-VIGILANCE-04: server batch size per fetch -- see the matching
 // constant/comment on hr/disciplinary/page.tsx.
@@ -102,6 +102,9 @@ export default async function VigilancePage(
   /* ── Role gate ─────────────────────────────────────────────── */
   const roles = getSessionRoles();
   const canAccess = roles.some((r) => VIGILANCE_ROLES.includes(r));
+  // GAP-HR-VIGILANCE-01: only the vigilance_officer role (and super_admin) may reveal allegation text;
+  // everyone else reads the masked register (the server enforces this; the page just stops offering it).
+  const canReveal = roles.some((r) => VIGILANCE_REVEAL_ROLES.includes(r));
   if (!canAccess) {
     return <PermissionDenied module="vigilance cases" requiredRoles={VIGILANCE_ROLES} />;
   }
@@ -253,6 +256,7 @@ export default async function VigilancePage(
               click-to-reveal control (GAP-HR-VIGILANCE-01). */}
           <VigilanceTable
             rows={items}
+            canReveal={canReveal}
             labels={{
               caseRef: t("colCaseRef"),
               employee: t("colEmployee"),
@@ -262,6 +266,7 @@ export default async function VigilancePage(
               inquiryOfficerAppointed: t("colInquiryOfficerAppointed"),
               status: t("colStatus"),
               noCharges: t("noCharges"),
+              revealRestricted: t("revealRestricted"),
               emptyTitle: hasFilter ? t("emptyFilteredTitle") : t("emptyTitle"),
               emptyMessage: hasFilter ? t("emptyFilteredMessage") : t("emptyMessage"),
               caption: t("cardTitle"),

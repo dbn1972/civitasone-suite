@@ -184,10 +184,10 @@ describe("ProbationConfirmationCard", () => {
   });
 });
 
-// GAP-HR-CONFIRMATION-01 (interim): hrms-service has no manager-recommendation store, so
-// GET /v1/hrms/confirmations never sends managerRecommendation. The card must not tell HR that a
-// manager is "Awaiting" a recommendation nobody has a way to give. Whether Confirm is blocked without
-// one is an owner decision, so Confirm/Extend are deliberately NOT gated here.
+// GAP-HR-CONFIRMATION-01 (owner decision, 26 Nov 2026): the reporting manager records the
+// recommendation; HR confirms, with a required override remark when none is on record (or it is "not
+// recommended"). Nothing is hard-blocked: Confirm / Extend stay enabled either way. An older API that
+// sends no managerRecommendation at all is still shown as "no recommendation on record".
 describe("ProbationConfirmationCard manager recommendation chip (GAP-HR-CONFIRMATION-01)", () => {
   const show = (row: ConfirmationRow) =>
     render(<NextIntlClientProvider locale="en" messages={enMessages}><ProbationConfirmationList rows={[row]} /></NextIntlClientProvider>);
@@ -217,9 +217,95 @@ describe("ProbationConfirmationCard manager recommendation chip (GAP-HR-CONFIRMA
     expect(screen.queryByText(enMessages.confirmation.recNotRecorded)).not.toBeInTheDocument();
   });
 
-  it("does not gate Confirm / Extend on a recommendation (that policy is undecided)", () => {
+  it("does not HARD-block Confirm / Extend without a recommendation (an override remark is asked for instead)", () => {
     show(WITHOUT as ConfirmationRow);
     expect(screen.getByRole("button", { name: "Confirm Priya Nair" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "Extend probation for Priya Nair" })).toBeEnabled();
+  });
+});
+
+// GAP-HR-CONFIRMATION-01: HR override remark.
+describe("ProbationConfirmationCard HR override remark (GAP-HR-CONFIRMATION-01)", () => {
+  afterEach(() => { vi.unstubAllGlobals(); refresh.mockClear(); });
+  const showRow = (row: ConfirmationRow) =>
+    render(<NextIntlClientProvider locale="en" messages={enMessages}><ProbationConfirmationList rows={[row]} /></NextIntlClientProvider>);
+
+  async function openConfirm(): Promise<void> {
+    fireEvent.click(screen.getByRole("button", { name: "Confirm Priya Nair" }));
+    await screen.findByRole("alertdialog");
+    fireEvent.change(screen.getByLabelText(/^Order reference/), { target: { value: "CONFIRM/2026/014" } });
+  }
+
+  it("with a positive recommendation there is no override field and the body carries no overrideRemark", async () => {
+    const fetchMock = vi.fn(async () => ({ ok: true, status: 202, text: async () => "{}" }) as Response);
+    vi.stubGlobal("fetch", fetchMock);
+    showRow(ROW);
+    await openConfirm();
+    expect(screen.queryByLabelText(/Override remark/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Confirm service" }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    expect(JSON.parse((fetchMock.mock.calls[0] as unknown as [string, RequestInit])[1].body as string)).not.toHaveProperty("overrideRemark");
+  });
+
+  it.each(["pending", "not_recommended", null] as const)("with managerRecommendation=%s the override remark is required (>= 10 chars) and is sent", async (rec) => {
+    const fetchMock = vi.fn(async () => ({ ok: true, status: 202, text: async () => "{}" }) as Response);
+    vi.stubGlobal("fetch", fetchMock);
+    showRow({ ...ROW, managerRecommendation: rec });
+    await openConfirm();
+    expect(screen.getByLabelText(/Override remark/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Confirm service" }));
+    expect(await screen.findByText(/override remark of at least 10 characters is required/i)).toBeInTheDocument();
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    fireEvent.change(screen.getByLabelText(/Override remark/), { target: { value: "Manager on long leave; HOD vouches" } });
+    fireEvent.click(screen.getByRole("button", { name: "Confirm service" }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    expect(JSON.parse((fetchMock.mock.calls[0] as unknown as [string, RequestInit])[1].body as string)).toMatchObject({ overrideRemark: "Manager on long leave; HOD vouches" });
+  });
+});
+
+// GAP-HR-CONFIRMATION-01: the reporting manager's entry point.
+describe("ProbationConfirmationCard manager recommendation action (GAP-HR-CONFIRMATION-01)", () => {
+  afterEach(() => { vi.unstubAllGlobals(); refresh.mockClear(); });
+  const showAs = (row: ConfirmationRow, props: { canDecide: boolean; canRecommend: boolean }) =>
+    render(<NextIntlClientProvider locale="en" messages={enMessages}><ProbationConfirmationList rows={[row]} {...props} /></NextIntlClientProvider>);
+
+  it("a manager-only viewer gets Recommend, and no Confirm / Extend", () => {
+    showAs({ ...ROW, managerRecommendation: "pending" }, { canDecide: false, canRecommend: true });
+    expect(screen.getByRole("button", { name: "Record confirmation recommendation for Priya Nair" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Confirm Priya Nair" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Extend probation for Priya Nair" })).not.toBeInTheDocument();
+  });
+
+  it("an HR-only viewer gets no Recommend", () => {
+    showAs(ROW, { canDecide: true, canRecommend: false });
+    expect(screen.queryByRole("button", { name: "Record confirmation recommendation for Priya Nair" })).not.toBeInTheDocument();
+  });
+
+  it("records a recommendation through POST .../confirmation-recommendation and refreshes the list", async () => {
+    const fetchMock = vi.fn(async () => ({ ok: true, status: 202, text: async () => "{}" }) as Response);
+    vi.stubGlobal("fetch", fetchMock);
+    showAs({ ...ROW, managerRecommendation: "pending" }, { canDecide: false, canRecommend: true });
+    fireEvent.click(screen.getByRole("button", { name: "Record confirmation recommendation for Priya Nair" }));
+    await screen.findByRole("alertdialog");
+    fireEvent.click(screen.getByRole("button", { name: "Record recommendation" }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
+      "/api/proxy/v1/hrms/employees/emp-1/confirmation-recommendation",
+      expect.objectContaining({ method: "POST", body: expect.stringContaining('"recommendation":"recommended"') }),
+    ));
+    await waitFor(() => expect(screen.getByText("Recommendation submitted")).toBeInTheDocument());
+    expect(refresh).toHaveBeenCalled();
+  });
+
+  it("a 'not recommended' needs a reason of at least 10 characters before anything is sent", async () => {
+    const fetchMock = vi.fn(async () => ({ ok: true, status: 202, text: async () => "{}" }) as Response);
+    vi.stubGlobal("fetch", fetchMock);
+    showAs({ ...ROW, managerRecommendation: "pending" }, { canDecide: false, canRecommend: true });
+    fireEvent.click(screen.getByRole("button", { name: "Record confirmation recommendation for Priya Nair" }));
+    await screen.findByRole("alertdialog");
+    fireEvent.change(screen.getByLabelText(/Your recommendation/), { target: { value: "not_recommended" } });
+    fireEvent.click(screen.getByRole("button", { name: "Record recommendation" }));
+    expect(await screen.findByText(/at least 10 characters/i)).toBeInTheDocument();
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

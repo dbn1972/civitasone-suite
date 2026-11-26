@@ -16,6 +16,8 @@ import { SERVICE_BOOK_TRANSFER_TYPES, SERVICE_BOOK_PROMOTION_TYPES } from "../se
 import { toServiceBookListEntry } from "../service-book/list-shape.js";
 import { hrmsDeputations } from "../deputation/schema.js";
 import { loadProbationMonthsResolver, defaultProbationEnd } from "../employee/probation-period.js";
+import { findLatestConfirmationRecommendations } from "../employee/repo.js";
+import { resolveEmployeeForActor } from "../employee/actor-link.js";
 
 const HR_ROLES = ["hr_admin", "hr_officer", "super_admin"];
 
@@ -275,7 +277,19 @@ export async function m7ListRoutes(app: FastifyInstance): Promise<void> {
   // Probation confirmations — employees on probation whose confirmation is due
   app.get("/v1/hrms/confirmations", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, HR_ROLES);
+    // GAP-HR-CONFIRMATION-01: a reporting manager reads their own reports' probationers so they can
+    // record a recommendation; HR keeps the whole tenant.
+    requireRole(ctx, [...HR_ROLES, "manager"]);
+    const isHr = ctx.roles.some((r) => HR_ROLES.includes(r));
+    let reportIds: string[] | undefined;
+    if (!isHr) {
+      const actorEmp = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId);
+      if (!actorEmp) return reply.send({ data: [], hasMore: false });
+      const reports = await scopedRead((tx) => tx.select({ id: hrmsEmployees.id }).from(hrmsEmployees)
+        .where(and(eq(hrmsEmployees.tenantId, ctx.tenantId), eq(hrmsEmployees.managerId, actorEmp.id))));
+      reportIds = reports.map((r) => r.id);
+      if (reportIds.length === 0) return reply.send({ data: [], hasMore: false });
+    }
     const employees = await scopedRead((tx) =>
       tx
         .select({
@@ -289,7 +303,10 @@ export async function m7ListRoutes(app: FastifyInstance): Promise<void> {
           status: hrmsEmployees.status,
         })
         .from(hrmsEmployees)
-        .where(and(eq(hrmsEmployees.tenantId, ctx.tenantId), eq(hrmsEmployees.status, "probation")))
+        .where(and(
+          eq(hrmsEmployees.tenantId, ctx.tenantId), eq(hrmsEmployees.status, "probation"),
+          reportIds ? inArray(hrmsEmployees.id, reportIds) : undefined,
+        ))
         .orderBy(hrmsEmployees.dateOfJoining, hrmsEmployees.id)
         .limit(500),
     );
@@ -311,6 +328,8 @@ export async function m7ListRoutes(app: FastifyInstance): Promise<void> {
     // employee/probation-period.ts, 24 months when the type configures none)
     // unless a later extension was recorded for them.
     const extensionMap = await batchLatestProbationExtensions(ctx.tenantId, employees.map((e) => e.id));
+    // GAP-HR-CONFIRMATION-01: the reporting manager's CURRENT recommendation; "pending" when none recorded.
+    const recommendationMap = await findLatestConfirmationRecommendations(ctx.tenantId, employees.map((e) => e.id));
     const probationMonthsFor = await loadProbationMonthsResolver(ctx.tenantId);
     const data = employees.map((e) => {
       const probationMonths = probationMonthsFor(e.employeeType);
@@ -326,6 +345,8 @@ export async function m7ListRoutes(app: FastifyInstance): Promise<void> {
         probationMonths,
         probationEnd,
         dueDate: e.confirmationDate ?? probationEnd,
+        managerRecommendation: recommendationMap.get(e.id)?.recommendation ?? "pending",
+        managerRecommendationRemark: recommendationMap.get(e.id)?.remark ?? null,
         status: "probation",
       };
     });

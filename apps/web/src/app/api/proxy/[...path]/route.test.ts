@@ -106,3 +106,26 @@ describe("BFF proxy If-Match header allow-list", () => {
     expect(sent["if-match"]).toBe("7");
   });
 });
+
+// GAP-HR-LEAVE-APPLY-04: a replayed offline request carries x-queued-at (when it was queued) so the
+// leave-reason minimum can grandfather requests queued before it was enforced server-side.
+describe("BFF proxy x-queued-at header allow-list", () => {
+  const fetchMock = vi.fn();
+  beforeEach(() => {
+    fetchMock.mockReset();
+    vi.stubGlobal("fetch", fetchMock);
+    fetchMock.mockResolvedValue(new Response("{}", { status: 202, headers: { "content-type": "application/json" } }));
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("forwards x-queued-at upstream", async () => {
+    await POST(
+      new Request("http://localhost/api/proxy/v1/hrms/leave-requests", {
+        method: "POST", body: "{}", headers: { "x-queued-at": "2026-11-20T10:00:00.000Z" },
+      }),
+      { params: Promise.resolve({ path: ["v1", "hrms", "leave-requests"] }) },
+    );
+    const sent = fetchMock.mock.calls[0]![1].headers as Record<string, string>;
+    expect(sent["x-queued-at"]).toBe("2026-11-20T10:00:00.000Z");
+  });
+});

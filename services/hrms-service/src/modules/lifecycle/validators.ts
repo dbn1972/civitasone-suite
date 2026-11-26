@@ -1,6 +1,23 @@
 import { z } from "zod";
+import { istToday } from "@civitasone/schemas/validators";
 
 const DATE = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+
+/**
+ * GAP-HR-PROMOTION-05 (owner decision, 26 Nov 2026): a promotion order may be back-dated
+ * (a past effective date is normal for government orders -- the web wizard shows a notice),
+ * but an effective date more than PROMOTION_MAX_FUTURE_YEARS ahead is refused. Enforced here
+ * so the API cannot be used to bypass the wizard's own check. Compared as ISO strings:
+ * "today (IST) + N years" keeps the month and day.
+ */
+export const PROMOTION_MAX_FUTURE_YEARS = 3;
+export function promotionLatestEffectiveDate(todayIst: string = istToday()): string {
+  return `${Number(todayIst.slice(0, 4)) + PROMOTION_MAX_FUTURE_YEARS}${todayIst.slice(4)}`;
+}
+const promotionEffectiveDate = DATE.refine(
+  (d) => d <= promotionLatestEffectiveDate(),
+  { message: `effectiveDate cannot be more than ${PROMOTION_MAX_FUTURE_YEARS} years in the future` },
+);
 
 // transferBody is the shared shape consumed by employee/commands.ts
 // (employeeId comes from the URL there) — DO NOT add employeeId here.
@@ -60,7 +77,7 @@ export const createPromotionBody = z.object({
   employeeId:    z.string().uuid(),
   fromDesigId:   z.string().uuid(),
   toDesigId:     z.string().uuid(),
-  effectiveDate: DATE,
+  effectiveDate: promotionEffectiveDate,
   orderRef:      z.string().max(128).optional(),
   newBasicMinor: z.number().int().positive().max(1_000_000_00).optional(),
 });
@@ -86,7 +103,7 @@ export const TOTAL_CHECKLIST_ITEMS = 25;
 export const promotionBody = z.object({
   fromDesigId:   z.string().uuid(),
   toDesigId:     z.string().uuid(),
-  effectiveDate: DATE,
+  effectiveDate: promotionEffectiveDate,
   orderRef:      z.string().max(128).optional(),
   newBasicMinor: z.number().int().positive().max(1_000_000_00).optional(),
 });

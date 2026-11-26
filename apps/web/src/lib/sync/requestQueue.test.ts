@@ -127,7 +127,7 @@ describe("requestQueue — GAP-OFFLINE-HOME-02", () => {
       path: APPROVAL_PATH,
       body: { decision: "approved", comment: "LGTM" },
       idempotencyKey: IDEMPOTENCY_KEY,
-      createdAt: new Date().toISOString(),
+      createdAt: "2026-11-20T10:15:00.000Z",
       retryCount: 0,
     });
 
@@ -140,6 +140,8 @@ describe("requestQueue — GAP-OFFLINE-HOME-02", () => {
     expect(url).toContain(APPROVAL_PATH);
     const headers = opts.headers as Record<string, string>;
     expect(headers["x-idempotency-key"]).toBe(IDEMPOTENCY_KEY);
+    // GAP-HR-LEAVE-APPLY-04: the replay says when the user made the request (grandfathers pre-rule requests).
+    expect(headers["x-queued-at"]).toBe("2026-11-20T10:15:00.000Z");
     expect(result.flushed).toBe(1);
     expect(result.remaining).toBe(0);
   });

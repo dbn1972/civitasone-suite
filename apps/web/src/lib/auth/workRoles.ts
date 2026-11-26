@@ -877,3 +877,12 @@ export const HR_EXPENSE_DECIDE_ROLES: readonly string[] = [
   "finance_officer",
   "super_admin",
 ] as const;
+
+/**
+ * GAP-HR-VIGILANCE-01 (owner decision, 26 Nov 2026): who may READ the (masked) vigilance register --
+ * hrms-service gap-features VIGILANCE_LIST_ROLES -- and who may REVEAL a case's allegation text
+ * (VIGILANCE_REVEAL_ROLES): the dedicated `vigilance_officer` role (already in the Keycloak realm) plus
+ * super_admin as audited break-glass. hr_admin / hr_officer read the masked register but cannot reveal.
+ */
+export const VIGILANCE_LIST_ROLES = [...HR_STAFF_ROLES, "vigilance_officer"];
+export const VIGILANCE_REVEAL_ROLES = ["vigilance_officer", "super_admin"];

@@ -5145,7 +5145,20 @@
     "networkErrorRetry": "Network error. Please try again.",
     "panelTitleWithCount": "Pending Leave Approvals ({count})",
     "truncatedNotice": "Showing the first {shown} pending leave approvals — more are waiting. Decide some of these and the rest will load.",
-    "truncatedEmptyMessage": "No leave approvals were found in the first {checked} workflow tasks, but more tasks exist, so this list may be incomplete. Try again later or contact support."
+    "truncatedEmptyMessage": "No leave approvals were found in the first {checked} workflow tasks, but more tasks exist, so this list may be incomplete. Try again later or contact support.",
+    "colSelect": "Select",
+    "selectRowAria": "Select {name}'s request for bulk approval",
+    "bulkCapReached": "At most {cap} requests can be approved in one action.",
+    "bulkBarLabel": "Bulk approval",
+    "bulkSelected": "{count} selected (up to {cap} per action)",
+    "bulkApprove": "Approve {count} selected",
+    "bulkClear": "Clear selection",
+    "bulkApproveOnlyNote": "Bulk action is approve-only. Reject requests one at a time with a reason.",
+    "bulkDialogTitle": "Approve {count} leave requests?",
+    "bulkDialogDescription": "Each request is approved as its own audited decision, one after another. A request that cannot be approved is reported and stays in the list. Rejections are never done in bulk.",
+    "bulkConfirmLabel": "Approve {count}",
+    "bulkResultSummary": "{ok, plural, one {# request approved} other {# requests approved}}, {failed, plural, =0 {none failed} one {# failed} other {# failed}}.",
+    "bulkFailedItem": "{name}: {message}"
   },
   "leaveBalance": {
     "title": "Leave Balance",
@@ -8970,7 +8983,8 @@
     "emptyFilteredMessage": "No vigilance case matches this status and search. Clear the filter to see the whole register.",
     "noCharges": "—",
     "backToVigilance": "Back to Vigilance",
-    "crumbVigilance": "Vigilance"
+    "crumbVigilance": "Vigilance",
+    "revealRestricted": "Restricted to vigilance officers"
   },
   "wfhForm": {
     "ariaLabel": "Work From Home request form",
@@ -8993,7 +9007,9 @@
     "errorToBeforeFrom": "To date cannot be before From date.",
     "confirming": "Request submitted — confirming…",
     "stillProcessing": "Still processing. Refresh this page to check.",
-    "gazettedErrorBand": "Work from home is not available for your grade band under your organisation's policy."
+    "gazettedErrorBand": "Work from home is not available for your grade band under your organisation's policy.",
+    "errorRetroReasonRequired": "A back-dated entry needs a reason of at least {min} characters.",
+    "hintRetro": "As HR you can record a day up to {days} days back, with a reason."
   },
   "wfhRequests": {
     "title": "Work From Home Requests",
@@ -9260,7 +9276,23 @@
     "recAria": "Manager recommendation: {label}",
     "emptyTitle": "No employees currently on probation",
     "emptyMessage": "Employees on probation appear here once added to the service book.",
-    "probationPeriodHint": "{months, plural, one {# month probation} other {# months probation}}"
+    "probationPeriodHint": "{months, plural, one {# month probation} other {# months probation}}",
+    "recommendButton": "Recommend",
+    "recommendAria": "Record confirmation recommendation for {name}",
+    "recommendTitle": "Recommend {name} for confirmation?",
+    "recommendDescription": "As the reporting manager, record whether you recommend this employee's confirmation at the end of probation. HR makes the final decision and sees your remark.",
+    "recChoiceLabel": "Your recommendation",
+    "recOptionRecommended": "Recommend confirmation",
+    "recOptionNotRecommended": "Do not recommend confirmation",
+    "recRemarkLabel": "Remark (required if you do not recommend)",
+    "recNotRecommendedNeedsReason": "Say why you do not recommend confirmation (at least {min} characters).",
+    "recConfirmLabel": "Record recommendation",
+    "recSubmitted": "Recommendation submitted",
+    "recRemarkPrefix": "Manager's remark:",
+    "overrideRemarkLabel": "Override remark",
+    "overrideNoRecommendation": "The reporting manager has not recorded a recommendation. Say why you are confirming without one.",
+    "overrideNotRecommended": "The reporting manager did not recommend confirmation. Say why you are confirming anyway.",
+    "overrideRemarkRequired": "An override remark of at least {min} characters is required."
   },
   "deputation": {
     "title": "Deputation",
@@ -9307,7 +9339,42 @@
       "dismissBtn": "Go back",
       "actionFailed": "Couldn't complete this action. Please try again.",
       "notActive": "This deputation is no longer active."
-    }
+    },
+    "newDeputation": "New deputation"
+  },
+  "deputationNew": {
+    "title": "New Deputation",
+    "subtitle": "Depute an officer to another organisation.",
+    "backLabel": "Back to Deputation",
+    "heading": "Deputation order",
+    "intro": "Recording a deputation switches the officer's posting and reporting line to the borrowing organisation immediately, and a service-book entry is written. Repatriate or cancel it from the Deputation page to restore the parent posting.",
+    "employeeLabel": "Officer",
+    "employeePlaceholder": "Search by name or employee code",
+    "parentCadreLabel": "Parent cadre / service",
+    "parentCadrePlaceholder": "e.g. State Civil Service (Revenue)",
+    "borrowingLabel": "Borrowing organisation",
+    "borrowingHint": "Pick a suggestion or type the organisation's name.",
+    "tenureFromLabel": "Deputation from",
+    "tenureToLabel": "Deputation until",
+    "allowanceLabel": "Deputation allowance (₹ per month)",
+    "allowanceHint": "Leave blank for none. Pay terms are set later.",
+    "orderRefLabel": "Order reference",
+    "orderRefPlaceholder": "e.g. DEP/2026/021",
+    "remarksLabel": "Remarks",
+    "submit": "Review and depute",
+    "cancelBtn": "Cancel",
+    "errEmployee": "Choose the officer.",
+    "errParentCadre": "Enter the parent cadre.",
+    "errBorrowing": "Enter the borrowing organisation.",
+    "errTenureFrom": "Enter the start date.",
+    "errTenureTo": "Enter the end date.",
+    "errTenureOrder": "The end date must be after the start date.",
+    "errAllowance": "Enter an amount in rupees, up to two decimals.",
+    "errAlreadyDeputed": "This officer already has an active deputation. Repatriate or cancel it first.",
+    "thisEmployee": "this officer",
+    "confirmTitle": "Depute {name}?",
+    "confirmDescription": "{name} will be posted to {org} from {from} to {to}. Their posting and reporting line change immediately and a service-book entry is written. This can be undone from the Deputation page by repatriating or cancelling it.",
+    "confirmLabel": "Depute officer"
   },
   "disciplinary": {
     "title": "Disciplinary Cases",
