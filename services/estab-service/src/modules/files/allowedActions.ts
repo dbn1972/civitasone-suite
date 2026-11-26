@@ -11,7 +11,7 @@
  * consumers, and the allowedActions served on GET /v1/estab/files/:id.
  */
 export type NotingLite = {
-  id: string; officerId: string; noteType: string; noteStatus: string; eSigned: boolean; createdAt: Date | string;
+  id: string; officerId: string; noteType: string; noteStatus: string; eSigned: boolean; createdAt: Date | string; seq?: number;
 };
 
 const ts = (n: NotingLite): number => new Date(n.createdAt).getTime();
@@ -22,10 +22,15 @@ export function latestDraft(notings: readonly NotingLite[]): NotingLite | null {
   return drafts.sort((a, b) => ts(b) - ts(a))[0] ?? null;
 }
 
-/** The latest note still awaiting a signature (draft or submitted), or null. */
+/**
+ * The latest note still awaiting a signature (draft or submitted), or null. Same rule as
+ * repo.findLatestUnsignedNoting (highest seq among e_signed = false), which the workflow's
+ * level auto-sign uses: the SIGN TARGET is always this note, so an approver holding the file's
+ * task cannot sign an arbitrary older note.
+ */
 export function latestUnsigned(notings: readonly NotingLite[]): NotingLite | null {
   const open = notings.filter((n) => !n.eSigned && n.noteStatus !== "approved");
-  return open.sort((a, b) => ts(b) - ts(a))[0] ?? null;
+  return open.sort((a, b) => (b.seq ?? 0) - (a.seq ?? 0) || ts(b) - ts(a))[0] ?? null;
 }
 
 export function isNotingAuthor(noting: Pick<NotingLite, "officerId">, actorId: string): boolean {

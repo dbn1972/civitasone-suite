@@ -384,6 +384,16 @@ export function registerFilesConsumers(rawQueue: Queue): void {
         });
         return;
       }
+      // B23: noting-level half of the gate: only the file's latest unsigned note may be signed here.
+      const latest = await repo.findLatestUnsignedNoting(tx, p.fileId, p.tenantId);
+      if (!latest || latest.id !== noting.id) {
+        await enqueue(tx, {
+          topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
+          tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+          payload: { service: "estab", action: "noting_sign_rejected_not_latest_unsigned", resourceType: "noting", resourceId: p.notingId, outcome: "rejected" },
+        });
+        return;
+      }
       await signNotingChain(tx, {
         tenantId: p.tenantId, fileId: p.fileId, notingId: noting.id,
         body: noting.body, officerId: msg.actorId,

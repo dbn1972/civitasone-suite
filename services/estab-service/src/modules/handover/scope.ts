@@ -40,10 +40,12 @@ export async function callerDivisions(ctx: RequestContext): Promise<string[]> {
 }
 
 /**
- * Throws unless the caller may take files from `fromOfficerId`. No-op for tenant-wide callers.
- * `fromOfficerId` is an hrms employee id (the operators directory's id space).
+ * Throws unless the caller may take files from `fromOfficerId` and (when given) hand them to
+ * `toOfficerId`: BOTH must hold an active desk in a division the caller administers, so a division
+ * admin can neither seize another division's files nor push their own into another division.
+ * No-op for tenant-wide callers. Ids are hrms employee ids (the operators directory's id space).
  */
-export async function assertMayHandOverFrom(ctx: RequestContext, fromOfficerId: string): Promise<void> {
+export async function assertMayHandOverFrom(ctx: RequestContext, fromOfficerId: string, toOfficerId?: string): Promise<void> {
   if (isTenantWideHandoverCaller(ctx.roles)) return;
   const mine = await callerDivisions(ctx);
   if (mine.length === 0) {
@@ -52,5 +54,11 @@ export async function assertMayHandOverFrom(ctx: RequestContext, fromOfficerId: 
   const fromDesks = await findActiveOperatorsForEmployee(ctx.tenantId, fromOfficerId);
   if (!fromDesks.some((d) => mine.includes(d.division))) {
     throw new HttpError(403, "OUTSIDE_DIVISION_SCOPE", "that officer is not on an active desk in a division you administer");
+  }
+  if (toOfficerId !== undefined) {
+    const toDesks = await findActiveOperatorsForEmployee(ctx.tenantId, toOfficerId);
+    if (!toDesks.some((d) => mine.includes(d.division))) {
+      throw new HttpError(403, "RECIPIENT_OUTSIDE_DIVISION_SCOPE", "the receiving officer is not on an active desk in a division you administer");
+    }
   }
 }

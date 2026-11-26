@@ -23,7 +23,7 @@ import {
   clearanceRankFor, tenantHasOperators, CLASSIFICATION_RANK,
 } from "../operators/eligibility.js";
 import { actorHoldsOpenFileTask } from "../../shared/workflow-client.js";
-import { computeAllowedActions, isNotingAuthor } from "./allowedActions.js";
+import { computeAllowedActions, isNotingAuthor, latestUnsigned } from "./allowedActions.js";
 import { assertMayHandOverFrom } from "../handover/scope.js";
 import { resolveActorEmployeeId, HrmsUnavailableError } from "../../shared/hrms-client.js";
 
@@ -195,6 +195,12 @@ export async function filesRoutes(app: FastifyInstance): Promise<void> {
     const noting = await queries.getNoting(ctx.tenantId, notingId);
     if (!noting || noting.fileId !== id) throw new HttpError(404, "NOT_FOUND", "noting not found on this file");
     await assertFileWritable(ctx.tenantId, id);
+    // B23: the task is file-level, so the sign must also be NOTING-level: only the latest unsigned
+    // note on the file (the one the approver is actually deciding) may be signed.
+    const target = latestUnsigned(await queries.listNotingsForActions(ctx.tenantId, id));
+    if (!target || target.id !== notingId) {
+      throw new HttpError(409, "NOT_LATEST_UNSIGNED_NOTING", "only the latest unsigned note on this file can be signed");
+    }
     // B23: only the current approver (the actor holding the open file_noting workflow task) may sign.
     // Fails closed: an unreachable workflow-service is a 503, never an implicit yes.
     const holds = await actorHoldsOpenFileTask({ tenantId: ctx.tenantId, actorId: ctx.actorId, roles: ctx.roles, fileId: id });

@@ -270,6 +270,19 @@ describe("POST /v1/estab/handovers division scope (GAP-ESTAB-HANDOVER-02, B25)",
     expect(res.statusCode).toBe(403);
     expect(res.json().code).toBe("OUTSIDE_DIVISION_SCOPE");
   });
+
+  it("a division admin is refused (403) when the receiving officer sits in another division", async () => {
+    const from = randomUUID(); const to = randomUUID();
+    await sqlClient.begin(async (s) => {
+      const tx = s as unknown as Tx;
+      await insertOperator(tx, T_SCOPE, EMP, "Establishment-I");
+      await insertOperator(tx, T_SCOPE, from, "Establishment-I");
+      await insertOperator(tx, T_SCOPE, to, "Accounts");
+    });
+    const res = await post({ fromOfficerId: from, toOfficerId: to, reason: "transfer" });
+    expect(res.statusCode).toBe(403);
+    expect(res.json().code).toBe("RECIPIENT_OUTSIDE_DIVISION_SCOPE");
+  });
 });
 
 // ── INBOX-01 ────────────────────────────────────────────────────────────────

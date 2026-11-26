@@ -68,6 +68,29 @@ export function registerApprovalRuleConsumers(queue: Queue): void {
       if (!existing) return;
       sourceType = existing.sourceType;
 
+      // B22 backstop for updates: a band move or (re)activation racing past the route check must not
+      // leave two active bands overlapping.
+      const bandChanged = p.patch.minAmountMinor !== undefined || p.patch.maxAmountMinor !== undefined;
+      const willBeActive = p.patch.active ?? existing.active;
+      if (willBeActive && (bandChanged || (p.patch.active === true && !existing.active))) {
+        const next = {
+          minAmountMinor: p.patch.minAmountMinor ?? existing.minAmountMinor,
+          maxAmountMinor: p.patch.maxAmountMinor !== undefined ? p.patch.maxAmountMinor : existing.maxAmountMinor,
+        };
+        const clash = findOverlappingRule(await repo.listActiveRulesForSourceTx(tx, p.tenantId, existing.sourceType), next, p.id);
+        if (clash) {
+          await enqueue(tx, {
+            topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
+            tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+            payload: {
+              service: "estab", action: "approval_rule.update_rejected_overlap", resourceType: "approval_rule",
+              resourceId: p.id, outcome: "rejected", metadata: { overlapsRuleId: clash.id },
+            },
+          });
+          return;
+        }
+      }
+
       const patch: Parameters<typeof repo.updateRule>[2] = { updatedBy: msg.actorId };
       if (p.patch.label !== undefined) patch.label = p.patch.label;
       if (p.patch.minAmountMinor !== undefined) patch.minAmountMinor = p.patch.minAmountMinor;

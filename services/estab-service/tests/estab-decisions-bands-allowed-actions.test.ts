@@ -55,6 +55,11 @@ describe("B23 computeAllowedActions", () => {
     expect(latestDraft([older, newer])?.id).toBe("new");
     expect(computeAllowedActions({ notings: [older, newer], actorId: AUTHOR, readOnly: false, holdsOpenTask: false }).canSubmit).toBe(false);
   });
+  it("the sign target is the highest-seq unsigned note, not any unsigned note", () => {
+    const old = n({ id: "old", seq: 1, noteStatus: "submitted" });
+    const cur = n({ id: "cur", seq: 2 });
+    expect(latestUnsigned([old, cur])?.id).toBe("cur");
+  });
   it("signed notes are not awaiting a signature", () => {
     expect(latestUnsigned([n({ noteStatus: "approved", eSigned: true, noteType: "green" })])).toBeNull();
   });

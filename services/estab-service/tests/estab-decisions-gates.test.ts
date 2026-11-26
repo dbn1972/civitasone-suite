@@ -77,6 +77,13 @@ describe("B25 division admin handover scope", () => {
       (emp === DIV_ADMIN_EMP ? [desk(emp, "Establishment-I")] : emp === OFFICER_IN ? [desk(emp, "Establishment-I")] : []) as never);
     await expect(assertMayHandOverFrom(ctxOf(["estab_division_admin"]), OFFICER_IN)).resolves.toBeUndefined();
   });
+  it("a division admin may not hand files to a receiving officer in another division", async () => {
+    vi.mocked(resolveActorEmployeeId).mockResolvedValue(DIV_ADMIN_EMP);
+    vi.mocked(opsRepo.findActiveOperatorsForEmployee).mockImplementation(async (_t, emp) =>
+      (emp === DIV_ADMIN_EMP || emp === OFFICER_IN ? [desk(emp, "Establishment-I")] : emp === OFFICER_OUT ? [desk(emp, "Accounts")] : []) as never);
+    await expect(assertMayHandOverFrom(ctxOf(["estab_division_admin"]), OFFICER_IN, OFFICER_OUT)).rejects.toMatchObject({ status: 403, code: "RECIPIENT_OUTSIDE_DIVISION_SCOPE" });
+    await expect(assertMayHandOverFrom(ctxOf(["estab_division_admin"]), OFFICER_IN, OFFICER_IN)).resolves.toBeUndefined();
+  });
   it("a division admin is refused for an officer in another division", async () => {
     vi.mocked(resolveActorEmployeeId).mockResolvedValue(DIV_ADMIN_EMP);
     vi.mocked(opsRepo.findActiveOperatorsForEmployee).mockImplementation(async (_t, emp) =>

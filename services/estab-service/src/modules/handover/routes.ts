@@ -32,7 +32,7 @@ export async function handoverRoutes(app: FastifyInstance): Promise<void> {
     const body = createHandoverBody.parse(req.body);
     // B25: a division admin may only take files from officers on their own division(s); estab_admin
     // and super_admin are tenant-wide (see scope.ts).
-    await assertMayHandOverFrom(ctx, body.fromOfficerId);
+    await assertMayHandOverFrom(ctx, body.fromOfficerId, body.toOfficerId);
 
     if (await tenantHasOperators(ctx.tenantId) && !(await isActiveOperator(ctx.tenantId, body.toOfficerId))) {
       throw new HttpError(422, "NOT_AN_OPERATOR", "receiving officer is not an active eOffice operator; enrol them first");
