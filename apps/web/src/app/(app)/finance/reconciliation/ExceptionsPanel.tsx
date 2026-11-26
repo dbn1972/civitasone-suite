@@ -228,7 +228,7 @@ export function ExceptionsPanel({
           <div>
             <StatusPill status={row.status} variant={exceptionStatusVariant(row.status)} />
             {row.writeoffRequestedBy && !closed ? (
-              <div role="note" style={{ color: "var(--warn, #b45309)", fontSize: 12, marginTop: 4, maxWidth: 260 }}>
+              <div role="note" style={{ color: "var(--warn)", fontSize: 12, marginTop: 4, maxWidth: 260 }}>
                 Write-off waiting for a second approver (finance admin). Requested by {actorLabel(row.writeoffRequestedBy, actorNames)}
                 {row.writeoffRequestedAt ? ` on ${formatIndianDate(row.writeoffRequestedAt)}` : ""}.
                 {row.writeoffRequestNote ? <div style={{ color: "var(--ink2)" }}>{row.writeoffRequestNote}</div> : null}

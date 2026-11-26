@@ -17,6 +17,8 @@ vi.mock("../src/shared/outbox.js", () => ({
 vi.mock("../src/modules/recon/repo.js", () => ({
   getBreakTx: (...a: unknown[]) => getBreakTx(...a),
   updateBreakStatus: (...a: unknown[]) => updateBreakStatus(...a),
+  getWriteoffThresholdTx: vi.fn(async () => 5_000_000n),
+  upsertWriteoffThreshold: vi.fn(),
 }));
 vi.mock("../src/modules/recon/service.js", () => ({ runReconciliation: vi.fn() }));
 
