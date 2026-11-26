@@ -5,6 +5,7 @@ import { listQuerySchema } from "@civitasone/schemas/common";
 import { resolveContext, requireRole } from "../../shared/context.js";
 import { hasAnyRole } from "@civitasone/auth";
 import { BID_OPENING_COMMITTEE_ROLES } from "../tender/domain.js";
+import { auditTenderBidders } from "../tender/routes.js";
 import { auditRead } from "../../shared/read-audit.js";
 import * as vendorQueries from "../vendor/queries.js";
 import * as tenderQueries from "../tender/queries.js";
@@ -32,12 +33,15 @@ export async function procurementGapRoutes(app: FastifyInstance): Promise<void> 
     const q = listQuerySchema.parse(req.query);
     // GAP2-PROCUREMENT-GAPLIST-03: meta.total is a real COUNT(*) over the
     // tenant set, not the capped page length (data.length).
-    const [data, total] = await Promise.all([
+    const [{ rows: data, sealedReveals }, total] = await Promise.all([
       tenderQueries.listBidEvaluations(ctx.tenantId, q.limit, q.offset, {
         isCommittee: hasAnyRole(ctx, [...BID_OPENING_COMMITTEE_ROLES]),
       }),
       tenderQueries.countBidEvaluations(ctx.tenantId),
     ]);
+    // Same fail-closed per-tender event the detail/evaluation routes emit when the
+    // committee sees still-sealed identities (tender_bidders_view, counts only).
+    for (const r of sealedReveals) await auditTenderBidders(ctx, r.tenderId, r.bidCount);
     // GAP-PROCUREMENT-BID-EVALUATION-06: bid scores are sealed-bid material, so
     // every read of the register is audited (who, when, how many rows, how many
     // carried an opened financial envelope -- never the bids themselves). Fails
