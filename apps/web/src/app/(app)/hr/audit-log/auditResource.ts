@@ -74,6 +74,7 @@ export const HR_AUDIT_RESOURCE_TYPES = [
   "leave_custom_rules_switch", // hrms leave type-admin consumer (custom-rules switch)
   "leave_type",
   "loan",
+  "loan_ceiling", // GAP-PAYROLL-LOANS-06 tenant loan ceilings
   "ltc_exemption",
   "manpower_plan",
   "policy_setting", // fin-hr-02 (wfh_eligibility / apar_deadlines / dashboard_scope)
