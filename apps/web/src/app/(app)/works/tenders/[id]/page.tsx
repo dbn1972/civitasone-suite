@@ -39,6 +39,10 @@ type TenderListItem = {
   tenderType: string | null;
   tenderCategory: string | null;
   status: string | null;
+  // C35 (TENDERS-NEW-02): optional register fields; null until populated.
+  tenderAmountMinor?: string | number | null;
+  approvingAuthorityId?: string | null;
+  contractorClassId?: string | null;
 };
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -269,6 +273,18 @@ export default async function TenderDetailPage(
               <dd className="v">
                 <StatusPill status={statusView.key} label={statusView.label} />
               </dd>
+            </div>
+            <div className="fld">
+              <dt className="l">Estimated Amount</dt>
+              <dd className="v">{tender.tenderAmountMinor != null ? formatMoney(String(tender.tenderAmountMinor)) : "—"}</dd>
+            </div>
+            <div className="fld">
+              <dt className="l">Approving Authority</dt>
+              <dd className="v">{tender.approvingAuthorityId ? "Assigned" : "—"}</dd>
+            </div>
+            <div className="fld">
+              <dt className="l">Contractor Class</dt>
+              <dd className="v">{tender.contractorClassId ? "Assigned" : "—"}</dd>
             </div>
             <div className="fld">
               <dt className="l">Work Number</dt>

@@ -273,7 +273,7 @@ describe("GET /v1/works/contractors/:id/rating-history -- ratedByName (DETAIL-03
 
   it("reports the configured cooling-off period in meta so the form's warning matches the enforced rule", async () => {
     fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("[]", { status: 200 }));
-    expect((await history()).json().meta.cooldownDays).toBe(0);
+    expect((await history()).json().meta.cooldownDays).toBe(90);
     process.env.WORKS_CONTRACTOR_RATING_COOLDOWN_DAYS = "45";
     try {
       expect((await history()).json().meta.cooldownDays).toBe(45);
@@ -289,7 +289,8 @@ describe("PATCH /v1/works/contractors/:id/rate -- cooling-off period (DETAIL-04)
   const daysAgo = (n: number) => new Date(Date.now() - n * 24 * 60 * 60 * 1000);
   afterEach(() => { delete process.env.WORKS_CONTRACTOR_RATING_COOLDOWN_DAYS; });
 
-  it("with no cooldown configured nothing is blocked and the history is not even consulted", async () => {
+  it("with the cooldown explicitly set to 0 nothing is blocked and the history is not even consulted", async () => {
+    process.env.WORKS_CONTRACTOR_RATING_COOLDOWN_DAYS = "0";
     const res = await rate();
     expect(res.statusCode).toBe(202);
     expect(latestRatingByActor).not.toHaveBeenCalled();
@@ -314,9 +315,21 @@ describe("PATCH /v1/works/contractors/:id/rate -- cooling-off period (DETAIL-04)
     expect(publishMock).toHaveBeenCalledTimes(2);
   });
 
+  it("C33: with nothing configured the default is 90 days, blocking (409) inside it and allowed after it", async () => {
+    latestRatingByActor.mockResolvedValue({ ratedAt: daysAgo(89) });
+    const blocked = await rate();
+    expect(blocked.statusCode).toBe(409);
+    expect(blocked.json().code).toBe("RATING_COOLDOWN");
+    latestRatingByActor.mockResolvedValue({ ratedAt: daysAgo(91) });
+    expect((await rate()).statusCode).toBe(202);
+    process.env.WORKS_CONTRACTOR_RATING_COOLDOWN_DAYS = "  ";
+    latestRatingByActor.mockResolvedValue({ ratedAt: daysAgo(10) });
+    expect((await rate()).statusCode).toBe(409);
+  });
+
   it("an unusable setting (0, negative, text, fractional) means no cooldown rather than a guess", async () => {
     latestRatingByActor.mockResolvedValue({ ratedAt: daysAgo(1) });
-    for (const bad of ["0", "-5", "abc", "2.5", ""]) {
+    for (const bad of ["0", "-5", "abc", "2.5"]) {
       process.env.WORKS_CONTRACTOR_RATING_COOLDOWN_DAYS = bad;
       expect((await rate()).statusCode).toBe(202);
     }

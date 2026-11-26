@@ -129,7 +129,7 @@ type ReadTx = Parameters<Parameters<typeof scopedRead>[0]>[0];
  * works.tenders has no producer (works.tender.create is declared in topics.ts but never wired - see
  * tenderOrPreTenderExists above), so the pre-tenders created through POST /v1/works/tenders/pre-tender are the
  * tenders that actually exist. The register therefore lists both; the FE detail page, quotations and awards already
- * accept either id. A pre-tender has no amount / authority / class / remarks columns (null) and carries its own
+ * accept either id. A pre-tender carries amount / authority / class as optional columns (null until populated) and has no remarks (null) and carries its own
  * status, which the FE status label prefers. Both branches are tenant-scoped.
  */
 function tenderRegisterRows(tenantId: string, id?: string) {
@@ -139,7 +139,7 @@ function tenderRegisterRows(tenantId: string, id?: string) {
       tenantId: tenders.tenantId,
       workId: tenders.workId,
       tenderTypeId: tenders.tenderTypeId,
-      tenderAmountMinor: tenders.tenderAmountMinor,
+      tenderAmountMinor: sql<bigint | null>`${tenders.tenderAmountMinor}`.mapWith(tenders.tenderAmountMinor).as("tender_amount_minor"),
       openingDate: tenders.openingDate,
       approvingAuthorityId: tenders.approvingAuthorityId,
       contractorClassId: tenders.contractorClassId,
@@ -157,10 +157,10 @@ function tenderRegisterRows(tenantId: string, id?: string) {
       tenantId: preTenders.tenantId,
       workId: preTenders.workId,
       tenderTypeId: preTenders.tenderTypeId,
-      tenderAmountMinor: sql<bigint>`NULL::bigint`.as("tender_amount_minor"),
+      tenderAmountMinor: sql<bigint | null>`${preTenders.tenderAmountMinor}`.mapWith(preTenders.tenderAmountMinor).as("tender_amount_minor"),
       openingDate: preTenders.openingDate,
-      approvingAuthorityId: sql<string | null>`NULL::uuid`.as("approving_authority_id"),
-      contractorClassId: sql<string | null>`NULL::uuid`.as("contractor_class_id"),
+      approvingAuthorityId: preTenders.approvingAuthorityId,
+      contractorClassId: preTenders.contractorClassId,
       remarks: sql<string | null>`NULL::varchar`.as("remarks"),
       status: preTenders.status,
       createdAt: preTenders.createdAt,

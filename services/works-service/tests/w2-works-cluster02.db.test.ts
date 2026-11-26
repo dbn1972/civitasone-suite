@@ -12,7 +12,7 @@
  *                                  event carries the stated reason; a rating can name the work it is about
  */
 import { randomUUID, randomBytes } from "node:crypto";
-import { describe, it, expect, afterAll, afterEach } from "vitest";
+import { describe, it, expect, afterAll, afterEach, beforeEach } from "vitest";
 import { runWithTenant } from "@civitasone/db";
 import { NonRetryableError } from "@civitasone/queue";
 import { eq } from "drizzle-orm";
@@ -65,6 +65,8 @@ async function outbox(topic: string, match: Record<string, string>): Promise<Arr
     Object.entries(match).every(([k, v]) => String(r.payload[k]) === v));
 }
 
+// C33: the production default is a 90-day cooldown; these scenarios rate repeatedly, so switch it off unless a test sets it.
+beforeEach(() => { process.env.WORKS_CONTRACTOR_RATING_COOLDOWN_DAYS = "0"; });
 afterEach(() => { delete process.env.WORKS_CONTRACTOR_RATING_COOLDOWN_DAYS; });
 
 afterAll(async () => {

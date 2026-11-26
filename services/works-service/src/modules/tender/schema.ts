@@ -19,6 +19,10 @@ export const preTenders = works.table("pre_tenders", {
   bidValidity: integer("bid_validity"),
   tenderClass: varchar("tender_class", { length: 64 }),
   fees: bigint("fees", { mode: "bigint" }),
+  // C35 (TENDERS-NEW-02): optional register fields; null until populated.
+  tenderAmountMinor: bigint("tender_amount_minor", { mode: "bigint" }),
+  approvingAuthorityId: uuid("approving_authority_id"),
+  contractorClassId: uuid("contractor_class_id"),
   publicationDate: timestamp("publication_date", { withTimezone: true }),
   downloadDate: timestamp("download_date", { withTimezone: true }),
   clarificationDate: timestamp("clarification_date", { withTimezone: true }),
