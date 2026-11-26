@@ -180,8 +180,35 @@ export async function countBidEvaluations(tenantId: string): Promise<number> {
   return repo.countBidEvaluationsByTenant(tenantId);
 }
 
-export async function listBidEvaluations(tenantId: string, limit: number, offset: number): Promise<BidEvaluationSummary[]> {
+/**
+ * Sealed-bid vendor-name omission on the cross-tender register: while a tender is
+ * still sealed (isBidderIdentitySealed) the vendor name is replaced by the same
+ * "Bidder N" handle (submission order) that the tender detail/evaluation views
+ * use, unless the caller is the bid-opening committee. Pure, so it is unit-testable.
+ */
+export function bidderLabelFor(
+  bid: { id: string },
+  tenderBids: ReadonlyArray<{ id: string; createdAt: Date }>,
+): string {
+  const ordered = [...tenderBids].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime() || a.id.localeCompare(b.id));
+  return `Bidder ${ordered.findIndex((b) => b.id === bid.id) + 1}`;
+}
+
+export async function listBidEvaluations(
+  tenantId: string, limit: number, offset: number, opts: { isCommittee?: boolean } = {},
+): Promise<BidEvaluationSummary[]> {
   const rows = await repo.listBidEvaluationsByTenant(tenantId, limit, offset);
+  // Per sealed tender: the full bid list, for stable submission-order numbering.
+  const sealedBids = new Map<string, Array<{ id: string; createdAt: Date }>>();
+  if (opts.isCommittee !== true) {
+    for (const tenderId of new Set(rows.map((r) => r.tenderId))) {
+      const first = rows.find((r) => r.tenderId === tenderId)!;
+      const all = await repo.findBidsByTender(tenderId);
+      if (isBidderIdentitySealed(first.tenderStatus, all.map((b) => b.status))) {
+        sealedBids.set(tenderId, all.map((b) => ({ id: b.id, createdAt: b.createdAt })));
+      }
+    }
+  }
   return rows.map((r) => {
     const tech = r.technicalScore ?? 0;
     const opened = r.financialOpened === true;
@@ -196,7 +223,7 @@ export async function listBidEvaluations(tenantId: string, limit: number, offset
       id: r.bidId,
       tender: r.tenderNo,
       tenderId: r.tenderId,
-      bidder: r.vendorName,
+      bidder: sealedBids.has(r.tenderId) ? bidderLabelFor({ id: r.bidId }, sealedBids.get(r.tenderId)!) : r.vendorName,
       technicalScore: tech,
       financialScore: fin,
       totalScore,

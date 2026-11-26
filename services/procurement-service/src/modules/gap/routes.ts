@@ -3,6 +3,8 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { listQuerySchema } from "@civitasone/schemas/common";
 import { resolveContext, requireRole } from "../../shared/context.js";
+import { hasAnyRole } from "@civitasone/auth";
+import { BID_OPENING_COMMITTEE_ROLES } from "../tender/domain.js";
 import { auditRead } from "../../shared/read-audit.js";
 import * as vendorQueries from "../vendor/queries.js";
 import * as tenderQueries from "../tender/queries.js";
@@ -31,7 +33,9 @@ export async function procurementGapRoutes(app: FastifyInstance): Promise<void> 
     // GAP2-PROCUREMENT-GAPLIST-03: meta.total is a real COUNT(*) over the
     // tenant set, not the capped page length (data.length).
     const [data, total] = await Promise.all([
-      tenderQueries.listBidEvaluations(ctx.tenantId, q.limit, q.offset),
+      tenderQueries.listBidEvaluations(ctx.tenantId, q.limit, q.offset, {
+        isCommittee: hasAnyRole(ctx, [...BID_OPENING_COMMITTEE_ROLES]),
+      }),
       tenderQueries.countBidEvaluations(ctx.tenantId),
     ]);
     // GAP-PROCUREMENT-BID-EVALUATION-06: bid scores are sealed-bid material, so

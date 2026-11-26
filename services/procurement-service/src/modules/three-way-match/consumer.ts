@@ -158,6 +158,8 @@ export function registerThreeWayMatchConsumers(queue: Queue): void {
           variancePct: result.totalVariancePct,
           qtyVariancePct: result.qtyVariancePct,
           priceVariancePct: result.priceVariancePct,
+          overInvoiced: result.overInvoiced,
+          nearPoCap: result.nearPoCap,
         },
       });
       await enqueue(tx, {
