@@ -4,7 +4,7 @@ import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
-import { checkNoRoomOverlap } from "./domain.js";
+import { checkNoRoomOverlap, assertRoomBookingTransition } from "./domain.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 
@@ -48,17 +48,71 @@ export function registerFacilitiesConsumers(queue: Queue): void {
         id: p.id, tenantId: p.tenantId, roomId: p.roomId,
         guestName: p.guestName, guestRef: p.guestRef ?? null,
         checkIn, checkOut, sponsorDept: p.sponsorDept ?? null,
-        chargesMinor: 0n, currency: "INR", status: "booked",
+        chargesMinor: 0n, currency: "INR", status: "pending",
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });
       await audit(tx, msg, "book", "room_booking", p.id);
     });
   });
 
+  queue.subscribe(COMMANDS.roomAdd, async (msg) => {
+    const p = msg.payload as { id: string; tenantId: string; guesthouseId: string; roomNo: string; type: string; capacity: number };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const inserted = await repo.insertRoom(tx, {
+        id: p.id, tenantId: p.tenantId, guesthouseId: p.guesthouseId, roomNo: p.roomNo,
+        type: p.type ?? "standard", capacity: p.capacity ?? 1, status: "available",
+        createdBy: msg.actorId, updatedBy: msg.actorId,
+      });
+      if (inserted) await audit(tx, msg, "add", "room", p.id, { roomNo: p.roomNo });
+    });
+  });
+
+  // Maker-checker, defence in depth: the route already 403s the requester; a command that reaches the
+  // queue another way cannot let the maker decide their own booking.
+  queue.subscribe(COMMANDS.roomApprove, async (msg) => {
+    const p = msg.payload as { bookingId: string; tenantId: string };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const booking = await repo.getRoomBookingByIdTx(tx, p.bookingId);
+      if (!booking) return;
+      assertRoomBookingTransition(booking.status, "approve");
+      if (booking.createdBy === msg.actorId) {
+        throw new Error("MAKER_CHECKER_VIOLATION: a room booking cannot be approved by its requester");
+      }
+      await repo.updateRoomBooking(tx, p.bookingId, {
+        status: "confirmed", decidedBy: msg.actorId, decidedAt: new Date(), updatedBy: msg.actorId,
+      });
+      await audit(tx, msg, "approve", "room_booking", p.bookingId);
+    });
+    await cache.invalidate(cache.makeKey(msg.tenantId, "guesthouse_bookings", "list:50"));
+  });
+
+  queue.subscribe(COMMANDS.roomReject, async (msg) => {
+    const p = msg.payload as { bookingId: string; tenantId: string; reason: string };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const booking = await repo.getRoomBookingByIdTx(tx, p.bookingId);
+      if (!booking) return;
+      assertRoomBookingTransition(booking.status, "reject");
+      if (booking.createdBy === msg.actorId) {
+        throw new Error("MAKER_CHECKER_VIOLATION: a room booking cannot be rejected by its requester");
+      }
+      await repo.updateRoomBooking(tx, p.bookingId, {
+        status: "rejected", decidedBy: msg.actorId, decidedAt: new Date(), decisionReason: p.reason, updatedBy: msg.actorId,
+      });
+      await audit(tx, msg, "reject", "room_booking", p.bookingId, { reason: p.reason });
+    });
+    await cache.invalidate(cache.makeKey(msg.tenantId, "guesthouse_bookings", "list:50"));
+  });
+
   queue.subscribe(COMMANDS.roomCheckin, async (msg) => {
     const p = msg.payload as { bookingId: string; tenantId: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      const booking = await repo.getRoomBookingByIdTx(tx, p.bookingId);
+      if (!booking) return;
+      assertRoomBookingTransition(booking.status, "checkin");
       await repo.updateRoomBooking(tx, p.bookingId, { status: "checked_in", updatedBy: msg.actorId });
       await audit(tx, msg, "checkin", "room_booking", p.bookingId);
     });
@@ -69,6 +123,9 @@ export function registerFacilitiesConsumers(queue: Queue): void {
     const p = msg.payload as { bookingId: string; tenantId: string; chargesMinor: number };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      const booking = await repo.getRoomBookingByIdTx(tx, p.bookingId);
+      if (!booking) return;
+      assertRoomBookingTransition(booking.status, "checkout");
       await repo.updateRoomBooking(tx, p.bookingId, {
         status: "checked_out", chargesMinor: BigInt(p.chargesMinor), updatedBy: msg.actorId,
       });

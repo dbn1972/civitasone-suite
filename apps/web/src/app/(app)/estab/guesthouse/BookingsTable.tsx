@@ -17,18 +17,23 @@ export type BookingRow = {
   checkOut: string;
   status: string;
   statusRaw: string;
+  /** Officer who raised the booking; the approver must be someone else (maker-checker). */
+  requestedBy?: string;
 };
 
 const SEGMENTS = ["All", "Pending", "In-house"];
 
-export function BookingsTable({ rows, canOperate = false }: { rows: BookingRow[]; canOperate?: boolean }) {
+export function BookingsTable({ rows, canOperate = false, canApprove = false, viewerId = null }: {
+  rows: BookingRow[]; canOperate?: boolean; canApprove?: boolean; viewerId?: string | null;
+}) {
   const router = useRouter();
   const t = useEstabT();
   const [seg, setSeg] = useState("All");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [actionTarget, setActionTarget] = useState<BookingRow | null>(null);
-  const [actionKind, setActionKind] = useState<"checkin" | "checkout">("checkin");
+  const [actionKind, setActionKind] = useState<"checkin" | "checkout" | "approve" | "reject">("checkin");
+  const [reason, setReason] = useState("");
   // Charges collected at check-out, as the officer typed them (rupees). Converted to integer paise with
   // string arithmetic only (never a float): "1500.50" -> 150050. Blank is not 0; the officer states it.
   const [charges, setCharges] = useState("");
@@ -52,28 +57,31 @@ export function BookingsTable({ rows, canOperate = false }: { rows: BookingRow[]
   async function executeAction() {
     if (!actionTarget) return;
     setMessage(""); setError("");
-    const endpoint =
-      actionKind === "checkin"
-        ? `/api/proxy/v1/estab/room-bookings/${actionTarget.id}/checkin`
-        : `/api/proxy/v1/estab/room-bookings/${actionTarget.id}/checkout`;
+    const base = `/api/proxy/v1/estab/room-bookings/${actionTarget.id}`;
+    const endpoint = `${base}/${actionKind}`;
+    const decision = actionKind === "approve" || actionKind === "reject";
     // The charges are what the officer entered at check-out; no tariff is applied or assumed here.
     if (actionKind === "checkout" && chargesMinor === null) throw new Error(t("ghChargesInvalid"));
     const res = await fetch(endpoint, {
-      method: "PATCH",
+      method: decision ? "POST" : "PATCH",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify(actionKind === "checkout" ? { chargesMinor } : {}),
+      body: JSON.stringify(
+        actionKind === "checkout" ? { chargesMinor } : actionKind === "reject" ? { reason: reason.trim() } : {},
+      ),
     });
     if (!res.ok) throw await userFacingErrorFromResponse(res, "save");
-    setMessage(`${actionKind === "checkin" ? "Checked in" : "Checked out"}: ${actionTarget.guest}`);
+    const done = { checkin: "Checked in", checkout: "Checked out", approve: "Approved", reject: "Rejected" }[actionKind];
+    setMessage(`${done}: ${actionTarget.guest}`);
     router.refresh();
   }
 
   const confirm = useConfirmAction({ onConfirm: () => executeAction() });
 
-  function triggerAction(row: BookingRow, kind: "checkin" | "checkout") {
+  function triggerAction(row: BookingRow, kind: "checkin" | "checkout" | "approve" | "reject") {
     setActionTarget(row);
     setActionKind(kind);
     setCharges("");
+    setReason("");
     confirm.trigger();
   }
 
@@ -101,7 +109,17 @@ export function BookingsTable({ rows, canOperate = false }: { rows: BookingRow[]
               // GAP-ESTAB-GUESTHOUSE-01: only establishment officers see check-in/out
               // (estab-service 403s every other role on these endpoints).
               if (!canOperate) return <>—</>;
-              if (r.statusRaw === "confirmed" || r.statusRaw === "pending") {
+              // Approve / Reject: server enforces a different officer than the requester (403 otherwise).
+              if (r.statusRaw === "pending") {
+                if (!canApprove || (viewerId && r.requestedBy === viewerId)) return <>Awaiting approval</>;
+                return (
+                  <>
+                    <Button type="button" variant="ghost" onClick={() => triggerAction(r, "approve")}>Approve</Button>
+                    <Button type="button" variant="ghost" onClick={() => triggerAction(r, "reject")}>Reject</Button>
+                  </>
+                );
+              }
+              if (r.statusRaw === "confirmed") {
                 return (
                   <Button type="button" variant="ghost" onClick={() => triggerAction(r, "checkin")}>
                     Check in
@@ -127,19 +145,33 @@ export function BookingsTable({ rows, canOperate = false }: { rows: BookingRow[]
       />
       <ConfirmDialog
         open={confirm.open}
-        title={actionKind === "checkin" ? "Confirm check-in?" : "Confirm check-out?"}
-        description={
-          actionKind === "checkin"
-            ? `Check in ${actionTarget?.guest ?? "this guest"} to ${actionTarget?.room ?? "the room"}?`
-            : `Check out ${actionTarget?.guest ?? "this guest"} from ${actionTarget?.room ?? "the room"}?`
-        }
-        confirmLabel={actionKind === "checkin" ? "Check in" : "Check out"}
+        title={{ checkin: "Confirm check-in?", checkout: "Confirm check-out?", approve: "Approve this booking?", reject: "Reject this booking?" }[actionKind]}
+        description={{
+          checkin: `Check in ${actionTarget?.guest ?? "this guest"} to ${actionTarget?.room ?? "the room"}?`,
+          checkout: `Check out ${actionTarget?.guest ?? "this guest"} from ${actionTarget?.room ?? "the room"}?`,
+          approve: `Approve ${actionTarget?.guest ?? "this guest"}'s booking for ${actionTarget?.room ?? "the room"}?`,
+          reject: `Reject ${actionTarget?.guest ?? "this guest"}'s booking for ${actionTarget?.room ?? "the room"}? The reason is recorded.`,
+        }[actionKind]}
+        confirmLabel={{ checkin: "Check in", checkout: "Check out", approve: "Approve", reject: "Reject" }[actionKind]}
         busy={confirm.busy}
-        confirmDisabled={actionKind === "checkout" && chargesMinor === null}
+        confirmDisabled={(actionKind === "checkout" && chargesMinor === null) || (actionKind === "reject" && reason.trim().length < 3)}
         errorMessage={confirm.error}
         onConfirm={confirm.confirm}
         onCancel={confirm.cancel}
       >
+        {actionKind === "reject" ? (
+          <div className="cd-field">
+            <label htmlFor="gh-reject-reason">Reason for rejection</label>
+            <input
+              id="gh-reject-reason"
+              type="text"
+              autoComplete="off"
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              aria-required="true"
+            />
+          </div>
+        ) : null}
         {actionKind === "checkout" ? (
           <div className="cd-field">
             <label htmlFor="gh-checkout-charges">{t("ghCheckoutCharges")}</label>

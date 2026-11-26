@@ -8,6 +8,7 @@ vi.mock("../../../_data/loaders", () => ({
 let mockRoles: string[] = ["estab_officer"];
 vi.mock("@/lib/auth/roleGuard", () => ({
   getSessionRoles: () => mockRoles,
+  getSessionUserId: () => "actor-checker",
   ESTAB_DFA_DRAFTER_ROLES: ["estab_officer", "estab_admin", "super_admin"],
 }));
 vi.mock("next/navigation", () => ({
@@ -246,5 +247,43 @@ describe("GuesthousePage - check-out records the charges the officer states (GAP
     fireEvent.click(within(dialog).getByRole("button", { name: "Check in" }));
     await waitFor(() => expect(calls).toHaveLength(1));
     expect(calls[0]!.body).toEqual({});
+  });
+});
+
+describe("GuesthousePage — GUESTHOUSE-01 (approve / reject, maker-checker)", () => {
+  beforeEach(() => {
+    getGuesthouseBookingsMock.mockReset();
+    mockRoles = ["estab_officer"];
+  });
+  const pending = (requestedBy: string) => ({
+    data: [
+      {
+        id: "b9",
+        bookingNo: "B9A1C2D3",
+        guestName: "Dr. Anjali Deshpande",
+        department: "Health",
+        checkInDate: "2026-12-10T08:30:00.000Z",
+        checkOutDate: "2026-12-11T06:30:00.000Z",
+        roomNo: "204",
+        status: "pending",
+        requestedBy,
+      },
+    ],
+    source: "api",
+  });
+
+  it("shows Approve and Reject to an officer other than the requester, and no Check in yet", async () => {
+    getGuesthouseBookingsMock.mockResolvedValueOnce(pending("actor-maker"));
+    render(await GuesthousePage());
+    expect(screen.getByRole("button", { name: "Approve" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Reject" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Check in" })).not.toBeInTheDocument();
+  });
+
+  it("hides Approve and Reject from the officer who raised the booking", async () => {
+    getGuesthouseBookingsMock.mockResolvedValueOnce(pending("actor-checker"));
+    render(await GuesthousePage());
+    expect(screen.queryByRole("button", { name: "Approve" })).not.toBeInTheDocument();
+    expect(screen.getByText("Awaiting approval")).toBeInTheDocument();
   });
 });

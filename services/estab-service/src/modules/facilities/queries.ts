@@ -1,11 +1,12 @@
 import { cache } from "../../shared/infra.js";
 import * as repo from "./repo.js";
 
-function mapBookingStatus(status: string): "pending" | "confirmed" | "checked_in" | "checked_out" | "cancelled" {
+function mapBookingStatus(status: string): "pending" | "confirmed" | "checked_in" | "checked_out" | "cancelled" | "rejected" {
   if (status === "confirmed" || status === "booked") return "confirmed";
   if (status === "checked_in") return "checked_in";
   if (status === "checked_out") return "checked_out";
   if (status === "cancelled") return "cancelled";
+  if (status === "rejected") return "rejected";
   return "pending";
 }
 
@@ -42,7 +43,42 @@ export async function listGuesthouseBookingSummaries(tenantId: string, limit: nu
     checkInDate: new Date(row.checkIn as unknown as string).toISOString(),
     checkOutDate: new Date(row.checkOut as unknown as string).toISOString(),
     status: mapBookingStatus(row.status),
+    // Lets the UI hide Approve/Reject from the officer who raised the booking (maker-checker).
+    requestedBy: row.createdBy,
+    ...(row.decisionReason ? { decisionReason: row.decisionReason } : {}),
   }));
+}
+
+export async function listGuesthouses(tenantId: string, limit: number) {
+  const rows = await repo.listGuesthousesByTenant(tenantId, limit);
+  return rows.map((g) => ({ id: g.id, name: g.name, location: g.location ?? undefined, contact: g.contact ?? undefined, status: g.status }));
+}
+
+/** Room detail: the room, its guesthouse, and its most recent bookings (newest first). */
+export async function getRoomDetail(tenantId: string, id: string) {
+  const room = await repo.getRoomById(tenantId, id);
+  if (!room) return null;
+  const [guesthouse, bookings] = await Promise.all([
+    repo.getGuesthouseById(tenantId, room.guesthouseId),
+    repo.listBookingsForRoom(tenantId, id, 20),
+  ]);
+  return {
+    id: room.id,
+    roomNo: room.roomNo,
+    type: room.type,
+    capacity: room.capacity,
+    status: room.status,
+    guesthouseId: room.guesthouseId,
+    guesthouseName: guesthouse?.name,
+    bookings: bookings.map((b) => ({
+      id: b.id,
+      guestName: b.guestName,
+      department: b.sponsorDept ?? undefined,
+      checkInDate: new Date(b.checkIn as unknown as string).toISOString(),
+      checkOutDate: new Date(b.checkOut as unknown as string).toISOString(),
+      status: mapBookingStatus(b.status),
+    })),
+  };
 }
 
 function mapBookAvailability(row: { copiesAvailable: number; status: string }): "available" | "unavailable" | "withdrawn" {

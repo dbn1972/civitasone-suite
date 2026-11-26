@@ -10,7 +10,7 @@ import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import {
-  idParam, createGuesthouseBody, bookRoomBody, checkoutBody, addBookBody, issueBookBody,
+  idParam, createGuesthouseBody, addRoomBody, rejectRoomBookingBody, bookRoomBody, checkoutBody, addBookBody, issueBookBody,
   libraryBooksQuery, libraryIssuesQuery, renewIssueBody, returnIssueBody, editBookBody, withdrawBookBody,
 } from "./validators.js";
 import * as commands from "./commands.js";
@@ -37,6 +37,45 @@ export async function facilitiesRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ESTAB_ROLES);
     const body = bookRoomBody.parse(req.body);
     return sendAccepted(reply, acceptedResponseSchema, await commands.bookRoom(ctx, body));
+  });
+
+  // Approval step (maker-checker: the requesting officer cannot decide their own booking).
+  app.post("/v1/estab/room-bookings/:id/approve", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ESTAB_ROLES);
+    const { id } = idParam.parse(req.params);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.approveRoomBooking(ctx, id));
+  });
+
+  app.post("/v1/estab/room-bookings/:id/reject", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ESTAB_ROLES);
+    const { id } = idParam.parse(req.params);
+    const body = rejectRoomBookingBody.parse(req.body);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.rejectRoomBooking(ctx, id, body));
+  });
+
+  app.post("/v1/estab/rooms", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ESTAB_ROLES);
+    const body = addRoomBody.parse(req.body);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.addRoom(ctx, body));
+  });
+
+  app.get("/v1/estab/rooms/:id", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    const { id } = idParam.parse(req.params);
+    const room = await queries.getRoomDetail(ctx.tenantId, id);
+    if (!room) throw new HttpError(404, "NOT_FOUND", "room not found");
+    return reply.send({ data: room });
+  });
+
+  app.get("/v1/estab/guesthouses", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    const q = listQuerySchema.parse(req.query);
+    return reply.send({ data: await queries.listGuesthouses(ctx.tenantId, q.limit) });
   });
 
   app.patch("/v1/estab/room-bookings/:id/checkin", async (req, reply) => {

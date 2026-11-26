@@ -1,8 +1,8 @@
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, sql, desc } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { estabGuesthouses, estabRoomBookings, estabRooms, estabLibraryBooks, estabIssues } from "./schema.js";
 import type {
-  GuesthouseInsert, RoomBookingRow, RoomBookingInsert,
+  GuesthouseInsert, GuesthouseRow, RoomRow, RoomInsert, RoomBookingRow, RoomBookingInsert,
   LibraryBookInsert, LibraryBookRow, IssueInsert, IssueRow,
 } from "./schema.js";
 
@@ -29,6 +29,46 @@ export async function findRoomBookingById(id: string, tenantId: string): Promise
 export async function listRoomsByTenant(tenantId: string, limit: number) {
   return db.transaction((tx) => tx.select().from(estabRooms)
     .where(eq(estabRooms.tenantId, tenantId)).limit(limit));
+}
+
+export async function getRoomBookingByIdTx(tx: Writer, id: string): Promise<RoomBookingRow | undefined> {
+  const rows = await (tx as typeof db).select().from(estabRoomBookings).where(eq(estabRoomBookings.id, id)).limit(1);
+  return rows[0];
+}
+
+export async function listGuesthousesByTenant(tenantId: string, limit: number): Promise<GuesthouseRow[]> {
+  return db.transaction((tx) => tx.select().from(estabGuesthouses)
+    .where(eq(estabGuesthouses.tenantId, tenantId)).limit(limit));
+}
+
+export async function getGuesthouseById(tenantId: string, id: string): Promise<GuesthouseRow | undefined> {
+  const rows = await db.transaction((tx) => tx.select().from(estabGuesthouses)
+    .where(and(eq(estabGuesthouses.tenantId, tenantId), eq(estabGuesthouses.id, id))).limit(1));
+  return rows[0];
+}
+
+export async function getRoomById(tenantId: string, id: string): Promise<RoomRow | undefined> {
+  const rows = await db.transaction((tx) => tx.select().from(estabRooms)
+    .where(and(eq(estabRooms.tenantId, tenantId), eq(estabRooms.id, id))).limit(1));
+  return rows[0];
+}
+
+export async function findRoomByNo(tenantId: string, guesthouseId: string, roomNo: string): Promise<RoomRow | undefined> {
+  const rows = await db.transaction((tx) => tx.select().from(estabRooms)
+    .where(and(eq(estabRooms.tenantId, tenantId), eq(estabRooms.guesthouseId, guesthouseId), eq(estabRooms.roomNo, roomNo))).limit(1));
+  return rows[0];
+}
+
+/** Idempotent on (guesthouse_id, room_no): a replayed or racing add-room is a no-op, never a duplicate. */
+export async function insertRoom(tx: Writer, row: RoomInsert): Promise<boolean> {
+  const out = await tx.insert(estabRooms).values(row).onConflictDoNothing().returning({ id: estabRooms.id });
+  return out.length > 0;
+}
+
+export async function listBookingsForRoom(tenantId: string, roomId: string, limit: number): Promise<RoomBookingRow[]> {
+  return db.transaction((tx) => tx.select().from(estabRoomBookings)
+    .where(and(eq(estabRoomBookings.tenantId, tenantId), eq(estabRoomBookings.roomId, roomId)))
+    .orderBy(desc(estabRoomBookings.checkIn)).limit(limit));
 }
 
 export async function insertGuesthouse(tx: Writer, row: GuesthouseInsert): Promise<void> {
