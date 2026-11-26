@@ -79,6 +79,14 @@ export default async function Page(props: { params: Promise<{ id: string }> }) {
         </div>
       </div>
 
+      {/* GAP-KNOWLEDGE-POLICIES-DETAIL-04: reviewer feedback; API only sends it to author + approvers */}
+      {policy.status === "draft" && policy.rejectReason && (
+        <div className="card">
+          <div className="card-h"><h3>Returned by reviewer</h3></div>
+          <div className="pad" style={{ whiteSpace: "pre-wrap" }}>{policy.rejectReason}</div>
+        </div>
+      )}
+
       {/* GAP-KNOWLEDGE-POLICIES-DETAIL-07: supersedes link */}
       {policy.supersedesId && (
         <div className="card">

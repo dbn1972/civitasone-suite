@@ -5,7 +5,7 @@ import { listQuerySchema, acceptedResponseSchema } from "@civitasone/schemas/com
 import { sendValidated, sendAccepted } from "@civitasone/schemas/validate";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { pathUuid } from "../../shared/params.js";
-import { createDocumentBody } from "./validators.js";
+import { createDocumentBody, archiveDocumentBody } from "./validators.js";
 import {
   KnowledgeDocSummaryListSchema,
   KnowledgeRecordListSchema,
@@ -173,6 +173,24 @@ export async function documentRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(403, "MAKER_CHECKER", "the author of a document cannot publish it (maker-checker)");
     }
     return reply.send({ id, status, correlationId: ctx.correlationId });
+  });
+
+  // PATCH /v1/knowledge/articles/:id/archive — soft-archive with a required
+  // reason (GAP-KNOWLEDGE-LIST-01). Approver roles only; the reason is recorded
+  // in the audit event written in the same transaction as the status change.
+  app.patch("/v1/knowledge/articles/:id/archive", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, APPROVER_ROLES);
+    const id = pathUuid(req.params);
+    const body = archiveDocumentBody.parse(req.body ?? {});
+    const levels = clearedAccessLevels(ctx);
+    if (levels && !(await queries.getDocumentById(ctx.tenantId, id, levels))) {
+      throw new HttpError(404, "NOT_FOUND", "article not found");
+    }
+    const outcome = await queries.archiveDocument(ctx.tenantId, id, ctx, body.reason);
+    if (outcome === "not_found") throw new HttpError(404, "NOT_FOUND", "article not found");
+    if (outcome === "already_archived") throw new HttpError(409, "ALREADY_ARCHIVED", "article is already archived");
+    return reply.send({ id, status: "archived", correlationId: ctx.correlationId });
   });
 
   // GET /v1/knowledge/categories/:id/articles — list articles in a category

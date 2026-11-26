@@ -1,7 +1,11 @@
 import { ModuleHub } from "../../_components/ModuleHub";
 import { IDENTITY_ADMIN_ROLES } from "@/lib/auth/identityRoles";
+import { IdentityPosture } from "./IdentityPosture";
 
-export default function Page() {
+export default async function Page() {
+  // B30: resolve the (tenant_admin-only) posture panel here so the async work is
+  // awaited by the server page, not left as an un-awaited async child element.
+  const posture = await IdentityPosture();
   return (
     <ModuleHub
       title="Identity"
@@ -38,6 +42,8 @@ export default function Page() {
           roles: IDENTITY_ADMIN_ROLES,
         },
       ]}
-    />
+    >
+      {posture}
+    </ModuleHub>
   );
 }

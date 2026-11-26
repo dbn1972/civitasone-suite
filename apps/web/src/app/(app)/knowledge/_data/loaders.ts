@@ -77,6 +77,7 @@ export function getKnowledgePolicy(id: string): Promise<LoaderResult<PolicyDetai
         body: str(r.body),
         reviewerId: strOrNull(r.reviewerId),
         supersedesId: strOrNull(r.supersedesId),
+        rejectReason: strOrNull(r.rejectReason),
         publishedAt: strOrNull(r.publishedAt),
         createdAt: str(r.createdAt),
       };

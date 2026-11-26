@@ -15,6 +15,12 @@ export const createDocumentBody = z.object({
 });
 export type CreateDocumentBody = z.infer<typeof createDocumentBody>;
 
+// D6 / GAP-KNOWLEDGE-LIST-01: archiving requires a recorded reason (audited).
+export const archiveDocumentBody = z.object({
+  reason: z.string().trim().min(10, "reason must be at least 10 characters").max(500),
+});
+export type ArchiveDocumentBody = z.infer<typeof archiveDocumentBody>;
+
 export const documentViewSchema = z.object({
   id: z.string().uuid(),
   tenantId: z.string().uuid(),

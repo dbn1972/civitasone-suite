@@ -351,3 +351,47 @@ export async function setStatusAudited(
     return "ok" as const;
   });
 }
+
+export type ArchiveOutcome = "ok" | "not_found" | "already_archived";
+
+/**
+ * D6 / GAP-KNOWLEDGE-LIST-01: soft-archive (status -> archived; the row, its
+ * versions and shares are retained). The required reason travels in the audit
+ * event that is enqueued in the SAME tenant-scoped transaction as the status
+ * change, so the archive and its audit trail can never diverge.
+ */
+export async function archiveAudited(
+  tenantId: string,
+  id: string,
+  actor: { actorId: string; correlationId: string },
+  reason: string,
+): Promise<ArchiveOutcome> {
+  return tenantTransaction(db, tenantId, async (tx) => {
+    const w = tx as unknown as Writer;
+    const rows = await w.select().from(documents)
+      .where(and(eq(documents.tenantId, tenantId), eq(documents.id, id)))
+      .for("update");
+    const row = rows[0];
+    if (!row) return "not_found" as const;
+    if (row.status === "archived") return "already_archived" as const;
+    await updateStatus(w, tenantId, id, "archived");
+    await enqueue(tx as unknown as DrizzleTx, {
+      topic: "audit.event.record",
+      eventType: "audit.event.record",
+      tenantId,
+      actorId: actor.actorId,
+      correlationId: actor.correlationId,
+      payload: {
+        service: "knowledge",
+        action: "archive",
+        resourceType: "document",
+        resourceId: id,
+        outcome: "success",
+        previousStatus: row.status,
+        newStatus: "archived",
+        reason,
+      },
+    });
+    return "ok" as const;
+  });
+}
