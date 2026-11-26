@@ -64,7 +64,7 @@ describe("Route: arrears/bonus/reimbursement CQRS handlers use sendAccepted (202
   // write + 201/200 reply — asserting the same static shape as arrears/bonus/
   // reimbursements above now that they've been lifted onto the CQRS pattern.
   it("POST /v1/payroll/salary-revisions calls sendAccepted(...) with commands.createSalaryRevision", () => {
-    const m = /app\.post\("\/v1\/payroll\/salary-revisions",\s*async[\s\S]{0,400}?\}\);/.exec(src);
+    const m = /app\.post\("\/v1\/payroll\/salary-revisions",\s*async[\s\S]{0,800}?\}\);/.exec(src);
     expect(m).not.toBeNull();
     expect(m![0]).toContain("sendAccepted");
     expect(m![0]).toContain("commands.createSalaryRevision");

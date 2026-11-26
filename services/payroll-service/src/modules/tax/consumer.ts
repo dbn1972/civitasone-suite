@@ -1,4 +1,5 @@
 import type { Queue } from "@civitasone/queue";
+import { NonRetryableError } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
@@ -262,9 +263,20 @@ export function registerTaxConsumers(queue: Queue): void {
         UPDATE payroll.payroll_tax_declarations
            SET status = 'verified', updated_at = now(), updated_by = ${msg.actorId}::uuid
          WHERE id = ${p.id}::uuid AND tenant_id = ${msg.tenantId}::uuid AND status = 'submitted'
+           AND created_by <> ${msg.actorId}::uuid
+           AND (updated_by IS NULL OR updated_by <> ${msg.actorId}::uuid)
         RETURNING employee_id::text AS employee_id, fy
       `)) as unknown as Array<{ employee_id: string; fy: string }>;
-      if (done.length === 0) return;
+      if (done.length === 0) {
+        // maker != checker is enforced here too (the route check alone is not authoritative): a still-'submitted'
+        // row that the UPDATE skipped can only have been skipped by the self-check. Any other state is an idempotent no-op.
+        const still = (await tx.execute(sql`
+          SELECT 1 AS one FROM payroll.payroll_tax_declarations
+           WHERE id = ${p.id}::uuid AND tenant_id = ${msg.tenantId}::uuid AND status = 'submitted'
+        `)) as unknown as Array<unknown>;
+        if (still.length > 0) throw new NonRetryableError(`SELF_VERIFY_FORBIDDEN: declaration ${p.id} must be verified by someone other than who filed it`);
+        return;
+      }
       await auditDetail(tx, msg, "verify", "tax_declaration", p.id, {
         employeeId: done[0]!.employee_id, fy: done[0]!.fy, before: { status: "submitted" }, after: { status: "verified" }, note: p.note ?? null,
       });

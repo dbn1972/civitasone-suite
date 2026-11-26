@@ -2172,12 +2172,12 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
       const inserted = (await tx.execute(sql`
         INSERT INTO payroll.payroll_salary_revisions
           (id, tenant_id, employee_id, effective_date, old_basic_minor, new_basic_minor,
-           old_gross_minor, new_gross_minor, revision_type, order_no, approved_by, created_by, status, created_at)
+           old_gross_minor, new_gross_minor, revision_type, order_no, approved_by, created_by, status, created_at, old_basic_override_reason)
         VALUES
           (${p.id}::uuid, ${p.tenantId}::uuid, ${p.employeeId}::uuid,
            ${p.effectiveDate}::date, ${p.oldBasicMinor}, ${p.newBasicMinor},
            ${p.oldGrossMinor}, ${p.newGrossMinor}, ${p.revisionType},
-           ${p.orderNo ?? null}, ${needsSecondApprover ? null : msg.actorId}::uuid, ${msg.actorId}::uuid, ${status}, NOW())
+           ${p.orderNo ?? null}, ${needsSecondApprover ? null : msg.actorId}::uuid, ${msg.actorId}::uuid, ${status}, NOW(), ${p.oldBasicOverrideReason ?? null})
         ON CONFLICT (id) DO NOTHING
         RETURNING id
       `)) as unknown as Array<{ id: string }>;

@@ -93,3 +93,12 @@ describe("C19 loan ceilings: tenant-configurable, admin-only writes", () => {
     expect(decideLoanCeiling(50000000n, 50000001n).allowed).toBe(false);
   });
 });
+
+describe("C20: old-basic override is admin-only (no lone-officer self-authorisation)", () => {
+  const REV = { employeeId: DECL, effectiveDate: "2026-04-01", oldBasicMinor: 4000000, newBasicMinor: 4400000, oldGrossMinor: 8000000, newGrossMinor: 8800000, revisionType: "annual_increment", orderNo: "ORD-1", oldBasicOverrideReason: "HRMS basic stale after fitment" };
+  it("payroll_officer sending oldBasicOverrideReason gets 403 and nothing is published", async () => {
+    const r = await call("POST", "/v1/payroll/salary-revisions", OFFICER, ["payroll_officer"], REV);
+    expect(r.statusCode).toBe(403);
+    expect(mockPublish).not.toHaveBeenCalled();
+  });
+});
