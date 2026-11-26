@@ -153,14 +153,41 @@ describe("GET /v1/hrms/disciplinary-cases (GAP-HR-DISCIPLINARY-01)", () => {
   });
 });
 
-describe("GET /v1/hrms/disciplinary-cases/:caseId (unchanged detail route)", () => {
-  it("still returns the complete, untruncated allegation text behind its existing role gate", async () => {
-    const res = await app.inject({
-      method: "GET", url: `/v1/hrms/disciplinary-cases/${longAllegationCaseId}`,
-      headers: auth(HR_OFFICER_ACTOR, ["hr_officer"]),
-    });
-    expect(res.statusCode).toBe(200);
-    expect(res.json().allegation).toBe(FULL_ALLEGATION);
+describe("GET /v1/hrms/disciplinary-cases/:caseId + /employees/:id/disciplinary-cases -- allegation is vigilance-only (GAP-HR-VIGILANCE-01)", () => {
+  const detail = (roles: string[]) => app.inject({
+    method: "GET", url: `/v1/hrms/disciplinary-cases/${longAllegationCaseId}`, headers: auth(HR_OFFICER_ACTOR, roles),
+  });
+
+  it("hr_admin / hr_officer read the case but the allegation text is null and never in the body", async () => {
+    for (const roles of [["hr_officer"], ["hr_admin"]]) {
+      const res = await detail(roles);
+      expect(res.statusCode).toBe(200);
+      expect(res.json().allegation).toBeNull();
+      expect(res.body.includes(FULL_ALLEGATION)).toBe(false);
+    }
+  });
+
+  it("a vigilance_officer (and super_admin) gets the complete, untruncated allegation", async () => {
+    for (const roles of [["vigilance_officer"], ["super_admin"]]) {
+      const res = await detail(roles);
+      expect(res.statusCode).toBe(200);
+      expect(res.json().allegation).toBe(FULL_ALLEGATION);
+    }
+  });
+
+  it("the per-employee list masks the same way", async () => {
+    const empId = (await detail(["vigilance_officer"])).json().employeeId as string;
+    const hr = await app.inject({ method: "GET", url: `/v1/hrms/employees/${empId}/disciplinary-cases`, headers: auth(HR_OFFICER_ACTOR, ["hr_admin"]) });
+    expect(hr.statusCode).toBe(200);
+    expect(hr.body.includes(FULL_ALLEGATION)).toBe(false);
+    const vig = await app.inject({ method: "GET", url: `/v1/hrms/employees/${empId}/disciplinary-cases`, headers: auth(HR_OFFICER_ACTOR, ["vigilance_officer"]) });
+    expect(vig.statusCode).toBe(200);
+    expect(vig.body.includes(FULL_ALLEGATION)).toBe(true);
+  });
+
+  it("manager / employee remain refused (403)", async () => {
+    expect((await detail(["manager"])).statusCode).toBe(403);
+    expect((await detail(["employee"])).statusCode).toBe(403);
   });
 });
 

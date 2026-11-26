@@ -104,10 +104,10 @@ describe("POST /v1/hrms/leave-requests -- 20-character reason (GAP-HR-LEAVE-APPL
     expect((res.json() as { valid: boolean }).valid).toBe(true);
   });
 
-  it("an offline request queued BEFORE the cut-over (x-queued-at) is grandfathered; one queued after it is not", async () => {
-    const old = await post("/v1/hrms/leave-requests", body("fever"), { "x-queued-at": "2026-11-20T10:15:00.000Z" });
-    expect(old.statusCode).toBe(202);
+  it("a stamp after the cut-over, or in the future, is never honoured (the grandfather rule itself is unit-tested with an injected clock)", async () => {
     const fresh = await post("/v1/hrms/leave-requests", body("fever"), { "x-queued-at": "2026-12-05T10:15:00.000Z" });
     expect(fresh.statusCode).toBe(400);
+    const future = await post("/v1/hrms/leave-requests", body("fever"), { "x-queued-at": "2026-11-20T10:15:00.000Z".replace("2026", "2099") });
+    expect(future.statusCode).toBe(400);
   });
 });

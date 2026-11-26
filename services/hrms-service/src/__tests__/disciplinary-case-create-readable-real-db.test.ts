@@ -112,7 +112,7 @@ describe("disciplinary case creation is genuinely readable afterward (not just 2
 
     const list = await app.inject({
       method: "GET", url: `/v1/hrms/employees/${employeeId}/disciplinary-cases`,
-      headers: auth(HR_ADMIN_ACTOR, ["hr_admin"]),
+      headers: auth(HR_ADMIN_ACTOR, ["vigilance_officer"]), // allegation text is vigilance-only (GAP-HR-VIGILANCE-01)
     });
     expect(list.statusCode).toBe(200);
     const rows = list.json().data as Array<Record<string, unknown>>;
