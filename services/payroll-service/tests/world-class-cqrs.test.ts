@@ -357,23 +357,48 @@ describe("Reimbursement CQRS", () => {
 });
 
 describe("Salary revision CQRS (F3 leftover)", () => {
+  // Owner decision 2026-11-26: oldBasicMinor must equal the basic HRMS holds (mock: 8000000).
+  const REV_BODY = {
+    employeeId: EMPLOYEE, effectiveDate: "2026-04-01",
+    oldBasicMinor: 8000000, newBasicMinor: 8800000,
+    oldGrossMinor: 8000000, newGrossMinor: 8700000,
+    revisionType: "annual_increment", orderNo: "ORD-95",
+  };
+
   it("createSalaryRevision publishes to COMMANDS.salaryRevisionCreate", async () => {
     const { createSalaryRevision } = await import("../src/modules/payroll/commands.js");
     const { COMMANDS } = await import("../src/topics.js");
 
-    const result = await createSalaryRevision(baseCtx, {
-      employeeId: EMPLOYEE, effectiveDate: "2026-04-01",
-      oldBasicMinor: 5000000, newBasicMinor: 5500000,
-      oldGrossMinor: 8000000, newGrossMinor: 8700000,
-      revisionType: "annual_increment", orderNo: "ORD-95",
-    } as any);
+    const result = await createSalaryRevision(baseCtx, REV_BODY as any);
 
     expect(mockPublish).toHaveBeenCalledTimes(1);
     const [topic, msg] = mockPublish.mock.calls[0];
     expect(topic).toBe(COMMANDS.salaryRevisionCreate);
     expect(msg.payload.employeeId).toBe(EMPLOYEE);
-    expect(msg.payload.newBasicMinor).toBe(5500000);
+    expect(msg.payload.newBasicMinor).toBe(8800000);
     expect(result.status).toBe("accepted");
+  });
+
+  it("C20: an old basic that differs from HRMS is refused 409 OLD_BASIC_MISMATCH and nothing is published", async () => {
+    const { createSalaryRevision } = await import("../src/modules/payroll/commands.js");
+    await expect(createSalaryRevision(baseCtx, { ...REV_BODY, oldBasicMinor: 5000000 } as any))
+      .rejects.toMatchObject({ status: 409, code: "OLD_BASIC_MISMATCH" });
+    expect(mockPublish).not.toHaveBeenCalled();
+  });
+
+  it("C20: a mismatch with an audited override reason is accepted and the reason travels in the command", async () => {
+    const { createSalaryRevision } = await import("../src/modules/payroll/commands.js");
+    await createSalaryRevision(baseCtx, { ...REV_BODY, oldBasicMinor: 5000000, oldBasicOverrideReason: "HRMS basic stale after fitment, corrected by order" } as any);
+    expect(mockPublish).toHaveBeenCalledTimes(1);
+    expect(mockPublish.mock.calls[0][1].payload.oldBasicOverrideReason).toContain("fitment");
+  });
+
+  it("C20: FAIL CLOSED -- HRMS unreachable => 502 HRMS_UNAVAILABLE, nothing published", async () => {
+    const hrms = await import("../src/shared/hrms-client.js");
+    (hrms.fetchPayrollInput as any).mockRejectedValueOnce(new hrms.HrmsUnavailableError("down"));
+    const { createSalaryRevision } = await import("../src/modules/payroll/commands.js");
+    await expect(createSalaryRevision(baseCtx, REV_BODY as any)).rejects.toMatchObject({ status: 502, code: "HRMS_UNAVAILABLE" });
+    expect(mockPublish).not.toHaveBeenCalled();
   });
 
   const REVISION_MSG = {

@@ -53,6 +53,8 @@ vi.mock("../src/modules/loans/repo.js", () => ({
   updateLoan: (...a: any[]) => updateLoanMock(...a),
   findLoanByIdForUpdateTx: (...a: any[]) => findLoanByIdTxMock(...a),
   findLoansByEmployeeTx: (...a: any[]) => findLoansByEmployeeTxMock(...a),
+  // GAP-PAYROLL-LOANS-06: no tenant ceiling configured => no ceiling
+  findLoanCeilingMinorTx: vi.fn(async () => null),
   findLatestGrossMinorForEmployeeTx: (...a: any[]) => findLatestGrossMinorForEmployeeTxMock(...a),
 }));
 vi.mock("../src/modules/tax/schema.js", () => ({

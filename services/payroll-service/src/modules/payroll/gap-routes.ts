@@ -35,15 +35,11 @@ const PAYROLL_ROLES = ["payroll_admin", "payroll_officer", "super_admin"];
  * frequency) through POST /v1/payroll/statutory/state-rules. Every change is
  * audited with its before/after values (payroll consumer, stateRulesUpsert).
  *
- * OWNER DECISION PENDING (GAP-PAYROLL-STATUTORY-LWF-01): today this is the
- * whole payroll staff tier -- payroll_officer included -- which is what the
- * route has always allowed. The sibling PT-rule writes (pt-versions-routes.ts
- * PT_ADMIN_ROLES) are payroll_admin + super_admin only. Whether LWF rule
- * changes should be narrowed to that admin pair too is a policy call this
- * code does not make: narrowing it removes an existing workflow from officers.
- * It is a named constant so that decision is a one-line change.
+ * OWNER DECISION (2026-11-26, GAP-PAYROLL-STATUTORY-LWF-01): narrowed to payroll_admin +
+ * super_admin, matching the sibling PT-rule writes (pt-versions-routes.ts PT_ADMIN_ROLES).
+ * payroll_officer keeps read access (READER_ROLES) but can no longer change LWF rules.
  */
-export const STATE_RULE_WRITER_ROLES = PAYROLL_ROLES;
+export const STATE_RULE_WRITER_ROLES = ["payroll_admin", "super_admin"];
 const READER_ROLES = [...PAYROLL_ROLES, "hr_admin", "finance_officer"];
 // UAT Phase 2 security review #2446 (1): per-employee pay data (salary
 // corrections: component old/new values + arrears) is payroll + HR only, like

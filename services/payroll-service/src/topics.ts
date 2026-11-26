@@ -89,6 +89,10 @@ export const COMMANDS = {
   arrearPolicySet:        "payroll.arrear_policy.set",
   perquisiteComponentDelete: "payroll.perquisite_component.delete",
   taxDeclarationWindowSet:   "payroll.tax_declaration_window.set",
+  // Owner decision 2026-11-26 (GAP-PAYROLL-TAX-DECLARATION-05): payroll_officer verifies, payroll_admin re-opens.
+  loanCeilingSet:            "payroll.loan_ceiling.set",
+  taxDeclarationVerify:      "payroll.tax_declaration.verify",
+  taxDeclarationReopen:      "payroll.tax_declaration.reopen",
   bonusRuleCreate:        "payroll.bonus_rule.create",
   // Section 8 G2: pay-component master (flag S8_PAY_COMPONENTS_ENABLED)
   ctcTemplateCreate:      "payroll.ctc_template.create",

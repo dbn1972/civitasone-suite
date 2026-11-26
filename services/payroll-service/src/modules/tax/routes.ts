@@ -14,7 +14,7 @@ import { resolveRunStatutoryConfig } from "../payroll/consumer.js";
 import { HrmsUnavailableError, fetchPayrollInput } from "../../shared/hrms-client.js";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { sendAccepted } from "@civitasone/schemas/validate";
-import { createTaxDeclarationBody, taxDeclarationWindowBody, LANDLORD_PAN_RENT_THRESHOLD_MINOR } from "./validators.js";
+import { createTaxDeclarationBody, taxDeclarationWindowBody, taxDeclarationReopenBody, taxDeclarationVerifyBody, declarationIdParam, LANDLORD_PAN_RENT_THRESHOLD_MINOR } from "./validators.js";
 import { maskPan } from "../../shared/pii-mask.js";
 import { encryptPii } from "../../shared/pii-crypto.js";
 import { currentFyWindow } from "./declaration-window.js";
@@ -30,6 +30,9 @@ const READER_STAFF_ROLES = staffRolesOf(READER_ROLES);
 // Excludes finance_officer: a finance_officer+employee caller files only their own declaration.
 const WRITER_STAFF_ROLES = staffRolesOf(WRITER_ROLES);
 const CEILING_ROLES = ["payroll_admin", "super_admin"];
+// Owner decision 2026-11-26 (GAP-PAYROLL-TAX-DECLARATION-05): the officer tier verifies; only the admin pair re-opens.
+const DECLARATION_VERIFIER_ROLES = ["payroll_officer", "payroll_admin", "super_admin"];
+const DECLARATION_REOPEN_ROLES = ["payroll_admin", "super_admin"];
 
 const VALID_SECTIONS = ["10_10", "10_10AA", "10_10B", "10_10C"] as const;
 
@@ -547,6 +550,43 @@ export async function taxRoutes(app: FastifyInstance): Promise<void> {
       .where(and(eq(taxDeclarationWindows.tenantId, ctx.tenantId), eq(taxDeclarationWindows.fy, fy))).limit(1)))[0] ?? null;
     const win = currentFyWindow(row ? { opensOn: row.opensOn, closesOn: row.closesOn } : null, istToday());
     return reply.send({ fy, configured: !!row, opensOn: win.opensOn, closesOn: win.closesOn, open: win.open, state: win.state });
+  });
+
+  /** Load a declaration of THIS tenant or 404. */
+  async function loadDeclaration(tenantId: string, id: string) {
+    const row = (await scopedRead((tx) => tx.select().from(taxDeclarations)
+      .where(and(eq(taxDeclarations.tenantId, tenantId), eq(taxDeclarations.id, id))).limit(1)))[0];
+    if (!row) throw new HttpError(404, "NOT_FOUND", "tax declaration not found");
+    return row;
+  }
+
+  /** POST /v1/payroll/tax-declarations/:id/verify -- payroll_officer / admin; maker != checker; locks the declaration. */
+  app.post("/v1/payroll/tax-declarations/:id/verify", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, DECLARATION_VERIFIER_ROLES);
+    const { id } = declarationIdParam.parse(req.params);
+    const body = taxDeclarationVerifyBody.parse(req.body ?? {});
+    const row = await loadDeclaration(ctx.tenantId, id);
+    if (row.updatedBy === ctx.actorId || row.createdBy === ctx.actorId) {
+      throw new HttpError(403, "SELF_VERIFY_FORBIDDEN", "a declaration must be verified by someone other than who filed it");
+    }
+    if (row.status !== "submitted") {
+      throw new HttpError(409, "INVALID_STATE", `declaration is ${row.status}; only a submitted declaration can be verified`);
+    }
+    return sendAccepted(reply, acceptedResponseSchema, await commands.verifyDeclaration(ctx, id, body.note));
+  });
+
+  /** POST /v1/payroll/tax-declarations/:id/reopen -- payroll_admin / super_admin only; reason is mandatory and audited. */
+  app.post("/v1/payroll/tax-declarations/:id/reopen", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, DECLARATION_REOPEN_ROLES);
+    const { id } = declarationIdParam.parse(req.params);
+    const { reason } = taxDeclarationReopenBody.parse(req.body);
+    const row = await loadDeclaration(ctx.tenantId, id);
+    if (!isDeclarationLocked(row.status)) {
+      throw new HttpError(409, "INVALID_STATE", `declaration is ${row.status}; only a verified or approved declaration can be re-opened`);
+    }
+    return sendAccepted(reply, acceptedResponseSchema, await commands.reopenDeclaration(ctx, id, reason));
   });
 
   /** PUT /v1/payroll/tax-declarations/window -- payroll_admin / super_admin; audited with a reason. */

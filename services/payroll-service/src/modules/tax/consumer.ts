@@ -252,6 +252,44 @@ export function registerTaxConsumers(queue: Queue): void {
     });
   });
 
+  // Owner decision 2026-11-26 (GAP-PAYROLL-TAX-DECLARATION-05): verify locks a 'submitted' declaration.
+  // The conditional UPDATE is the race-safe guard; a no-op (already verified / not submitted) is idempotent.
+  queue.subscribe(COMMANDS.taxDeclarationVerify, async (msg) => {
+    const p = msg.payload as { id: string; note?: string | null };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const done = (await tx.execute(sql`
+        UPDATE payroll.payroll_tax_declarations
+           SET status = 'verified', updated_at = now(), updated_by = ${msg.actorId}::uuid
+         WHERE id = ${p.id}::uuid AND tenant_id = ${msg.tenantId}::uuid AND status = 'submitted'
+        RETURNING employee_id::text AS employee_id, fy
+      `)) as unknown as Array<{ employee_id: string; fy: string }>;
+      if (done.length === 0) return;
+      await auditDetail(tx, msg, "verify", "tax_declaration", p.id, {
+        employeeId: done[0]!.employee_id, fy: done[0]!.fy, before: { status: "submitted" }, after: { status: "verified" }, note: p.note ?? null,
+      });
+    });
+  });
+
+  // Re-open a verified / approved declaration back to 'submitted' so the employee (or staff) can amend it.
+  queue.subscribe(COMMANDS.taxDeclarationReopen, async (msg) => {
+    const p = msg.payload as { id: string; reason: string };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const done = (await tx.execute(sql`
+        UPDATE payroll.payroll_tax_declarations d
+           SET status = 'submitted', updated_at = now(), updated_by = ${msg.actorId}::uuid
+         WHERE d.id = ${p.id}::uuid AND d.tenant_id = ${msg.tenantId}::uuid
+           AND d.status IN (${sql.join(LOCKED_DECLARATION_STATUSES.map((s) => sql`${s}`), sql`, `)})
+        RETURNING d.employee_id::text AS employee_id, d.fy
+      `)) as unknown as Array<{ employee_id: string; fy: string }>;
+      if (done.length === 0) return;
+      await auditDetail(tx, msg, "reopen", "tax_declaration", p.id, {
+        employeeId: done[0]!.employee_id, fy: done[0]!.fy, reason: p.reason, after: { status: "submitted" },
+      });
+    });
+  });
+
   // GAP-PAYROLL-STATUTORY-PERQUISITE-06: remove a mistaken component. The
   // audit row carries the deleted values, so a delete stays reconstructable.
   queue.subscribe(COMMANDS.perquisiteComponentDelete, async (msg) => {

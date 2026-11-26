@@ -2154,7 +2154,7 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
     const p = msg.payload as {
       id: string; tenantId: string; employeeId: string; effectiveDate: string;
       oldBasicMinor: number; newBasicMinor: number; oldGrossMinor: number; newGrossMinor: number;
-      revisionType: string; orderNo?: string | null; reason?: string | null;
+      revisionType: string; orderNo?: string | null; reason?: string | null; oldBasicOverrideReason?: string | null;
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
@@ -2194,6 +2194,7 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
       await audit(tx, msg, "create", "payroll_salary_revision", p.id, {
         newValue: { status, ...(p.orderNo ? { orderNo: p.orderNo } : {}) },
         ...(p.reason ? { reason: p.reason } : {}),
+        ...(p.oldBasicOverrideReason ? { oldBasicOverrideReason: p.oldBasicOverrideReason } : {}),
       });
     });
   });

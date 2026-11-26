@@ -5,8 +5,8 @@ import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { LwfConfigForm } from "./LwfConfigForm";
 import { toHumanError } from "@/lib/messages";
 import { PermissionDenied } from "../../../../../_components/PermissionDenied";
-import { getSessionRoles, PAYROLL_ADMIN_ROLES } from "@/lib/auth/roleGuard";
-import { PAYROLL_STATUTORY_ADMIN_ROLES } from "@/lib/auth/workRoles";
+import { getSessionRoles } from "@/lib/auth/roleGuard";
+import { PAYROLL_STATUTORY_ADMIN_ROLES, PAYROLL_CONFIG_ADMIN_ROLES } from "@/lib/auth/workRoles";
 
 type LwfRow = {
   state_code: string;
@@ -34,9 +34,9 @@ export default async function LwfPage() {
   if (!roles.some((r) => PAYROLL_STATUTORY_ADMIN_ROLES.includes(r))) {
     return <PermissionDenied module="labour welfare fund" requiredRoles={PAYROLL_STATUTORY_ADMIN_ROLES} backHref="/hr/payroll/statutory" backLabel={t("errorBackLabel")} />;
   }
-  // GAP-PAYROLL-STATUTORY-LWF-01: POST statutory/state-rules is PAYROLL_ROLES-only
-  // (payroll_admin/payroll_officer/super_admin); hr_admin/finance_officer may read.
-  const canEdit = roles.some((r) => PAYROLL_ADMIN_ROLES.includes(r));
+  // GAP-PAYROLL-STATUTORY-LWF-01: POST statutory/state-rules is STATE_RULE_WRITER_ROLES-only (owner decision 2026-11-26)
+  // (payroll_admin/super_admin); payroll_officer, hr_admin/finance_officer may read.
+  const canEdit = roles.some((r) => PAYROLL_CONFIG_ADMIN_ROLES.includes(r));
   const { data: rows, source } = await getData();
   const errored = source === "error";
 

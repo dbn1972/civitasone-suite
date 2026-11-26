@@ -108,3 +108,23 @@ export async function deletePerquisiteComponent(ctx: RequestContext, body: { id:
   });
   return { id: body.id, status: "accepted", correlationId: ctx.correlationId };
 }
+
+/** Owner decision 2026-11-26: a payroll officer verifies a submitted declaration (locks it). */
+export async function verifyDeclaration(ctx: RequestContext, id: string, note?: string): Promise<Accepted> {
+  await queue.publish(COMMANDS.taxDeclarationVerify, {
+    messageId: randomUUID(), type: COMMANDS.taxDeclarationVerify,
+    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+    payload: { id, note: note ?? null },
+  });
+  return { id, status: "accepted", correlationId: ctx.correlationId };
+}
+
+/** Owner decision 2026-11-26: only payroll_admin / super_admin re-open a locked declaration, with an audited reason. */
+export async function reopenDeclaration(ctx: RequestContext, id: string, reason: string): Promise<Accepted> {
+  await queue.publish(COMMANDS.taxDeclarationReopen, {
+    messageId: randomUUID(), type: COMMANDS.taxDeclarationReopen,
+    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+    payload: { id, reason },
+  });
+  return { id, status: "accepted", correlationId: ctx.correlationId };
+}

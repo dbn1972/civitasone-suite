@@ -5,17 +5,33 @@ import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { scopeEmployeeId, staffRolesOf } from "../../shared/employee-scope.js";
-import { createLoanBody, disburseLoanBody, idParam, loanQueryParams } from "./validators.js";
+import { setLoanCeilingBody, createLoanBody, disburseLoanBody, idParam, loanQueryParams } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 import * as repo from "./repo.js";
 
 const PAYROLL_ROLES = ["payroll_admin", "payroll_officer", "super_admin"];
+const LOAN_CEILING_ADMIN_ROLES = ["payroll_admin", "super_admin"];
 const READER_ROLES  = [...PAYROLL_ROLES, "hr_admin", "employee"];
 // Excludes finance_officer: a finance_officer+employee caller is self-scoped here.
 const READER_STAFF_ROLES = staffRolesOf(READER_ROLES);
 
 export async function loansRoutes(app: FastifyInstance): Promise<void> {
+  // GAP-PAYROLL-LOANS-06 (owner decision 2026-11-26): Finance-supplied ceilings, admin-only writes.
+  // No rows => no ceiling. There is no built-in "max eligible" figure.
+  app.get("/v1/payroll/loan-ceilings", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, [...PAYROLL_ROLES, "hr_admin"]);
+    return reply.send({ ceilings: await repo.listLoanCeilings(ctx.tenantId) });
+  });
+
+  app.put("/v1/payroll/loan-ceilings", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, LOAN_CEILING_ADMIN_ROLES);
+    const body = setLoanCeilingBody.parse(req.body);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.setLoanCeiling(ctx, body));
+  });
+
   app.post("/v1/payroll/loans", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, PAYROLL_ROLES);

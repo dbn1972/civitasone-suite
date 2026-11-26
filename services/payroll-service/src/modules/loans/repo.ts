@@ -1,4 +1,4 @@
-import { eq, and, inArray, desc } from "drizzle-orm";
+import { eq, and, inArray, desc, sql } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
 import { payrollLoans, payrollLoanRepayments, type LoanRow } from "./schema.js";
 // BUG-1 (payroll loans EMI cap): reads payroll's own gross-pay history to
@@ -152,4 +152,29 @@ export async function insertRepayment(tx: Writer, row: typeof payrollLoanRepayme
 export async function countRepayments(tx: Writer, loanId: string): Promise<number> {
   const rows = await (tx as typeof db).select().from(payrollLoanRepayments).where(eq(payrollLoanRepayments.loanId, loanId)).limit(500);
   return rows.length;
+}
+
+/** GAP-PAYROLL-LOANS-06: the tenant's principal ceiling for a loan type, or null when Finance has not set one. */
+export async function findLoanCeilingMinor(tenantId: string, loanType: string): Promise<bigint | null> {
+  const rows = (await scopedRead((tx) => tx.execute(sql`
+    SELECT max_principal_minor::text AS v FROM loans.loan_ceilings
+     WHERE tenant_id = ${tenantId}::uuid AND loan_type = ${loanType}
+  `))) as unknown as Array<{ v: string }>;
+  return rows[0] ? BigInt(rows[0].v) : null;
+}
+
+export async function findLoanCeilingMinorTx(tx: Writer & { execute: (q: ReturnType<typeof sql>) => Promise<unknown> }, tenantId: string, loanType: string): Promise<bigint | null> {
+  const rows = (await tx.execute(sql`
+    SELECT max_principal_minor::text AS v FROM loans.loan_ceilings
+     WHERE tenant_id = ${tenantId}::uuid AND loan_type = ${loanType}
+  `)) as unknown as Array<{ v: string }>;
+  return rows[0] ? BigInt(rows[0].v) : null;
+}
+
+export async function listLoanCeilings(tenantId: string): Promise<Array<{ loanType: string; maxPrincipalMinor: string; changeReason: string; updatedAt: string }>> {
+  const rows = (await scopedRead((tx) => tx.execute(sql`
+    SELECT loan_type, max_principal_minor::text AS v, change_reason, updated_at::text AS updated_at
+      FROM loans.loan_ceilings WHERE tenant_id = ${tenantId}::uuid ORDER BY loan_type
+  `))) as unknown as Array<{ loan_type: string; v: string; change_reason: string; updated_at: string }>;
+  return rows.map((r) => ({ loanType: r.loan_type, maxPrincipalMinor: r.v, changeReason: r.change_reason, updatedAt: r.updated_at }));
 }

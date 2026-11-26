@@ -5,9 +5,9 @@ import { queue, cache } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
 import { HttpError } from "../../shared/context.js";
 import { deterministicUuid } from "../../shared/deterministic-id.js";
-import type { CreateLoanBody, DisburseLoanBody } from "./validators.js";
+import type { CreateLoanBody, DisburseLoanBody, SetLoanCeilingBody } from "./validators.js";
 import * as repo from "./repo.js";
-import { checkLoanTerms, decideCombinedEmiCap, decideDisbursal, sumActiveEmiMinor, MAX_COMBINED_LOAN_EMI_PCT_OF_GROSS } from "./policy.js";
+import { checkLoanTerms, decideLoanCeiling, decideCombinedEmiCap, decideDisbursal, sumActiveEmiMinor, MAX_COMBINED_LOAN_EMI_PCT_OF_GROSS } from "./policy.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 
@@ -49,6 +49,12 @@ export async function createLoan(ctx: RequestContext, body: CreateLoanBody): Pro
     tenureMonths: body.tenureMonths, interestRatePct: body.interestRatePct,
   });
   if (!terms.ok) throw new HttpError(422, `LOAN_${terms.code}`, terms.message);
+
+  // GAP-PAYROLL-LOANS-06: tenant-configured principal ceiling (none configured => allowed).
+  const ceiling = decideLoanCeiling(await repo.findLoanCeilingMinor(ctx.tenantId, body.loanType), BigInt(body.principalMinor));
+  if (!ceiling.allowed) {
+    throw new HttpError(422, "LOAN_CEILING_EXCEEDED", `principal ${body.principalMinor} exceeds the ${body.loanType} loan ceiling of ${ceiling.ceilingMinor} set for this tenant`);
+  }
 
   const [existingLoans, grossMinor, duplicateLoanId] = await Promise.all([
     repo.findLoansByEmployee(ctx.tenantId, body.employeeId),
@@ -119,5 +125,16 @@ export async function disburseLoan(ctx: RequestContext, id: string, body: Disbur
   });
   await cache.invalidate(cache.makeKey(ctx.tenantId, "payroll_loan", id));
   await cache.invalidate(cache.makeKey(ctx.tenantId, "loans_emp", loan.employeeId));
+  return { id, status: "accepted", correlationId: ctx.correlationId };
+}
+
+/** GAP-PAYROLL-LOANS-06: set (or clear, with null) the principal ceiling for a loan type. payroll_admin / super_admin; audited. */
+export async function setLoanCeiling(ctx: RequestContext, body: SetLoanCeilingBody): Promise<Accepted> {
+  const id = randomUUID();
+  await queue.publish(COMMANDS.loanCeilingSet, {
+    messageId: id, type: COMMANDS.loanCeilingSet,
+    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+    payload: { id, tenantId: ctx.tenantId, ...body },
+  });
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }

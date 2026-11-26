@@ -99,9 +99,9 @@ describe("POST /v1/payroll/statutory/state-rules -- role gate and before/after a
   });
 
   it("a partial update audits the TRUE before and after: omitted fields are kept (COALESCE), changed ones differ", async () => {
-    // payroll_officer is currently permitted (owner decision pending on narrowing -- see gap-routes.ts STATE_RULE_WRITER_ROLES)
+    // LWF writes are payroll_admin / super_admin only (owner decision 2026-11-26, gap-routes.ts STATE_RULE_WRITER_ROLES)
     const res = await app.inject({
-      method: "POST", url: "/v1/payroll/statutory/state-rules", headers: auth(OFFICER_USER, ["payroll_officer"]),
+      method: "POST", url: "/v1/payroll/statutory/state-rules", headers: auth(OFFICER_USER, ["payroll_admin"]),
       payload: { stateCode: "MH", lwfEmployer: 9000, lwfFrequency: "yearly" },
     });
     expect(res.statusCode).toBe(202);

@@ -954,6 +954,7 @@
     "dscRestrictedTitle": "DSC details are visible to payroll administrators only",
     "dscUnavailableTitle": "We couldn't load the digital signature (DSC) settings",
     "dscConfigureLink": "Configure a DSC",
+    "dscAckLabel": "I acknowledge that the payroll key signs the bank file, not this DSC.",
     "dscNotAppliedNote": "Bank files are signed with the payroll signing key (an OpenPGP detached signature by default), not with this DSC. Change the format under Bank file signing in Configuration. The DSC is used for Form 16 and other signed documents.",
     "unsignedDisclosure": "This file is UNSIGNED. Unsigned files are allowed only in dev or sandbox.",
     "signingNotReady": "Bank files can't be generated yet because the production signing key isn't set up. Contact your administrator.",
