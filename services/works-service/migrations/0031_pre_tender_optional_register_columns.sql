@@ -4,7 +4,7 @@
 -- Rollback: ALTER TABLE works.pre_tenders DROP COLUMN IF EXISTS tender_amount_minor, DROP COLUMN IF EXISTS approving_authority_id, DROP COLUMN IF EXISTS contractor_class_id;
 -- Affected services: works-service
 
-SET lock_timeout = 5s;
+SET lock_timeout = '5s';
 
 ALTER TABLE works.pre_tenders ADD COLUMN IF NOT EXISTS tender_amount_minor bigint;
 ALTER TABLE works.pre_tenders ADD COLUMN IF NOT EXISTS approving_authority_id uuid;
