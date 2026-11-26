@@ -15,15 +15,16 @@ const renderPage = () => render(<NextIntlClientProvider locale="en" messages={en
 describe("NewAdvancePage role wrapper", () => {
   beforeEach(() => { roles.current = []; });
 
-  it.each(["finance_officer", "super_admin", "payroll_admin", "payroll_officer", "hr_admin"])("%s gets the officer picker", (role) => {
+  it.each(["finance_officer", "finance_admin", "super_admin", "payroll_admin", "payroll_officer", "hr_admin"])("%s gets the officer picker", (role) => {
     roles.current = [role];
     renderPage();
     expect(screen.queryByText(/Your role cannot search the employee directory/)).not.toBeInTheDocument();
     expect(screen.getByText(/Search and pick the payee/)).toBeInTheDocument();
   });
 
-  it("finance_admin (can create advances, cannot search employees) gets a typed officer name", () => {
-    roles.current = ["finance_admin"];
+  // B17: finance_admin is on the payroll lookup's role list (picker above). A role still outside it types the officer.
+  it("a role outside the lookup list (accounts_officer) gets a typed officer name", () => {
+    roles.current = ["accounts_officer"];
     renderPage();
     expect(screen.getByText(/Your role cannot search the employee directory/)).toBeInTheDocument();
   });

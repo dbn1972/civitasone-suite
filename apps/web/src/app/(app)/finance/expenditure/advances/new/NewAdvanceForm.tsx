@@ -32,7 +32,7 @@ export function NewAdvanceForm({ canPickEmployees }: { canPickEmployees: boolean
   const router = useRouter();
   // `payee` is the display name sent with the advance: the picked record's label for an officer / vendor advance (with
   // `payeeId` set), or the typed name for an "other" party (no id).
-  const [form, setForm] = useState({ advanceNo: "", purpose: "", payee: "", type: "employee", amount: "", dueDate: "", sanctionAuthority: "" });
+  const [form, setForm] = useState({ advanceNo: "", purpose: "", payee: "", type: "employee", amount: "", dueDate: "", sanctionAuthority: "", recoveryMode: "" });
   const [payeeId, setPayeeId] = useState<string | null>(null);
   // An officer advance picks the employee only when the viewer's role may search the employee lookup; otherwise (e.g.
   // finance_admin) the officer's name is typed, exactly as before, and no employee id is stored.
@@ -114,6 +114,8 @@ export function NewAdvanceForm({ canPickEmployees }: { canPickEmployees: boolean
           dueDate: form.dueDate || undefined,
           sanctionAuthority: form.sanctionAuthority.trim(),
           reason: (reason ?? "").trim(),
+          // C25: how the advance will be recovered (optional; the server stores NULL when not chosen).
+          ...(form.recoveryMode ? { recoveryMode: form.recoveryMode } : {}),
         }),
       });
       setConfirmOpen(false);
@@ -160,7 +162,7 @@ export function NewAdvanceForm({ canPickEmployees }: { canPickEmployees: boolean
             </div>
             <div className="fld" style={{ flexDirection: "column", alignItems: "flex-start" }}>
               <label className="l" htmlFor="adv-type">{t("labelType")}</label>
-              <select id="adv-type" value={form.type} onChange={(e) => { setForm({ ...form, type: e.target.value, payee: "" }); setPayeeId(null); setPayeeError(""); }} style={inputStyle}>
+              <select id="adv-type" value={form.type} onChange={(e) => { setForm({ ...form, type: e.target.value, payee: "", recoveryMode: form.recoveryMode === "salary" && e.target.value !== "employee" ? "" : form.recoveryMode }); setPayeeId(null); setPayeeError(""); }} style={inputStyle}>
                 <option value="employee">{t("typeEmployee")}</option>
                 <option value="vendor">{t("typeVendor")}</option>
                 <option value="other">{t("typeOther")}</option>
@@ -207,6 +209,18 @@ export function NewAdvanceForm({ canPickEmployees }: { canPickEmployees: boolean
               <span id="adv-payee-help" style={{ fontSize: 12, color: "var(--ink2)" }}>
                 {picksPayee ? t("helpPayeePick") : form.type === "employee" ? t("helpPayeeOfficerTyped") : t("helpPayeeOther")}
               </span>
+            </div>
+            <div className="fld" style={{ flexDirection: "column", alignItems: "flex-start" }}>
+              <label className="l" htmlFor="adv-recovery">{t("labelRecoveryMode")}</label>
+              <select id="adv-recovery" value={form.recoveryMode} onChange={(e) => setForm({ ...form, recoveryMode: e.target.value })} style={inputStyle}>
+                <option value="">{t("recoveryUnset")}</option>
+                {form.type === "employee" ? <option value="salary">{t("recoverySalary")}</option> : null}
+                <option value="cash">{t("recoveryCash")}</option>
+                <option value="adjust_against_bill">{t("recoveryAdjustBill")}</option>
+              </select>
+              {formError.fieldError("recoveryMode") && (
+                <span style={{ fontSize: 12, color: "var(--bad)" }}>{formError.fieldError("recoveryMode")}</span>
+              )}
             </div>
             <div className="fld" style={{ flexDirection: "column", alignItems: "flex-start" }}>
               <label className="l" htmlFor="adv-authority">{t("labelAuthority")}</label>

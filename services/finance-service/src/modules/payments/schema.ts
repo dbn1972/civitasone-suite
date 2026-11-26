@@ -191,6 +191,9 @@ export const financeAdvances = paymentsSchema.table("finance_advances", {
   // GAP-FINANCE-EXPENDITURE-ADVANCES-NEW-01: who sanctioned the advance and why.
   sanctionAuthority: text("sanction_authority"),
   reason:         text("reason"),
+  // C25 (migration 0190): how the advance is recovered -- salary | cash | adjust_against_bill. NULL = not recorded (every
+  // advance created before the column existed); never back-filled with a guess.
+  recoveryMode:   varchar("recovery_mode", { length: 20 }),
   status:         varchar("status", { length: 16 }).notNull().default("active"),
   createdAt:      timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:      timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),

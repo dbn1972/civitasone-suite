@@ -220,4 +220,25 @@ describe("GstConsolePage estimated cash payable", () => {
     expect(screen.getByText("Estimated cash payable after set-off").closest(".stat")).toHaveTextContent("₹30.00");
     expect(screen.getByText(/Indicative only/)).toBeInTheDocument();
   });
+
+  // C28: the CSV is no longer capped at the first 500 ledger rows -- the loader follows offset pages.
+  it("follows ledger pages until a short page, so a busy month is not truncated at 500 rows", async () => {
+    const row = (n: number) => ({
+      id: String(n), invoice_id: null, invoice_no: `INV-${n}`, invoice_date: "2026-06-05", party_gstin: "27AAAAA0000A1Z5",
+      party_name: "Vendor Co", gst_type: "CGST", direction: "output", taxable_minor: 100, tax_minor: 9, rate_pct: 9,
+      hsn_code: "9954", period: "2026-06", status: "posted", created_at: "2026-06-05T00:00:00Z",
+    });
+    const ledgerOffsets: string[] = [];
+    fetchJsonMock.mockImplementation((path: string) => {
+      if (typeof path !== "string" || path.includes("/summary") || path.includes("/itc-reconciliation")) return Promise.resolve({ data: [], source: "api" });
+      const offset = /offset=(\d+)/.exec(path)?.[1] ?? "?";
+      ledgerOffsets.push(offset);
+      const page = offset === "0" ? 500 : offset === "500" ? 120 : 0;
+      return Promise.resolve({ data: Array.from({ length: page }, (_, k) => row(Number(offset) + k)), source: "api" });
+    });
+    const ui = await GstConsolePage({ searchParams: Promise.resolve({ period: "2026-06" }) });
+    render(ui);
+    expect(ledgerOffsets).toEqual(["0", "500"]);
+    expect(screen.queryByText(/ledger is capped/i)).not.toBeInTheDocument();
+  });
 });

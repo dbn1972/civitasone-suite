@@ -15,10 +15,10 @@ describe("finance write-role constants (GAP-FINANCE-OPENING-BALANCES-04 / PAYMEN
       expect((ACCOUNT_HEAD_WRITE_ROLES as readonly string[]).includes(r), r).toBe(false);
     }
   });
-  it("employee lookup (officer picker on the new-advance form): payroll-service LOOKUP_ROLES; finance_admin is NOT among them", () => {
-    expect([...EMPLOYEE_LOOKUP_ROLES]).toEqual(["payroll_admin", "payroll_officer", "super_admin", "hr_admin", "finance_officer"]);
-    expect((EMPLOYEE_LOOKUP_ROLES as readonly string[]).includes("finance_admin")).toBe(false);
-    // ...so a finance_admin can create an advance (PAYMENT_WRITE_ROLES-style gate on the service) but needs the typed fallback
+  it("employee lookup (officer picker on the new-advance form): payroll-service LOOKUP_ROLES; finance_admin IS among them (B17)", () => {
+    expect([...EMPLOYEE_LOOKUP_ROLES]).toEqual(["payroll_admin", "payroll_officer", "super_admin", "hr_admin", "finance_officer", "finance_admin"]);
+    expect((EMPLOYEE_LOOKUP_ROLES as readonly string[]).includes("finance_admin")).toBe(true);
+    // ...so a finance_admin who can create an advance (PAYMENT_WRITE_ROLES-style gate on the service) also gets the officer picker
     expect((PAYMENT_WRITE_ROLES as readonly string[]).includes("finance_admin")).toBe(true);
   });
   it("every write role can reach the finance module at all", () => {

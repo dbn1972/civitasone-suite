@@ -18,6 +18,8 @@ export default async function AdvancesPage() {
   // / ₹0.00 (GAP-FINANCE-EXPENDITURE-ADVANCES-02).
   const failed = result.source === "error" && advances.length === 0;
   const stats = advanceStats(advances);
+  // C25: when this role may not see personal-advance figures the totals would silently leave them out -- show "—" instead.
+  const figuresWithheld = advances.some((a) => a.balancesMasked);
   // GAP-FINANCE-EXPENDITURE-BILLS-05: POST /v1/finance/advances is FINANCE_ROLES
   // only; do not offer the link to read-only finance readers.
   const mayCreate = canWrite(getSessionRoles(), ADVANCE_CREATE_ROLES);
@@ -37,8 +39,8 @@ export default async function AdvancesPage() {
 
       <StatGrid>
         <StatCard icon="💵" tone="info" label={t("statOpenAdvances")} value={failed ? null : stats.open} />
-        <StatCard icon="📤" tone="info" label={t("statOutstanding")} value={failed ? null : formatMoney(stats.outstanding)} />
-        <StatCard icon="✅" tone="good" label={t("statSettledAllTime")} value={failed ? null : formatMoney(stats.settledAllTime)} />
+        <StatCard icon="📤" tone="info" label={t("statOutstanding")} value={failed || figuresWithheld ? null : formatMoney(stats.outstanding)} />
+        <StatCard icon="✅" tone="good" label={t("statSettledAllTime")} value={failed || figuresWithheld ? null : formatMoney(stats.settledAllTime)} />
         <StatCard icon="⚠️" tone="bad" label={t("statOverdue")} value={failed ? null : stats.overdue90} />
       </StatGrid>
 

@@ -235,11 +235,11 @@ export const ACCOUNT_HEAD_WRITE_ROLES = ["finance_officer", "finance_admin", "su
 /**
  * GAP-FINANCE-EXPENDITURE-ADVANCES-NEW-03: roles payroll-service lets search the employee lookup
  * (GET /v1/payroll/employee-lookup: employee-lookup/routes.ts LOOKUP_ROLES), which the new-advance form uses to PICK
- * the officer an advance is issued to. finance_admin can create an advance but is not among them, so for that role the
- * form falls back to a typed officer name (no employee id) instead of an officer picker that could only 403. Mirrors
+ * the officer an advance is issued to. finance_admin was added by B17 (owner decision 2026-11-26), so the officer picker is
+ * offered to it too; a role still outside the list falls back to a typed officer name (no employee id). Mirrors
  * that constant exactly -- keep in sync.
  */
-export const EMPLOYEE_LOOKUP_ROLES = ["payroll_admin", "payroll_officer", "super_admin", "hr_admin", "finance_officer"] as const;
+export const EMPLOYEE_LOOKUP_ROLES = ["payroll_admin", "payroll_officer", "super_admin", "hr_admin", "finance_officer", "finance_admin"] as const;
 
 /**
  * UX gate for every page under /hr, /hr/payroll and /hr/recruitment (all

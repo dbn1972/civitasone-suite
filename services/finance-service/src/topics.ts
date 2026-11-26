@@ -63,6 +63,7 @@ export const COMMANDS = {
   // recon (CAP-059)
   reconRun:             "finance.recon.run",
   reconExceptionAction: "finance.recon.exception_action",
+  reconWriteoffPolicySet: "finance.recon.writeoff_policy_set",
   // masters (bank / FY / opening balances)
   bankAccountCreate: "finance.masters.bank_account.create",
   fiscalYearCreate: "finance.masters.fiscal_year.create",

@@ -701,7 +701,7 @@ export function registerPaymentsConsumers(queue: Queue): void {
     const p = msg.payload as {
       id: string; tenantId: string; advanceNo: string; purpose: string; payee?: string; payeeId?: string;
       type?: string; amountMinor: number; currency?: string; dueDate?: string;
-      sanctionAuthority?: string; reason?: string;
+      sanctionAuthority?: string; reason?: string; recoveryMode?: string;
     };
     const today = todayIST();
     // payee is required by createAdvanceBody; a legacy queued message without
@@ -721,6 +721,7 @@ export function registerPaymentsConsumers(queue: Queue): void {
           ...(p.dueDate ? { dueDate: p.dueDate } : {}),
           purpose: p.purpose,
           sanctionAuthority: p.sanctionAuthority ?? null, reason: p.reason ?? null,
+          recoveryMode: p.recoveryMode ?? null,
           status: "active", createdBy: msg.actorId, updatedBy: msg.actorId,
         });
         await audit(tx, msg, "create", "advance", p.id);

@@ -103,44 +103,21 @@ describe("isVoucherNoViolation (pure)", () => {
   });
 });
 
-describe("POST /v1/finance/journals -- duplicate voucher number", () => {
-  it("accepts a fresh typed voucher, then answers 409 DUPLICATE_VOUCHER for the same number and posts nothing more", async () => {
+describe("POST /v1/finance/journals -- typed voucher number (C22: server-allocated only)", () => {
+  it("refuses a typed voucher number with 422 VOUCHER_NO_SERVER_ALLOCATED and stores nothing", async () => {
     const app = await buildApp();
     try {
-      const first = await app.inject({ method: "POST", url: "/v1/finance/journals", headers: headers(TENANT, randomUUID()), payload: payload(VOUCHER) });
-      expect(first.statusCode).toBe(202);
-      await drain();
-      const stored = await journalsWithVoucher(TENANT, VOUCHER);
-      expect(stored).toHaveLength(1);
-      expect(stored[0]?.status).toBe("pending_approval");
-
-      const second = await app.inject({ method: "POST", url: "/v1/finance/journals", headers: headers(TENANT, randomUUID()), payload: payload(VOUCHER) });
-      expect(second.statusCode).toBe(409);
-      const body = second.json();
-      expect(body.code).toBe("DUPLICATE_VOUCHER");
-      expect(body.retryable).toBe(false);
+      const res = await app.inject({ method: "POST", url: "/v1/finance/journals", headers: headers(TENANT, randomUUID()), payload: payload(VOUCHER) });
+      expect(res.statusCode).toBe(422);
+      const body = res.json();
+      expect(body.code).toBe("VOUCHER_NO_SERVER_ALLOCATED");
       expect(body.fieldErrors).toEqual([expect.objectContaining({ field: "voucherNo" })]);
       await drain();
-      expect(await journalsWithVoucher(TENANT, VOUCHER)).toHaveLength(1);
+      expect(await journalsWithVoucher(TENANT, VOUCHER)).toHaveLength(0);
     } finally { await app.close(); }
   });
 
-  it("a replay of the SAME request (same idempotency key) is not a duplicate of itself", async () => {
-    const app = await buildApp();
-    try {
-      const key = randomUUID();
-      const voucher = `JV-REPLAY-${key.slice(0, 8)}`;
-      const first = await app.inject({ method: "POST", url: "/v1/finance/journals", headers: headers(TENANT, key), payload: payload(voucher) });
-      expect(first.statusCode).toBe(202);
-      await drain();
-      const replay = await app.inject({ method: "POST", url: "/v1/finance/journals", headers: headers(TENANT, key), payload: payload(voucher) });
-      expect(replay.statusCode).toBe(202);
-      await drain();
-      expect(await journalsWithVoucher(TENANT, voucher)).toHaveLength(1);
-    } finally { await app.close(); }
-  });
-
-  it("an omitted or AUTO voucher is never a duplicate (the server allocates it)", async () => {
+  it("an omitted or AUTO voucher is accepted (the server allocates it)", async () => {
     const app = await buildApp();
     try {
       for (const v of [undefined, "AUTO", "auto", "AUTO"]) {
@@ -148,17 +125,6 @@ describe("POST /v1/finance/journals -- duplicate voucher number", () => {
         expect(res.statusCode).toBe(202);
       }
       await drain();
-    } finally { await app.close(); }
-  });
-
-  it("the same voucher number in another tenant is accepted (uniqueness is per tenant)", async () => {
-    const app = await buildApp();
-    try {
-      const res = await app.inject({ method: "POST", url: "/v1/finance/journals", headers: headers(OTHER_TENANT, randomUUID()), payload: payload(VOUCHER) });
-      expect(res.statusCode).toBe(202);
-      await drain();
-      expect(await journalsWithVoucher(OTHER_TENANT, VOUCHER)).toHaveLength(1);
-      expect(await journalsWithVoucher(TENANT, VOUCHER)).toHaveLength(1);
     } finally { await app.close(); }
   });
 });

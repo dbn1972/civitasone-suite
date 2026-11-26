@@ -118,6 +118,10 @@ export const createAdvanceBody = z.object({
   // public money, so the sanctioning authority and the reason are recorded with it.
   sanctionAuthority: z.string().trim().min(2, "Name the sanctioning authority").max(200),
   reason:      z.string().trim().min(5, "Give the reason for this advance (at least 5 characters)").max(500),
+  // C25: how the advance will be recovered. Optional (not recorded when omitted); "salary" only makes sense for an officer advance.
+  recoveryMode: z.enum(["salary", "cash", "adjust_against_bill"]).optional(),
+}).refine((b) => !(b.recoveryMode === "salary" && b.type !== "employee"), {
+  message: "salary recovery applies to an officer (employee) advance only", path: ["recoveryMode"],
 });
 export type CreateAdvanceBody = z.infer<typeof createAdvanceBody>;
 

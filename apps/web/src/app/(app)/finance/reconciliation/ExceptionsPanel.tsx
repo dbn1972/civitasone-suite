@@ -14,7 +14,7 @@ import {
 } from "./reconHelpers";
 
 export type ExceptionStatus = "open" | "investigating" | "resolved" | "written_off";
-export type ExceptionAction = "investigate" | "resolve" | "write_off" | "reopen";
+export type ExceptionAction = "investigate" | "resolve" | "write_off" | "reopen" | "decline_write_off";
 
 export type ExceptionRow = {
   id: string;
@@ -32,6 +32,10 @@ export type ExceptionRow = {
   resolutionNote: string | null;
   resolvedBy: string | null;
   resolvedAt: string | null;
+  /** C30: set while a write-off above the approval limit waits for a second approver (finance_admin). */
+  writeoffRequestedBy?: string | null;
+  writeoffRequestedAt?: string | null;
+  writeoffRequestNote?: string | null;
   createdAt: string;
 } & Record<string, unknown>;
 
@@ -40,7 +44,13 @@ const ACTION_LABEL: Record<ExceptionAction, string> = {
   resolve: "Resolve",
   write_off: "Write off",
   reopen: "Reopen",
+  decline_write_off: "Decline write-off",
 };
+
+/** What an action button says on a row (C30: the Write off button on a pending request is the second approval). */
+function actionLabel(row: ExceptionRow, action: ExceptionAction): string {
+  return action === "write_off" && row.writeoffRequestedBy ? "Approve write-off" : ACTION_LABEL[action];
+}
 
 // Mirrors the exception lifecycle state machine in @civitasone/reconciliation —
 // only actions valid for the exception's current status are offered.
@@ -74,7 +84,7 @@ export function formatBreakValue(row: Pick<ExceptionRow, "fieldType">, value: st
 }
 
 /** Actions whose justification is mandatory (resolve / write-off close the break). */
-const NOTE_REQUIRED: ReadonlySet<ExceptionAction> = new Set(["resolve", "write_off"]);
+const NOTE_REQUIRED: ReadonlySet<ExceptionAction> = new Set(["resolve", "write_off", "decline_write_off"]);
 
 export function ExceptionsPanel({
   exceptions,
@@ -116,7 +126,11 @@ export function ExceptionsPanel({
         setDialogError(await errorMessageFromResponse(res, "save", "reconciliation exception"));
         return;
       }
-      setMessage(`Exception ${pending.row.breakKey} marked "${ACTION_LABEL[pending.action]}".`);
+      setMessage(
+        pending.action === "write_off" && !pending.row.writeoffRequestedBy
+          ? `Write-off of ${pending.row.breakKey} submitted. Above the approval limit it waits for a second approver; the status shows when it is final.`
+          : `Exception ${pending.row.breakKey} marked "${actionLabel(pending.row, pending.action)}".`,
+      );
       setPending(null);
       router.refresh();
     } catch {
@@ -135,7 +149,9 @@ export function ExceptionsPanel({
     label: "Actions",
     sortable: false,
     render: (row: ExceptionRow) => {
-      const actions = AVAILABLE_ACTIONS[row.status] ?? [];
+      const base = AVAILABLE_ACTIONS[row.status] ?? [];
+      // C30: a pending write-off request can be declined (withdrawn by its requester, or refused by a finance admin).
+      const actions: ExceptionAction[] = row.writeoffRequestedBy ? [...base, "decline_write_off"] : base;
       if (actions.length === 0) {
         return <span style={{ color: "var(--ink2)", fontSize: 13 }}>—</span>;
       }
@@ -147,13 +163,13 @@ export function ExceptionsPanel({
               type="button"
               variant="ghost"
               size="sm"
-              aria-label={`${ACTION_LABEL[action]} exception ${row.breakKey}`}
+              aria-label={`${actionLabel(row, action)} exception ${row.breakKey}`}
               onClick={() => {
                 setDialogError(undefined);
                 setPending({ row, action });
               }}
             >
-              {ACTION_LABEL[action]}
+              {actionLabel(row, action)}
             </Button>
           ))}
         </div>
@@ -211,6 +227,13 @@ export function ExceptionsPanel({
         return (
           <div>
             <StatusPill status={row.status} variant={exceptionStatusVariant(row.status)} />
+            {row.writeoffRequestedBy && !closed ? (
+              <div role="note" style={{ color: "var(--warn, #b45309)", fontSize: 12, marginTop: 4, maxWidth: 260 }}>
+                Write-off waiting for a second approver (finance admin). Requested by {actorLabel(row.writeoffRequestedBy, actorNames)}
+                {row.writeoffRequestedAt ? ` on ${formatIndianDate(row.writeoffRequestedAt)}` : ""}.
+                {row.writeoffRequestNote ? <div style={{ color: "var(--ink2)" }}>{row.writeoffRequestNote}</div> : null}
+              </div>
+            ) : null}
             {closed && (row.resolutionNote || row.resolvedAt) ? (
               <div style={{ color: "var(--ink2)", fontSize: 12, marginTop: 4, maxWidth: 260 }}>
                 {row.resolutionNote ? <div>{row.resolutionNote}</div> : null}
@@ -257,8 +280,8 @@ export function ExceptionsPanel({
 
       <ConfirmDialog
         open={pending !== null}
-        title={pending ? `${ACTION_LABEL[pending.action]} this exception?` : ""}
-        confirmLabel={pending ? ACTION_LABEL[pending.action] : "Confirm"}
+        title={pending ? `${actionLabel(pending.row, pending.action)} this exception?` : ""}
+        confirmLabel={pending ? actionLabel(pending.row, pending.action) : "Confirm"}
         danger={pending?.action === "write_off"}
         requireReason={pending ? NOTE_REQUIRED.has(pending.action) : false}
         optionalReason={pending ? !NOTE_REQUIRED.has(pending.action) : false}
@@ -270,7 +293,7 @@ export function ExceptionsPanel({
         description={
           pending ? (
             <>
-              {ACTION_LABEL[pending.action]} exception <strong>{pending.row.breakKey}</strong> ({pending.row.breakType}
+              {actionLabel(pending.row, pending.action)} exception <strong>{pending.row.breakKey}</strong> ({pending.row.breakType}
               {pending.row.field ? `, field "${pending.row.field}"` : ""}) from provider{" "}
               <strong>{pending.row.provider}</strong>.
               <dl style={{ margin: "12px 0 0", display: "grid", gridTemplateColumns: "max-content 1fr", gap: "4px 16px" }}>
@@ -285,7 +308,8 @@ export function ExceptionsPanel({
               </dl>
               {pending.action === "write_off" && pending.row.deltaMinor != null ? (
                 <p style={{ margin: "8px 0 0" }}>
-                  You are writing off <strong>{formatMoney(pending.row.deltaMinor)}</strong>.
+                  You are writing off <strong>{formatMoney(pending.row.deltaMinor)}</strong>. A write-off above the office&apos;s
+                  approval limit needs a second approver (a different finance admin).
                 </p>
               ) : null}
             </>

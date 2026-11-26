@@ -330,7 +330,7 @@ describe("RaiseEOfficeNote classification, error mapping and notify warning", ()
 // ── GAP-FINANCE-PAYMENTS-DETAIL-02: the forward-to directory follows the role ──
 // finance_officer / finance_admin may raise an eFile (estab INITIATOR_ROLES) but are NOT on the HR
 // employee directory's role list (DIRECTORY_ROLES): the HR search 403s for them. finance_officer can
-// reach the payroll employee lookup; finance_admin reaches neither.
+// reach the payroll employee lookup; finance_admin joined it in B17 (2026-11-26); roles on neither list (accounts_officer) get a plain note.
 describe("RaiseEOfficeNote forward-to directory follows the signed-in role", () => {
   const props = { refType: "finance_payment", refId: "p-9", subject: "Payment PAY-9", dept: "Finance" };
 
@@ -405,8 +405,18 @@ describe("RaiseEOfficeNote forward-to directory follows the signed-in role", () 
     expect(urlsOf(spy).some((u) => u.includes("/payroll/employee-lookup"))).toBe(false);
   });
 
-  it("a finance_admin (no reachable directory) is told so plainly, with no picker that can only fail", async () => {
-    const spy = mockSession(["finance_admin"]);
+  it("a finance_admin picks the forward-to officer from the same narrow payroll lookup (B17), never the HR directory", async () => {
+    const spy = mockSession(["finance_admin"], { hrmsStatus: 403 });
+    render(<RaiseEOfficeNote {...props} />);
+    await openForm(spy);
+    fireEvent.change(screen.getByLabelText("Forward to officer"), { target: { value: "Ben" } });
+    await screen.findByText("Ben Iyer (E-002)");
+    expect(urlsOf(spy).some((u) => u.includes("/payroll/employee-lookup?q=Ben"))).toBe(true);
+    expect(urlsOf(spy).some((u) => u.includes("/hrms/employees"))).toBe(false);
+  });
+
+  it("a role with no reachable directory (accounts_officer) is told so plainly, with no picker that can only fail", async () => {
+    const spy = mockSession(["accounts_officer"]);
     render(<RaiseEOfficeNote {...props} />);
     await openForm(spy);
     expect(await screen.findByText(/cannot search the employee directory/i)).toBeInTheDocument();

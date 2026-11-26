@@ -11,7 +11,7 @@ import * as queries from "./queries.js";
 import * as repo from "./repo.js";
 import { queue, cache } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
-import { DomainError, normaliseVendorBillNo, vendorBillNoKey, vendorBillNoUniqueEnabled, assertBillRejectable, assertBillApprovable, assertPaymentSubmittable, assertPayerNotPasser, assertDistinctMakerChecker, maskAdvanceBeneficiaries } from "./domain.js";
+import { DomainError, normaliseVendorBillNo, vendorBillNoKey, vendorBillNoUniqueEnabled, assertBillRejectable, assertBillApprovable, assertPaymentSubmittable, assertPayerNotPasser, assertDistinctMakerChecker, maskAdvanceBeneficiaries, maskAdvanceBalances } from "./domain.js";
 import * as mastersRepo from "../masters/repo.js";
 import { assertBillDdoConfigured } from "../masters/ddo-commands.js";
 import * as ucRepo from "./uc-repo.js";
@@ -83,6 +83,9 @@ const FINANCE_ROLES  = ["finance_officer", "finance_admin", "super_admin"];
 const APPROVER_ROLES = ["accounts_officer", "finance_admin", "super_admin"];
 // accounts_officer approves/rejects bills (APPROVER_ROLES), so must be able to read the bill screen they act on.
 const READER_ROLES   = [...FINANCE_ROLES, "accounts_officer", "audit_officer", "procurement_officer"];
+// C25: the payroll roles that recover an officer advance from salary may open the advances register (their names are masked
+// like any non-officer role; balances are shown to them -- ADVANCE_BALANCE_ROLES in ./domain.ts).
+const ADVANCE_READER_ROLES = [...READER_ROLES, "payroll_admin", "payroll_officer"];
 
 // Mirrors budget/distribution-routes.ts's toDomain(): a DomainError from a
 // pure/domain assertion becomes a proper HttpError at the given status
@@ -136,11 +139,11 @@ export async function paymentsRoutes(app: FastifyInstance): Promise<void> {
 
   app.get("/v1/finance/advances", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, READER_ROLES);
+    requireRole(ctx, ADVANCE_READER_ROLES);
     const q = listQuerySchema.parse(req.query);
     // Personal advances name a natural person: mask the name for roles that
     // are not entitled to it (DPDP; GAP-FINANCE-EXPENDITURE-ADVANCES-03).
-    sendValidated(reply, AdvanceSummaryListSchema, maskAdvanceBeneficiaries(await queries.listAdvances(ctx.tenantId, q.limit, q.offset), ctx.roles));
+    sendValidated(reply, AdvanceSummaryListSchema, maskAdvanceBalances(maskAdvanceBeneficiaries(await queries.listAdvances(ctx.tenantId, q.limit, q.offset), ctx.roles), ctx.roles));
   });
 
   app.get("/v1/finance/utilization-certificates", async (req, reply) => {
@@ -206,6 +209,11 @@ export async function paymentsRoutes(app: FastifyInstance): Promise<void> {
     }
     // GAP-FINANCE-EXPENDITURE-UTILIZATION-CERTIFICATES-NEW-03: a scheme code must be one of this tenant's schemes. The
     // consumer repeats the check in its own transaction.
+    // C27 (owner-approved 2026-11-26): the scheme CODE is canonical -- a UC raised in an office that has schemes must name one
+    // (the free-text `scheme` no longer stands in for it); an office with NO schemes set up may omit it.
+    if (!body.schemeCode && (await scopedRead((tx) => ucRepo.countSchemes(tx, ctx.tenantId))) > 0) {
+      throw new HttpError(400, "SCHEME_CODE_REQUIRED", "choose the scheme this certificate is raised against", [{ field: "schemeCode", message: "Choose one of the schemes set up in Scheme Tracking." }]);
+    }
     if (body.schemeCode) {
       const schemeCode = body.schemeCode;
       if (!(await scopedRead((tx) => ucRepo.findSchemeByCode(tx, ctx.tenantId, schemeCode)))) {

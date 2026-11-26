@@ -19,7 +19,9 @@ import { z } from "zod";
 import { resolveContext, requireRole } from "../../shared/context.js";
 import { searchEmployeeSummaries } from "../../shared/hrms-client.js";
 
-export const LOOKUP_ROLES = ["payroll_admin", "payroll_officer", "super_admin", "hr_admin", "finance_officer"];
+// B17 (owner-approved): finance_admin can create advances (officer picker on the new-advance form) and raise eFiles, so it gets
+// the same NARROW lookup finance_officer has (id / employee no / name / department only). The HR directory is NOT widened.
+export const LOOKUP_ROLES = ["payroll_admin", "payroll_officer", "super_admin", "hr_admin", "finance_officer", "finance_admin"];
 
 const query = z.object({
   q: z.string().trim().max(100).optional(),

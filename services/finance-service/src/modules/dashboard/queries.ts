@@ -5,6 +5,7 @@ import { headNatureOf } from "../../shared/head-nature.js";
 import { financeSanctions, financeBudgets, financeHeads } from "../budget/schema.js";
 import { financePayments } from "../payments/schema.js";
 import { financeLedger } from "../gl/schema.js";
+import { financeMajorHeads } from "../hoa/schema.js";
 
 /**
  * UX-006: null when there is no sanctioned budget (BE) on record for this
@@ -69,6 +70,35 @@ export function expenseHeadIds(heads: ReadonlyArray<{ id: string; code: string; 
   return heads.filter((h) => headNatureOf(h.code, h.classification) === "expense").map((h) => h.id);
 }
 
+/** Label for expenditure booked to a head that carries no (or a malformed) head-of-account code. */
+export const UNCLASSIFIED_MAJOR_HEAD_LABEL = "Unclassified (no head of account)";
+
+/**
+ * C24 / GAP-FINANCE-DASHBOARD-01 (owner-approved, Finance to confirm): the expenditure split by MAJOR HEAD OF ACCOUNT, over
+ * exactly the same set of postings as totalExpenditure (net debit - credit on expense heads). `perHead` is the net per expense
+ * head; each head rolls up to the 4-digit major head of its hoa_code, and a head with no usable HoA lands in one
+ * "Unclassified" bucket, so the buckets always add up to totalExpenditure (reconciles by construction). Returns undefined
+ * (the UI then says "not available") when there is nothing to split or any bucket nets negative -- the wire contract is a
+ * non-negative paise string, and a net-credit bucket must not be drawn as a bar or silently clamped. Pure.
+ */
+export function buildCategoryBreakdown(
+  perHead: ReadonlyArray<{ hoaCode: string | null; netMinor: bigint }>,
+  majorHeadNames: ReadonlyMap<string, string>,
+): Array<{ label: string; amountMinor: string }> | undefined {
+  const buckets = new Map<string, bigint>();
+  for (const h of perHead) {
+    const code = /^\d{4}/.test((h.hoaCode ?? "").trim()) ? (h.hoaCode as string).trim().slice(0, 4) : "";
+    buckets.set(code, (buckets.get(code) ?? 0n) + h.netMinor);
+  }
+  const rows = [...buckets.entries()].filter(([, v]) => v !== 0n);
+  if (rows.length === 0 || rows.some(([, v]) => v < 0n)) return undefined;
+  rows.sort((a, b) => (a[1] === b[1] ? a[0].localeCompare(b[0]) : a[1] > b[1] ? -1 : 1));
+  return rows.map(([code, v]) => ({
+    label: code === "" ? UNCLASSIFIED_MAJOR_HEAD_LABEL : majorHeadNames.get(code) ? `${code} - ${majorHeadNames.get(code)}` : code,
+    amountMinor: v.toString(),
+  }));
+}
+
 /**
  * `fy` (optional): scope expenditure to ledger postings dated inside that FY
  * and budget estimates to that FY. Omitted -> legacy all-time totals.
@@ -81,14 +111,14 @@ export async function getDashboard(tenantId: string, fy?: string) {
     cache.makeKey(tenantId, "dashboard", `summary:${fy ?? "all"}`),
     async () => {
       return scopedRead(async (tx) => {
-        const heads = await tx.select({ id: financeHeads.id, code: financeHeads.code, classification: financeHeads.classification })
+        const heads = await tx.select({ id: financeHeads.id, code: financeHeads.code, classification: financeHeads.classification, hoaCode: financeHeads.hoaCode })
           .from(financeHeads)
           .where(eq(financeHeads.tenantId, tenantId));
         const expenseIds = expenseHeadIds(heads);
         const ledgerScope = bounds
           ? and(eq(financeLedger.tenantId, tenantId), gte(financeLedger.postingDate, bounds.start), lte(financeLedger.postingDate, bounds.end))
           : eq(financeLedger.tenantId, tenantId);
-        const [[pendingRow], [payRow], [expRow], [budgetRow]] = await Promise.all([
+        const [[pendingRow], [payRow], expPerHead, [budgetRow], majorRows] = await Promise.all([
           tx.select({ count: sql<number>`count(*)::int` })
             .from(financeSanctions)
             .where(and(eq(financeSanctions.tenantId, tenantId), inArray(financeSanctions.status, [...PENDING_SANCTION_STATUSES]))),
@@ -97,18 +127,24 @@ export async function getDashboard(tenantId: string, fy?: string) {
             // UAT P2: "this month" = since the 1st of the current calendar month in India (it counted every payment).
             .where(and(eq(financePayments.tenantId, tenantId), sql`${financePayments.createdAt} >= (date_trunc('month', now() AT TIME ZONE 'Asia/Kolkata') AT TIME ZONE 'Asia/Kolkata')`)),
           expenseIds.length === 0
-            ? Promise.resolve([{ total: 0 }])
-            : tx.select({ total: sql<number>`coalesce(sum(${financeLedger.debitMinor} - ${financeLedger.creditMinor}), 0)::bigint` })
+            ? Promise.resolve([] as Array<{ headId: string; net: string }>)
+            : tx.select({ headId: financeLedger.headId, net: sql<string>`coalesce(sum(${financeLedger.debitMinor} - ${financeLedger.creditMinor}), 0)::text` })
               .from(financeLedger)
-              .where(and(ledgerScope, inArray(financeLedger.headId, expenseIds))),
+              .where(and(ledgerScope, inArray(financeLedger.headId, expenseIds)))
+              .groupBy(financeLedger.headId),
           tx.select({ totalBE: sql<number>`coalesce(sum(be_minor), 0)::bigint` })
             .from(financeBudgets)
             .where(fy
               ? and(eq(financeBudgets.tenantId, tenantId), eq(financeBudgets.fy, fy))
               : eq(financeBudgets.tenantId, tenantId)),
+          tx.select({ code: financeMajorHeads.code, description: financeMajorHeads.description }).from(financeMajorHeads),
         ]);
+        const hoaByHead = new Map(heads.map((h) => [h.id, h.hoaCode] as const));
+        const perHead = expPerHead.map((r) => ({ hoaCode: hoaByHead.get(r.headId) ?? null, netMinor: BigInt(r.net) }));
+        const totalExpenditureMinor = perHead.reduce((s, r) => s + r.netMinor, 0n);
+        const categoryBreakdown = buildCategoryBreakdown(perHead, new Map(majorRows.map((m) => [String(m.code).trim(), m.description] as const)));
         const sanctioned = Number(budgetRow?.totalBE ?? 0);
-        const expenditure = Number(expRow?.total ?? 0);
+        const expenditure = Number(totalExpenditureMinor);
         const budgetUtilisationPct = computeBudgetUtilisationPct(expenditure, sanctioned);
         return {
           budgetUtilisationPct,
@@ -118,13 +154,15 @@ export async function getDashboard(tenantId: string, fy?: string) {
           // scale directly. Dividing by 100 here previously sent rupees,
           // which formatMoney() then re-divided again, rendering every
           // amount 100x too small (the same bug fixed in gl/queries.ts).
-          totalExpenditure: Number(expRow?.total ?? 0),
+          totalExpenditure: Number(totalExpenditureMinor),
           // GAP-FINANCE-DASHBOARD-04: the budget-estimate total (paise, decimal
           // string). NOTE: BE ONLY (`sum(be_minor)`): no RE / re-appropriation and
           // not the sanctions table, so the UI calls it a "budget estimate". Lets it
           // derive "remaining"/"over estimate" by exact subtraction instead of
           // back-computing from the rounded percentage.
           sanctionedMinor: sanctionedMinorString(budgetRow?.totalBE),
+          // C24: split of totalExpenditure by major head of account (same debit set; sums to it). Omitted when not derivable.
+          ...(categoryBreakdown ? { categoryBreakdown } : {}),
         };
       });
     },
