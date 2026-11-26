@@ -9,7 +9,7 @@ import { SETUP_SKIPPED_STEPS_KEY } from "@/lib/setupSteps";
  * steps from the tenant-service settings store (key `setup.skipped_steps`).
  *
  * The persistence is the generic tenant-settings key/value store
- * (tenant-service `/v1/settings`, proxied as `/api/v1/tenant/settings/:key`),
+ * (tenant-service `/v1/settings`, proxied as `/api/v1/settings/:key`),
  * which already does CQRS + audit + tenant scoping + admin role gating. The
  * value is an array of WizardStep keys. On any failure (403 for a non-admin
  * viewer, offline, or a never-set key → 404) we return an empty list so the
@@ -17,7 +17,7 @@ import { SETUP_SKIPPED_STEPS_KEY } from "@/lib/setupSteps";
  */
 export async function getSkippedSteps(): Promise<string[]> {
   const result = await fetchJson<unknown, string[]>(
-    `/api/v1/tenant/settings/${encodeURIComponent(SETUP_SKIPPED_STEPS_KEY)}`,
+    `/api/v1/settings/${encodeURIComponent(SETUP_SKIPPED_STEPS_KEY)}`,
     [],
     {
       // Short cache: a freshly-persisted skip should show on the next visit.

@@ -13,7 +13,7 @@ function toOption(row: IdentityUserRow): EntityOption {
  * EntityPicker adapters for identity-service users (GAP-HR-PROMOTION-05's
  * "initiating officer" / "forward to" pickers). Same client-side-filter
  * shape as lib/entityAdapters/payStructure.ts and ./designation.ts: this
- * calls the exact same `/api/proxy/v1/identity/users?limit=200` request
+ * calls the exact same `/api/proxy/v1/admin/users?limit=200` request
  * PromoteWithApproval.tsx already made directly (no new backend route, no
  * change to role/tenant scoping -- see that route's own access rules,
  * unchanged here), just wrapped in the shared search(q)/resolve(ids)
@@ -23,13 +23,13 @@ function toOption(row: IdentityUserRow): EntityOption {
 async function fetchAll(signal?: AbortSignal, opts?: StrictOpt): Promise<IdentityUserRow[]> {
   // The list answers at most 200 rows per call; walk the pages so a tenant with more users is searchable in full.
   const all = await fetchAllPages(async (limit, offset) => {
-    const res = await fetch(`/api/proxy/v1/identity/users?limit=${limit}&offset=${offset}`, { signal });
+    const res = await fetch(`/api/proxy/v1/admin/users?limit=${limit}&offset=${offset}`, { signal });
     failStrict(res, opts);
     if (!res.ok) return null;
     const body = (await res.json()) as { data?: IdentityUserRow[] } | IdentityUserRow[];
     return Array.isArray(body) ? body : (body.data ?? []);
   });
-  if (all && !all.complete) recordLoaderFallback({ key: "entity-picker.identity-users", reason: "truncated", path: "/api/proxy/v1/identity/users", timestamp: new Date().toISOString() });
+  if (all && !all.complete) recordLoaderFallback({ key: "entity-picker.identity-users", reason: "truncated", path: "/api/proxy/v1/admin/users", timestamp: new Date().toISOString() });
   return all ? all.rows : [];
 }
 

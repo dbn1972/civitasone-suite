@@ -39,7 +39,7 @@ function stubFetch(createResponse: Response) {
     if (url.includes("/v1/works/proposals")) {
       return new Response(JSON.stringify({ data: [{ id: WORK_ID, workNumber: "WK/2026/001", description: "Road work", status: "dao_finalized" }] }), { status: 200 });
     }
-    if (url.includes("/v1/identity/users")) {
+    if (url.includes("/v1/admin/users")) {
       return new Response(JSON.stringify({ data: [{ id: AUTH_ID, name: "A. Officer", designation: "DAO" }] }), { status: 200 });
     }
     if (url.includes("/v1/works/approvals/aa") && (init?.method ?? "GET") === "POST") {
