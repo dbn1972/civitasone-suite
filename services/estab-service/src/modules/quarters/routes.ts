@@ -13,6 +13,7 @@ import {
 } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
+import { getEmployeeDisplayMap } from "../../shared/hrms-client.js";
 
 const ESTAB_ROLES  = ["estab_officer", "estab_admin", "quarter_officer", "super_admin"];
 const READER_ROLES = [...ESTAB_ROLES, "audit_officer", "employee"];
@@ -61,7 +62,16 @@ export async function quartersRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/estab/quarter-allotments", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES); // employees can apply
-    const body = applyAllotmentBody.parse(req.body);
+    const parsed = applyAllotmentBody.parse(req.body);
+    // GAP-ESTAB-QUARTERS-DETAIL-02 (owner decision B26): the applicant's designation is the HRMS
+    // service-record value, not what the client typed. When HRMS resolves the employee the
+    // client-sent designation is IGNORED and replaced; when it cannot (unreachable / no
+    // designation on file) the typed value is kept as before.
+    // BOUNCED: payLevel is not derived here. hrms-service's employee-summaries does not expose the
+    // pay level (only payroll-input does, month-scoped), and tenants on private grade bands carry a
+    // band code in payLevel; so payLevel stays client-supplied, labelled "as per service record".
+    const hrms = (await getEmployeeDisplayMap(ctx.tenantId, [parsed.employeeRef])).get(parsed.employeeRef);
+    const body = hrms?.designationName ? { ...parsed, designation: hrms.designationName } : parsed;
     return sendAccepted(reply, acceptedResponseSchema, await commands.applyForAllotment(ctx, body));
   });
 

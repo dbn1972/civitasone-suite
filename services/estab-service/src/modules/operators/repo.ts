@@ -65,3 +65,11 @@ export async function insertOperator(tx: Writer, row: OperatorInsert): Promise<v
 export async function updateOperator(tx: Writer, id: string, patch: Partial<OperatorInsert>): Promise<void> {
   await tx.update(estabFileOperator).set({ ...patch, updatedAt: new Date() }).where(eq(estabFileOperator.id, id));
 }
+
+/** Distinct divisions of the tenant's ACTIVE operator desks: the department master (B24). */
+// Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id before this read.
+export async function listActiveDivisions(tenantId: string): Promise<string[]> {
+  const rows = await db.transaction((tx) => tx.selectDistinct({ division: estabFileOperator.division }).from(estabFileOperator)
+    .where(and(eq(estabFileOperator.tenantId, tenantId), eq(estabFileOperator.active, true))));
+  return rows.map((r) => r.division);
+}

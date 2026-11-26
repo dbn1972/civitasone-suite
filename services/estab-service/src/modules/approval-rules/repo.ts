@@ -34,6 +34,16 @@ export async function listActiveRulesForSource(tenantId: string, sourceType: str
     .orderBy(asc(estabApprovalRule.minAmountMinor), asc(estabApprovalRule.priority)));
 }
 
+/** Same read as listActiveRulesForSource, through an open consumer transaction (no nested transaction). */
+export async function listActiveRulesForSourceTx(tx: Writer, tenantId: string, sourceType: string): Promise<ApprovalRuleRow[]> {
+  return tx.select().from(estabApprovalRule)
+    .where(and(
+      eq(estabApprovalRule.tenantId, tenantId),
+      eq(estabApprovalRule.sourceType, sourceType),
+      eq(estabApprovalRule.active, true),
+    ));
+}
+
 /**
  * TX-001 — tenant-scoped sibling of findRuleById(). Reads through a
  * caller-supplied transaction handle so an already-open db.transaction()

@@ -3,6 +3,7 @@ import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS } from "../../topics.js";
 import * as repo from "./repo.js";
+import { findOverlappingRule } from "./bands.js";
 import { invalidateResolverCache } from "./resolver.js";
 import type { CreateApprovalRuleBody, UpdateApprovalRuleBody } from "./validators.js";
 
@@ -16,6 +17,19 @@ export function registerApprovalRuleConsumers(queue: Queue): void {
     const p = msg.payload as CreatePayload;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      // B22 backstop: two creates racing past the route check must not both land an overlapping band.
+      const clash = findOverlappingRule(await repo.listActiveRulesForSourceTx(tx, p.tenantId, p.sourceType), p);
+      if (clash) {
+        await enqueue(tx, {
+          topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
+          tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+          payload: {
+            service: "estab", action: "approval_rule.create_rejected_overlap", resourceType: "approval_rule",
+            resourceId: p.id, outcome: "rejected", metadata: { overlapsRuleId: clash.id },
+          },
+        });
+        return;
+      }
       await repo.insertRule(tx, {
         id: p.id,
         tenantId: p.tenantId,

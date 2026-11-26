@@ -1,4 +1,5 @@
 import { cache } from "../../shared/infra.js";
+import { HttpError } from "../../shared/context.js";
 import * as repo from "./repo.js";
 import type { OperatorRow } from "./schema.js";
 
@@ -80,6 +81,7 @@ export async function invalidateOperatorCache(tenantId: string, employeeId: stri
   await cache.invalidate(cache.makeKey(tenantId, "operator", employeeId));
   // Also bust the adoption flag so the first enrolment flips gating on.
   await cache.invalidate(cache.makeKey(tenantId, "operator", "_any"));
+  await cache.invalidate(cache.makeKey(tenantId, "operator", "_divisions"));
 }
 
 /** Classification → clearance rank (CSMOP). */
@@ -107,4 +109,32 @@ export async function isAccessAllowed(
   if (need <= 1) return true; // public
   if (!(await tenantHasOperators(tenantId))) return true; // not yet adopted
   return (await clearanceRankFor(tenantId, employeeId)) >= need;
+}
+
+/**
+ * GAP-ESTAB-FILES-NEW-03 (owner decision B24): the department master is the set of enrolled
+ * operator divisions. A file's department must be one of them, but ONLY for a tenant that has
+ * adopted the operator model (enrolled >=1 active operator): a greenfield tenant has no master
+ * to check against, so it stays unrestricted (same adoption-aware rule as isMoveAllowed).
+ * Cached with the other operator reads and busted by invalidateOperatorCache.
+ */
+export async function listDepartmentMaster(tenantId: string): Promise<string[]> {
+  return (
+    (await cache.getOrLoad<string[]>(
+      cache.makeKey(tenantId, "operator", "_divisions"),
+      () => repo.listActiveDivisions(tenantId),
+      60,
+    )) ?? []
+  );
+}
+
+export async function assertDepartmentInMaster(tenantId: string, dept: string): Promise<void> {
+  if (!(await tenantHasOperators(tenantId))) return;
+  const master = await listDepartmentMaster(tenantId);
+  if (!master.includes(dept.trim())) {
+    throw new HttpError(
+      422, "UNKNOWN_DEPARTMENT",
+      `department "${dept}" is not one of the enrolled operator divisions (${master.join(", ") || "none"})`,
+    );
+  }
 }

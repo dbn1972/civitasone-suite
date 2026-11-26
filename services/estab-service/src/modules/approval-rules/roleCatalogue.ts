@@ -1,4 +1,5 @@
 import { HttpError } from "../../shared/context.js";
+import { getIdentityRoleKeys } from "../../shared/identity-client.js";
 
 /**
  * GAP-ESTAB-APPROVAL-MATRIX-03: the approver-role catalogue.
@@ -25,6 +26,8 @@ export const APPROVER_ROLE_CODE_RE = /^[a-z][a-z0-9_]{1,63}$/;
 export type ApproverRoleCatalogue = {
   /** True when the deployment declared an authoritative list. */
   configured: boolean;
+  /** Where the list came from: the tenant's identity RBAC plus the built-in floor, or the floor alone. */
+  source?: "identity+default" | "default" | "env";
   /** The allowed role codes, in the configured order, without duplicates. */
   roles: string[];
 };
@@ -54,6 +57,39 @@ export const DEFAULT_APPROVER_ROLES: readonly string[] = [
 export function getApproverRoleCatalogue(): ApproverRoleCatalogue {
   const fromEnv = parseApproverRoleCatalogue(process.env.ESTAB_APPROVER_ROLES);
   return fromEnv.configured ? fromEnv : { configured: true, roles: [...DEFAULT_APPROVER_ROLES] };
+}
+
+/**
+ * B22 (owner-approved): the approver roles of a tenant are its IDENTITY RBAC roles (the list
+ * GET /v1/admin/roles serves), unioned with the built-in floor above. The floor stays because the
+ * standard file-noting chain (estab_deputy_secretary ...) names roles that identity-service never
+ * seeds, so an identity-only list would make the shipped chain unconfigurable. Identity keys that
+ * are not valid role codes (e.g. dotted system keys) are dropped. When identity-service cannot
+ * answer, the catalogue degrades to the env/default list (never blocks the matrix).
+ * An explicit ESTAB_APPROVER_ROLES still wins outright (deployment pin).
+ */
+export async function loadApproverRoleCatalogue(tenantId: string): Promise<ApproverRoleCatalogue> {
+  const fromEnv = parseApproverRoleCatalogue(process.env.ESTAB_APPROVER_ROLES);
+  if (fromEnv.configured) return { ...fromEnv, source: "env" };
+  const identityKeys = await getIdentityRoleKeys(tenantId);
+  const roles = new Set<string>(DEFAULT_APPROVER_ROLES);
+  let fromIdentity = false;
+  for (const k of identityKeys ?? []) {
+    if (APPROVER_ROLE_CODE_RE.test(k)) { roles.add(k); fromIdentity = true; }
+  }
+  return { configured: true, roles: [...roles], source: fromIdentity ? "identity+default" : "default" };
+}
+
+/** Async twin of assertApproverRolesKnown that reads the tenant's identity-backed catalogue. */
+export async function assertApproverRolesKnownForTenant(
+  tenantId: string,
+  steps: ReadonlyArray<{ role: string }> | undefined,
+): Promise<void> {
+  if (!steps) return;
+  const unknown = unknownApproverRoles(steps, await loadApproverRoleCatalogue(tenantId));
+  if (unknown.length > 0) {
+    throw new HttpError(422, "UNKNOWN_APPROVER_ROLE", `unknown approver role: ${unknown.join(", ")}`);
+  }
 }
 
 /** The step roles that are not in the catalogue (empty when none is configured). */

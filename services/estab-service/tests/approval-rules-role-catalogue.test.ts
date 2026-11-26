@@ -118,7 +118,7 @@ describe("approval-rules routes with the catalogue (GAP-ESTAB-APPROVAL-MATRIX-03
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({
       data: [],
-      approverRoles: { configured: true, roles: ["section_officer", "under_secretary"] },
+      approverRoles: { configured: true, roles: ["section_officer", "under_secretary"], source: "env" },
     });
   });
 
@@ -126,9 +126,11 @@ describe("approval-rules routes with the catalogue (GAP-ESTAB-APPROVAL-MATRIX-03
     const app = await buildApp();
     const res = await app.inject({ method: "GET", url: "/v1/estab/approval-rules", headers: authHeader(["estab_admin"]) });
     await app.close();
+    // B22: identity RBAC is unioned in when identity-service answers; it cannot here, so the floor is served.
     expect(res.json().approverRoles).toEqual({
       configured: true,
       roles: ["estab_admin", "estab_deputy_secretary", "estab_division_admin"],
+      source: "default",
     });
   });
 
