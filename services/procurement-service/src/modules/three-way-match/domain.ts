@@ -78,6 +78,28 @@ export interface MatchResult {
   priceVariancePct: number;
   totalVariancePct: number;
   matchStatus: "matched" | "mismatch";
+  /** Invoice exceeds the PO amount: hard cap (decision C2), always a mismatch regardless of tolerance. */
+  overInvoiced: boolean;
+  /** Invoice is at/over the warn threshold (90%) of the PO amount but not over the cap. */
+  nearPoCap: boolean;
+}
+
+/** Decision C2: warn once invoiced value reaches 90% of the PO amount; cap (block) above 100%. */
+export const INVOICE_WARN_PCT = 90;
+
+/**
+ * Invoice-vs-PO utilisation, BigInt-exact. Pure; also used by the read path to
+ * derive the flags from the stored amounts (no extra columns needed).
+ */
+export function invoiceCapStatus(poAmountMinor: bigint, invoiceAmountMinor: bigint | null | undefined): {
+  invoiceToPoPct: number | null; overInvoiced: boolean; nearPoCap: boolean;
+} {
+  if (invoiceAmountMinor == null || invoiceAmountMinor <= 0n || poAmountMinor <= 0n) {
+    return { invoiceToPoPct: null, overInvoiced: false, nearPoCap: false };
+  }
+  const overInvoiced = invoiceAmountMinor > poAmountMinor;
+  const nearPoCap = !overInvoiced && invoiceAmountMinor * 100n >= poAmountMinor * BigInt(INVOICE_WARN_PCT);
+  return { invoiceToPoPct: Number((invoiceAmountMinor * 10000n) / poAmountMinor) / 100, overInvoiced, nearPoCap };
 }
 
 function diff(a: bigint, b: bigint): bigint {
@@ -142,12 +164,15 @@ export function evaluateMatch(input: MatchInput, tolerance: ToleranceConfig): Ma
   }
   const totalVariancePct = input.poAmountMinor > 0n ? Number((maxDiff * 10000n) / input.poAmountMinor) / 100 : 0;
 
+  const cap = invoiceCapStatus(input.poAmountMinor, input.invoicePresent ? input.invoiceAmountMinor : null);
+
   const matchStatus: MatchResult["matchStatus"] =
+    !cap.overInvoiced &&
     qtyVariancePct <= tolerance.qtyTolerancePct &&
     priceVariancePct <= tolerance.priceTolerancePct &&
     totalVariancePct <= tolerance.totalTolerancePct
       ? "matched"
       : "mismatch";
 
-  return { qtyVariancePct, priceVariancePct, totalVariancePct, matchStatus };
+  return { qtyVariancePct, priceVariancePct, totalVariancePct, matchStatus, overInvoiced: cap.overInvoiced, nearPoCap: cap.nearPoCap };
 }

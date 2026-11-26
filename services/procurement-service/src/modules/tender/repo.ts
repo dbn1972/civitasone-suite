@@ -145,6 +145,7 @@ export type BidEvaluationRow = {
   bidId: string;
   tenderNo: string;
   tenderId: string;
+  tenderStatus: string;
   vendorName: string;
   technicalScore: number | null;
   financialScore: number | null;
@@ -187,6 +188,7 @@ export async function listBidEvaluationsByTenant(tenantId: string, limit: number
       bidId: procurementTenderBids.id,
       tenderNo: procurementTenders.tenderNo,
       tenderId: procurementTenders.id,
+      tenderStatus: procurementTenders.status,
       vendorName: procurementTenderBids.vendorName,
       technicalScore: procurementTenderBids.technicalScore,
       financialScore: procurementTenderBids.financialScore,

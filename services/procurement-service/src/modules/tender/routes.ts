@@ -23,7 +23,7 @@ const PROC_ROLES   = ["procurement_officer", "procurement_admin", "super_admin"]
 const READER_ROLES = [...PROC_ROLES, "audit_officer", "finance_officer"];
 
 /** D4c #20: audit event for a committee view of still-sealed bidder identities (counts only, no names). */
-async function auditTenderBidders(ctx: RequestContext, tenderId: string, bidCount: number): Promise<void> {
+export async function auditTenderBidders(ctx: RequestContext, tenderId: string, bidCount: number): Promise<void> {
   try {
     await queue.publish("audit.event.record", {
       messageId: randomUUID(), type: "audit.event.record",

@@ -8,6 +8,7 @@ import type { ThreeWayMatchRow } from "./schema.js";
 import * as poRepo from "../po/repo.js";
 import * as grnRepo from "../grn/repo.js";
 import * as commands from "./commands.js";
+import { invoiceCapStatus } from "./domain.js";
 import { rupeesStringToMinor, invoiceTotalMinor } from "./money.js";
 import { randomUUID } from "node:crypto";
 
@@ -83,6 +84,9 @@ function toApi(r: ThreeWayMatchRow): Record<string, unknown> {
     qtyTolerancePct: r.qtyTolerancePct,
     priceTolerancePct: r.priceTolerancePct,
     totalTolerancePct: r.totalTolerancePct,
+    // Decision C2: invoice capped at the PO amount, warn at 90%. Derived from the
+    // stored amounts so it is always consistent with what the match used.
+    ...invoiceCapStatus(BigInt(r.poAmountMinor), r.invoiceAmountMinor != null ? BigInt(r.invoiceAmountMinor) : null),
   };
 }
 
