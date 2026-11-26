@@ -44,3 +44,11 @@ export const idParam = z.object({ id: z.string().uuid() });
 export const loanQueryParams = z.object({
   empId: z.string().uuid().optional(),
 });
+
+export const setLoanCeilingBody = z.object({
+  loanType: z.string().trim().min(1).max(32),
+  /** null clears the ceiling for that loan type (back to "no ceiling"). */
+  maxPrincipalMinor: z.number().int().positive().max(MAX_MONEY_MINOR).nullable(),
+  changeReason: z.string().trim().min(10).max(500),
+}).strict();
+export type SetLoanCeilingBody = z.infer<typeof setLoanCeilingBody>;

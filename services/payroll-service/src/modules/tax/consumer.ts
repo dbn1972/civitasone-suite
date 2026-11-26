@@ -1,4 +1,5 @@
 import type { Queue } from "@civitasone/queue";
+import { NonRetryableError } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
@@ -248,6 +249,55 @@ export function registerTaxConsumers(queue: Queue): void {
         fy: p.fy, reason: p.changeReason,
         before: prev[0] ? { opensOn: prev[0].opens_on, closesOn: prev[0].closes_on } : null,
         after: { opensOn: p.opensOn ?? null, closesOn: p.closesOn },
+      });
+    });
+  });
+
+  // Owner decision 2026-11-26 (GAP-PAYROLL-TAX-DECLARATION-05): verify locks a 'submitted' declaration.
+  // The conditional UPDATE is the race-safe guard; a no-op (already verified / not submitted) is idempotent.
+  queue.subscribe(COMMANDS.taxDeclarationVerify, async (msg) => {
+    const p = msg.payload as { id: string; note?: string | null };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const done = (await tx.execute(sql`
+        UPDATE payroll.payroll_tax_declarations
+           SET status = 'verified', updated_at = now(), updated_by = ${msg.actorId}::uuid
+         WHERE id = ${p.id}::uuid AND tenant_id = ${msg.tenantId}::uuid AND status = 'submitted'
+           AND created_by <> ${msg.actorId}::uuid
+           AND (updated_by IS NULL OR updated_by <> ${msg.actorId}::uuid)
+        RETURNING employee_id::text AS employee_id, fy
+      `)) as unknown as Array<{ employee_id: string; fy: string }>;
+      if (done.length === 0) {
+        // maker != checker is enforced here too (the route check alone is not authoritative): a still-'submitted'
+        // row that the UPDATE skipped can only have been skipped by the self-check. Any other state is an idempotent no-op.
+        const still = (await tx.execute(sql`
+          SELECT 1 AS one FROM payroll.payroll_tax_declarations
+           WHERE id = ${p.id}::uuid AND tenant_id = ${msg.tenantId}::uuid AND status = 'submitted'
+        `)) as unknown as Array<unknown>;
+        if (still.length > 0) throw new NonRetryableError(`SELF_VERIFY_FORBIDDEN: declaration ${p.id} must be verified by someone other than who filed it`);
+        return;
+      }
+      await auditDetail(tx, msg, "verify", "tax_declaration", p.id, {
+        employeeId: done[0]!.employee_id, fy: done[0]!.fy, before: { status: "submitted" }, after: { status: "verified" }, note: p.note ?? null,
+      });
+    });
+  });
+
+  // Re-open a verified / approved declaration back to 'submitted' so the employee (or staff) can amend it.
+  queue.subscribe(COMMANDS.taxDeclarationReopen, async (msg) => {
+    const p = msg.payload as { id: string; reason: string };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const done = (await tx.execute(sql`
+        UPDATE payroll.payroll_tax_declarations d
+           SET status = 'submitted', updated_at = now(), updated_by = ${msg.actorId}::uuid
+         WHERE d.id = ${p.id}::uuid AND d.tenant_id = ${msg.tenantId}::uuid
+           AND d.status IN (${sql.join(LOCKED_DECLARATION_STATUSES.map((s) => sql`${s}`), sql`, `)})
+        RETURNING d.employee_id::text AS employee_id, d.fy
+      `)) as unknown as Array<{ employee_id: string; fy: string }>;
+      if (done.length === 0) return;
+      await auditDetail(tx, msg, "reopen", "tax_declaration", p.id, {
+        employeeId: done[0]!.employee_id, fy: done[0]!.fy, reason: p.reason, after: { status: "submitted" },
       });
     });
   });

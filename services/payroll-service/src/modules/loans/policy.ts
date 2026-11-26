@@ -156,3 +156,13 @@ export function checkLoanTerms(t: { principalMinor: bigint; emiMinor: bigint; te
 export function formatLoanNo(year: number, seq: number): string {
   return `LN-${year}-${String(seq).padStart(6, "0")}`;
 }
+
+/**
+ * GAP-PAYROLL-LOANS-06 (owner decision 2026-11-26): tenant-configured principal ceiling per loan type.
+ * `ceilingMinor === null` means Finance has not supplied one, so the loan is allowed -- there is deliberately
+ * no built-in "max eligible" number.
+ */
+export function decideLoanCeiling(ceilingMinor: bigint | null, principalMinor: bigint): { allowed: boolean; ceilingMinor: bigint | null } {
+  if (ceilingMinor === null) return { allowed: true, ceilingMinor: null };
+  return { allowed: principalMinor <= ceilingMinor, ceilingMinor };
+}

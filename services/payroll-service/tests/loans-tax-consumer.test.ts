@@ -53,6 +53,8 @@ vi.mock("../src/modules/loans/repo.js", () => ({
   updateLoan: (...a: any[]) => updateLoanMock(...a),
   findLoanByIdForUpdateTx: (...a: any[]) => findLoanByIdTxMock(...a),
   findLoansByEmployeeTx: (...a: any[]) => findLoansByEmployeeTxMock(...a),
+  // GAP-PAYROLL-LOANS-06: no tenant ceiling configured => no ceiling
+  findLoanCeilingMinorTx: vi.fn(async () => null),
   findLatestGrossMinorForEmployeeTx: (...a: any[]) => findLatestGrossMinorForEmployeeTxMock(...a),
 }));
 vi.mock("../src/modules/tax/schema.js", () => ({
@@ -237,6 +239,33 @@ describe("taxDeclarationSubmit command", () => {
     expect(audits).toHaveLength(1);
     expect(audits[0]!.payload).toMatchObject({ action: "submit", outcome: "denied", reason: "DECLARATION_LOCKED", employeeId, fy: "2025-26" });
     expect(audits.some((a) => (a.payload as { outcome: string }).outcome === "success")).toBe(false);
+    await q.stop();
+  });
+});
+
+describe("taxDeclarationVerify consumer -- maker != checker (owner decision 2026-11-26)", () => {
+  it("a still-submitted row skipped by the self-check is refused (NonRetryable SELF_VERIFY_FORBIDDEN), not silently ignored", async () => {
+    // 1st execute = the guarded UPDATE (skips the row: actor is the filer), 2nd = existence probe (still submitted)
+    mockTx.execute.mockResolvedValueOnce([]).mockResolvedValueOnce([{ one: 1 }]);
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const q = new MemoryQueue(); registerTaxConsumers(q); await q.start();
+    await q.publish(COMMANDS.taxDeclarationVerify, makeMsg(COMMANDS.taxDeclarationVerify, { id: randomUUID() }));
+    await settle();
+    expect(errorSpy.mock.calls.map((c) => String(c[0])).some((l) => l.includes("SELF_VERIFY_FORBIDDEN"))).toBe(true);
+    expect(enqueuedMessages.some((m) => (m.payload as { action?: string }).action === "verify")).toBe(false);
+    await q.stop();
+    errorSpy.mockRestore();
+  });
+  it("an already-verified row is an idempotent no-op; a successful verify is audited", async () => {
+    mockTx.execute.mockResolvedValueOnce([]).mockResolvedValueOnce([]);
+    const q = new MemoryQueue(); registerTaxConsumers(q); await q.start();
+    await q.publish(COMMANDS.taxDeclarationVerify, makeMsg(COMMANDS.taxDeclarationVerify, { id: randomUUID() }));
+    await settle();
+    expect(enqueuedMessages).toHaveLength(0);
+    mockTx.execute.mockResolvedValueOnce([{ employee_id: "e1", fy: "2025-26" }]);
+    await q.publish(COMMANDS.taxDeclarationVerify, makeMsg(COMMANDS.taxDeclarationVerify, { id: randomUUID() }));
+    await settle();
+    expect(enqueuedMessages.some((m) => (m.payload as { action?: string }).action === "verify")).toBe(true);
     await q.stop();
   });
 });

@@ -27,6 +27,7 @@ function renderWizard(
 function goToDownloadStep() {
   fireEvent.click(screen.getByRole("button", { name: /next: preview/i }));
   fireEvent.click(screen.getByRole("button", { name: /next: dsc/i }));
+  fireEvent.click(screen.getByRole("checkbox", { name: /i acknowledge/i }));
   fireEvent.click(screen.getByRole("button", { name: /next: download/i }));
 }
 
@@ -38,6 +39,16 @@ function okFile(headers: Record<string, string> = {}) {
 }
 
 describe("BankFileWizard", () => {
+  it("[DISB-03] DSC step needs an acknowledgement (payroll key signs the file) before Next: Download", () => {
+    renderWizard();
+    fireEvent.click(screen.getByRole("button", { name: /next: preview/i }));
+    fireEvent.click(screen.getByRole("button", { name: /next: dsc/i }));
+    const next = screen.getByRole("button", { name: /next: download/i });
+    expect(next).toBeDisabled();
+    fireEvent.click(screen.getByRole("checkbox", { name: /i acknowledge/i }));
+    expect(next).toBeEnabled();
+  });
+
   const fetchMock = vi.fn();
   beforeEach(() => {
     fetchMock.mockReset();

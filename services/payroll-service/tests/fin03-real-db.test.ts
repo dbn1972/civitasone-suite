@@ -27,6 +27,8 @@ vi.mock("../src/shared/hrms-client.js", async (importOriginal) => ({
   fetchEmployeeSummaries: vi.fn(async () => new Map()),
   fetchPayrollReadiness: vi.fn(async () => new Map()),
   verifyEmployeeExists: vi.fn(async () => true),
+  // C20 (owner decision 2026-11-26): createSalaryRevision checks oldBasicMinor against the HRMS basic; every employee here holds 4000000.
+  fetchPayrollInput: vi.fn(async () => ({ month: "2026-04", employees: { find: () => ({ basicMinor: "4000000" }) }, lopDays: {}, overtimeHours: {} })),
   resolveActorEmployeeId: vi.fn(async (_tenant: string, actor: string) => EMPLOYEE_BY_ACTOR.get(actor) ?? null),
 }));
 
@@ -640,9 +642,9 @@ describe("reimbursement receipts", () => {
 // ─── PT slabs (GAP-PAYROLL-STATUTORY-PT-04) ─────────────────────────────────
 describe("PT state rules: state codes", () => {
   it("rejects a code that is not a state / UT, and refuses PT slabs on state-rules (versioned: pt-versions-real-db.test.ts)", async () => {
-    const zz = await app.inject({ method: "POST", url: "/v1/payroll/statutory/state-rules", headers: auth(MAKER, OFFICER), payload: { stateCode: "ZZ", lwfEmployee: 100 } });
+    const zz = await app.inject({ method: "POST", url: "/v1/payroll/statutory/state-rules", headers: auth(MAKER, ["payroll_admin"]), payload: { stateCode: "ZZ", lwfEmployee: 100 } });
     expect(zz.statusCode).toBe(400);
-    const slabs = await app.inject({ method: "POST", url: "/v1/payroll/statutory/state-rules", headers: auth(MAKER, OFFICER), payload: { stateCode: "GJ", ptSlabs: [{ fromMinor: 0, toMinor: 100, taxMinor: 0 }] } });
+    const slabs = await app.inject({ method: "POST", url: "/v1/payroll/statutory/state-rules", headers: auth(MAKER, ["payroll_admin"]), payload: { stateCode: "GJ", ptSlabs: [{ fromMinor: 0, toMinor: 100, taxMinor: 0 }] } });
     expect(slabs.statusCode).toBe(422);
     expect((slabs.json() as { code: string }).code).toBe("PT_SLABS_USE_VERSIONS");
   });

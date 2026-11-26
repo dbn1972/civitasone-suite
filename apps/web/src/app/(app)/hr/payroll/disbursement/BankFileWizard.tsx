@@ -107,6 +107,9 @@ export function BankFileWizard({
   const [encrypted, setEncrypted] = useState(false);
   const [sigError, setSigError] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  // Owner decision 2026-11-26 (GAP-PAYROLL-DISBURSEMENT-03): the DSC step is informational, but the operator must
+  // acknowledge that the bank file is signed with the payroll key, not this DSC. Not a hard block on the DSC itself.
+  const [dscAck, setDscAck] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | undefined>();
   const formError = useFormError("bank file");
@@ -362,10 +365,14 @@ export function BankFileWizard({
             <p role="note" style={{ margin: "12px 0 0", fontSize: 12, color: "var(--ink2)" }}>
               {t("dscNotAppliedNote")}
             </p>
+            <label style={{ display: "flex", alignItems: "flex-start", gap: 8, marginTop: 12, fontSize: 13 }}>
+              <input type="checkbox" checked={dscAck} onChange={(e) => setDscAck(e.target.checked)} />
+              <span>{t("dscAckLabel")}</span>
+            </label>
           </div>
           <div style={{ display: "flex", gap: 10 }}>
             <Button variant="ghost" onClick={() => setStep(1)}>{t("backBtn")}</Button>
-            <Button onClick={() => setStep(3)}>{t("nextDownloadBtn")}</Button>
+            <Button disabled={!dscAck} onClick={() => setStep(3)}>{t("nextDownloadBtn")}</Button>
           </div>
         </div>
       )}
@@ -414,7 +421,7 @@ export function BankFileWizard({
           <div style={{ display: "flex", gap: 10 }}>
             {!filename && <Button variant="ghost" onClick={() => setStep(2)}>{t("backBtn")}</Button>}
             {filename && (
-              <Button variant="ghost" onClick={() => { setStep(0); setFilename(null); setSigned(null); setSigFormat(null); setIssuanceId(null); setEncrypted(false); setSigError(false); setError(undefined); }}>
+              <Button variant="ghost" onClick={() => { setStep(0); setDscAck(false); setFilename(null); setSigned(null); setSigFormat(null); setIssuanceId(null); setEncrypted(false); setSigError(false); setError(undefined); }}>
                 {t("generateAnotherBtn")}
               </Button>
             )}

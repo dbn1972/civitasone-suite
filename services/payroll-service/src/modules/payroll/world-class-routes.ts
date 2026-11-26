@@ -306,6 +306,8 @@ export async function worldClassPayrollRoutes(app: FastifyInstance): Promise<voi
     const ctx = resolveContext(req);
     requireRole(ctx, ["payroll_admin", "payroll_officer", "super_admin"]);
     const body = createSalaryRevisionBody.parse(req.body);
+    // Forcing an old basic that differs from HRMS is an admin-only override (no officer may self-authorise it).
+    if (body.oldBasicOverrideReason) requireRole(ctx, ["payroll_admin", "super_admin"]);
     return sendAccepted(reply, acceptedResponseSchema, await commands.createSalaryRevision(ctx, body));
   });
 

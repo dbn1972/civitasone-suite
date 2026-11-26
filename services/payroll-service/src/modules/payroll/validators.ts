@@ -325,6 +325,9 @@ export const createSalaryRevisionBody = z.object({
   // keep working) but, when sent, it must be a real sentence -- the web form
   // always sends it (ConfirmDialog requires >= 10 characters).
   reason:        z.string().trim().min(10).max(512).optional(),
+  // Owner decision 2026-11-26 (GAP-PAYROLL-SALARY-REVISIONS-02): oldBasicMinor must equal the basic HRMS holds today.
+  // A deliberate mismatch is accepted only with this stated reason, which is written to the audit record.
+  oldBasicOverrideReason: z.string().trim().min(10).max(512).optional(),
 }).superRefine((b, ctx) => {
   // GAP-PAYROLL-SALARY-REVISIONS-03: the same sanity rules the web form applies.
   const issue = revisionSanityIssue(b);

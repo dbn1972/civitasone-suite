@@ -232,12 +232,11 @@ describe("GAP-PAYROLL-STATUTORY-LWF-01: who may change a statutory state rule", 
     expect(mockPublish.mock.calls[0]![0]).toBe(COMMANDS.stateRulesUpsert);
   });
 
-  // OWNER DECISION PENDING (ledger GAP-PAYROLL-STATUTORY-LWF-01): payroll_officer has always been allowed
-  // here (the PT-version writes are admin-only). This pins today's behaviour so narrowing it is a
-  // deliberate, one-line change to STATE_RULE_WRITER_ROLES -- and a deliberate edit of this test.
-  it("payroll_officer may currently change an LWF rule (owner decision pending whether to narrow to admin only)", async () => {
+  // OWNER DECISION 2026-11-26: LWF-rate writes are payroll_admin/super_admin only.
+  it("payroll_officer is refused (403) and nothing is published", async () => {
     const r = await post("/v1/payroll/statutory/state-rules", MAKER, LWF, ["payroll_officer"]);
-    expect(r.statusCode).toBe(202);
+    expect(r.statusCode).toBe(403);
+    expect(mockPublish).not.toHaveBeenCalled();
   });
 
   it("the writer role set is a subset of the payroll staff tier -- never hr_admin, finance_officer, manager or employee", async () => {

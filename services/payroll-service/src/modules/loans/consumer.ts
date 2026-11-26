@@ -6,7 +6,7 @@ import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
-import { checkLoanTerms, decideCombinedEmiCap, decideDisbursal, formatLoanNo, sumActiveEmiMinor, MAX_COMBINED_LOAN_EMI_PCT_OF_GROSS } from "./policy.js";
+import { checkLoanTerms, decideLoanCeiling, decideCombinedEmiCap, decideDisbursal, formatLoanNo, sumActiveEmiMinor, MAX_COMBINED_LOAN_EMI_PCT_OF_GROSS } from "./policy.js";
 
 const AUDIT = "audit.event.record";
 
@@ -56,6 +56,13 @@ export function registerLoansConsumers(queue: Queue): void {
           );
         }
 
+        // GAP-PAYROLL-LOANS-06: authoritative ceiling re-check (commands.ts's is the fast pre-check).
+        const ceilingDecision = decideLoanCeiling(
+          await repo.findLoanCeilingMinorTx(tx as never, p.tenantId, p.loanType), BigInt(p.principalMinor));
+        if (!ceilingDecision.allowed) {
+          throw new NonRetryableError(`LOAN_CEILING_EXCEEDED: principal ${p.principalMinor} > ${p.loanType} ceiling ${ceilingDecision.ceilingMinor}`);
+        }
+
         // GAP-PAYROLL-LOANS-05: authoritative terms re-check (the route's is a fast pre-check).
         const terms = checkLoanTerms({
           principalMinor: BigInt(p.principalMinor), emiMinor: BigInt(p.emiMinor),
@@ -78,6 +85,33 @@ export function registerLoansConsumers(queue: Queue): void {
       await cache.invalidate(cache.makeKey(msg.tenantId, "loans_emp", (msg.payload as any).employeeId));
     } catch (err) {
       logConsumerError(COMMANDS.loanCreate, msg, err);
+      throw err;
+    }
+  });
+
+  queue.subscribe(COMMANDS.loanCeilingSet, async (msg) => {
+    try {
+      const p = msg.payload as { id: string; tenantId: string; loanType: string; maxPrincipalMinor: number | null; changeReason: string };
+      await db.transaction(async (tx) => {
+        if (!(await markProcessed(tx, msg.messageId))) return;
+        const before = await repo.findLoanCeilingMinorTx(tx as never, p.tenantId, p.loanType);
+        if (p.maxPrincipalMinor === null) {
+          await tx.execute(sql`DELETE FROM loans.loan_ceilings WHERE tenant_id = ${p.tenantId}::uuid AND loan_type = ${p.loanType}`);
+        } else {
+          await tx.execute(sql`
+            INSERT INTO loans.loan_ceilings (tenant_id, loan_type, max_principal_minor, change_reason, updated_by)
+            VALUES (${p.tenantId}::uuid, ${p.loanType}, ${p.maxPrincipalMinor}, ${p.changeReason}, ${msg.actorId}::uuid)
+            ON CONFLICT (tenant_id, loan_type) DO UPDATE
+              SET max_principal_minor = EXCLUDED.max_principal_minor, change_reason = EXCLUDED.change_reason,
+                  updated_by = EXCLUDED.updated_by, updated_at = now()
+          `);
+        }
+        await audit(tx, msg, "set_ceiling", "loan_ceiling", `${p.tenantId}:${p.loanType}`, {
+          reason: p.changeReason, before: before === null ? "none" : before.toString(), after: p.maxPrincipalMinor === null ? "none" : String(p.maxPrincipalMinor),
+        });
+      });
+    } catch (err) {
+      logConsumerError(COMMANDS.loanCeilingSet, msg, err);
       throw err;
     }
   });

@@ -632,6 +632,27 @@ export async function decideReimbursement(
  * later, genuinely different one for the same employee.
  */
 export async function createSalaryRevision(ctx: RequestContext, body: CreateSalaryRevisionBody): Promise<Accepted> {
+  // Owner decision 2026-11-26 (GAP-PAYROLL-SALARY-REVISIONS-02): manual entry must start from the basic HRMS actually
+  // holds. FAIL CLOSED: if HRMS cannot be reached the revision is refused (502), never accepted unverified. A
+  // mismatch is refused (409) unless the maker gives an audited override reason. The revision itself still goes
+  // through the second-approver (maker-checker) step in the consumer.
+  const thisMonth = new Date(Date.now() + 5.5 * 3_600_000).toISOString().slice(0, 7);
+  let hrmsBasicMinor: bigint | null;
+  try {
+    const feed = await fetchPayrollInput(ctx.tenantId, thisMonth);
+    const emp = feed.employees.find((e) => e.id === body.employeeId);
+    hrmsBasicMinor = emp ? BigInt(emp.basicMinor) : null;
+  } catch (err) {
+    if (err instanceof HrmsUnavailableError) {
+      throw new HttpError(502, "HRMS_UNAVAILABLE", "cannot verify the employee's current basic pay: HRMS is unreachable; the revision was not accepted");
+    }
+    throw err;
+  }
+  if (hrmsBasicMinor === null) throw new HttpError(404, "NOT_FOUND", "employee not found in HRMS payroll input");
+  if (hrmsBasicMinor !== BigInt(body.oldBasicMinor) && !body.oldBasicOverrideReason) {
+    throw new HttpError(409, "OLD_BASIC_MISMATCH",
+      `old basic ${body.oldBasicMinor} does not match the basic pay HRMS holds (${hrmsBasicMinor}); correct it, or send oldBasicOverrideReason (min 10 characters, audited)`);
+  }
   // Prefers a genuine client-supplied key (ctx.idempotencyKey, from the
   // x-idempotency-key header) when sent; falls back to this deterministic
   // domain key otherwise -- see hrms-service's hireApplication for the

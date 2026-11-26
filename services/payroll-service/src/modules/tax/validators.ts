@@ -37,4 +37,8 @@ export const taxDeclarationWindowBody = z.object({
   changeReason: z.string().trim().min(10).max(500),
 }).refine((b) => !b.opensOn || b.opensOn <= b.closesOn, { message: "opensOn must not be after closesOn", path: ["opensOn"] });
 export type TaxDeclarationWindowBody = z.infer<typeof taxDeclarationWindowBody>;
+
+export const taxDeclarationReopenBody = z.object({ reason: z.string().trim().min(10).max(500) }).strict();
+export const taxDeclarationVerifyBody = z.object({ note: z.string().trim().max(500).optional() }).strict();
+export const declarationIdParam = z.object({ id: z.string().uuid() });
 export type CreateTaxDeclarationBody = z.infer<typeof createTaxDeclarationBody>;
