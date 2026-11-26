@@ -55,7 +55,8 @@ test.describe('HR Hub & Dashboard', () => {
     test('shows attendance percentage', async ({ page }) => {
       await page.goto('/hr/dashboard');
       // hrDashboard.attendanceTodayPct = 92
-      await expect(page.getByText(/attendance/i)).toBeVisible();
+      // Sidebar "My attendance" also matches /attendance/i; target the KPI label.
+      await expect(page.getByText('Live attendance', { exact: true })).toBeVisible();
     });
 
     test('shows pending leaves count', async ({ page }) => {

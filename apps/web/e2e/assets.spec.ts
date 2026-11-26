@@ -60,8 +60,10 @@ test.describe('Assets', () => {
 
   test('asset detail shows asset name and details', async ({ page }) => {
     await page.goto('/assets/ast-001');
-    await expect(page.getByRole('heading', { name: 'Dell Laptop XPS 15' })).toBeVisible();
-    await expect(page.getByText('AST-001')).toBeVisible();
+    // The detail <h1> is now "Asset <code>"; the asset name is rendered as the
+    // subtitle text beneath it.
+    await expect(page.getByRole('heading', { name: 'Asset AST-001', level: 1 })).toBeVisible();
+    await expect(page.getByRole('main').getByText('Dell Laptop XPS 15', { exact: true }).first()).toBeVisible();
   });
 
   test('asset detail breadcrumb links back to register', async ({ page }) => {
@@ -75,7 +77,8 @@ test.describe('Assets', () => {
     // UX-015: the row link's accessible name is "Open <identifying column>"
     // (the asset code itself is aria-hidden -- see the test above).
     await page.getByRole('link', { name: /Dell Laptop XPS 15/ }).click();
-    await expect(page.getByRole('heading', { name: 'Dell Laptop XPS 15' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Asset AST-001', level: 1 })).toBeVisible();
+    await expect(page.getByRole('main').getByText('Dell Laptop XPS 15', { exact: true }).first()).toBeVisible();
   });
 
   // ── Sub-lists ─────────────────────────────────────────────────────────────

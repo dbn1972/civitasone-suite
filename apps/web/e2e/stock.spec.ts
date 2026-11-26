@@ -61,7 +61,7 @@ test.describe('Stock (legacy /stock/* redirects)', () => {
 
   test('stock item detail has a back link to the inventory list', async ({ page }) => {
     await page.goto('/stock/sku-001');
-    await expect(page.getByRole('link', { name: 'Back' })).toHaveAttribute('href', '/inventory/list');
+    await expect(page.getByRole('link', { name: 'Back', exact: true })).toHaveAttribute('href', '/inventory/list');
   });
 
   test('stock item detail shows ledger section', async ({ page }) => {
