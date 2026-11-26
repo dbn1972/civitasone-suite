@@ -1361,6 +1361,9 @@
     "colStatus": "Status"
   },
   "citizenFeedback": {
+    "movedTitle": "Feedback is collected through surveys",
+    "movedMessage": "Share your feedback by taking part in the citizen surveys published by your office.",
+    "movedAction": "Open surveys",
     "pageTitle": "Citizen Feedback",
     "pageSubtitle": "Feedback and suggestions submitted by citizens.",
     "emptyTitle": "No feedback yet",
