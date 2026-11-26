@@ -75,7 +75,10 @@ export async function getBreak(tenantId: string, id: string): Promise<ReconBreak
  */
 export async function getBreakTx(tx: Writer, tenantId: string, id: string): Promise<ReconBreakRow | null> {
   const rows = await (tx as typeof db).select().from(reconBreak)
-    .where(and(eq(reconBreak.tenantId, tenantId), eq(reconBreak.id, id))).limit(1);
+    .where(and(eq(reconBreak.tenantId, tenantId), eq(reconBreak.id, id))).limit(1)
+    // Row lock: two concurrent actions on one break (e.g. two first write-off requests) serialise here, so the second
+    // re-reads the first's writeoff_requested_by instead of overwriting it.
+    .for("update");
   return rows[0] ?? null;
 }
 

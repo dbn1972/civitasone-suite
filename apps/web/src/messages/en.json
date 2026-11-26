@@ -21059,5 +21059,8 @@
       "status_busy": "Busy",
       "status_wrap_up": "Wrap-up",
       "status_offline": "Offline"
-    }
+    },
+  "financeGstPage": {
+    "ledgerCapped": "The ledger is capped at the first {limit} entries for this period; narrow the period or ask Finance for a full extract, as this list and its CSV export are incomplete."
+  }
 }

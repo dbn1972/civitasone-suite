@@ -1,3 +1,4 @@
+import { getTranslations } from "next-intl/server";
 import { Alert, PageHeader, StatGrid, StatCard, Card } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
@@ -56,6 +57,7 @@ async function getItcReconciliation(period: string): Promise<LoaderResult<ItcRow
 }
 
 export default async function GstConsolePage(props: { searchParams?: Promise<{ period?: string }> }) {
+  const tg = await getTranslations("financeGstPage");
   const searchParams = await props.searchParams;
   const requested = searchParams?.period;
   const periodValid = !!requested && PERIOD_PATTERN.test(requested);
@@ -136,7 +138,7 @@ export default async function GstConsolePage(props: { searchParams?: Promise<{ p
 
       {ledgerSource !== "error" && ledger.length >= GST_LEDGER_LIMIT && (
         <Alert variant="warning">
-          The ledger is capped at the first {GST_LEDGER_LIMIT} entries for this period; narrow the period or ask Finance for a full extract, as this list and its CSV export are incomplete.
+          {tg("ledgerCapped", { limit: GST_LEDGER_LIMIT })}
         </Alert>
       )}
 
