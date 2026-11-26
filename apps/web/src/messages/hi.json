@@ -1405,6 +1405,7 @@
     "track": "ट्रैक करें"
   },
   "citizenNotices": {
+    "noDocument": "—",
     "colDocument": "दस्तावेज़",
     "docAttached": "संलग्न",
     "docAttachedAria": "सूचना {subject} के लिए दस्तावेज़ लाइब्रेरी खोलें",

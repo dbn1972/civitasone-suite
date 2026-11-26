@@ -151,8 +151,10 @@ export function NoticesTable({ notices, source = "api", canAuthor = false }: { n
               {
                 key: "documentId",
                 label: t("colDocument"),
-                render: (r: NoticeRow) =>
-                  r.documentId ? <Link href="/documents/library" aria-label={t("docAttachedAria", { subject: r.subject })}>{t("docAttached")}</Link> : "—",
+                render: (r: NoticeRow) => {
+                  if (!r.documentId) return t("noDocument");
+                  return <Link href="/documents/library" aria-label={t("docAttachedAria", { subject: r.subject })}>{t("docAttached")}</Link>;
+                },
               },
               ...(canAuthor
                 ? [{ key: "actions", label: t("colActions"), render: (r: NoticeRow) => <PublishWithdrawActions kind="notices" id={r.id} status={r.lifecycle} /> }]

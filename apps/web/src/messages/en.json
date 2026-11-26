@@ -1406,6 +1406,7 @@
     "track": "Track"
   },
   "citizenNotices": {
+    "noDocument": "—",
     "colDocument": "Document",
     "docAttached": "Attached",
     "docAttachedAria": "Open document library for notice {subject}",
