@@ -5,8 +5,8 @@
 import { describe, it, expect } from "vitest";
 import { createNoticeBody } from "../src/modules/engagement/validators.js";
 import { toNoticeDto } from "../src/modules/engagement/mappers.js";
-import { decideRtiAppealBody, RTI_APPEAL_OUTCOMES } from "../src/modules/rti/validators.js";
-import { RTI_APPELLATE_ROLES } from "../src/modules/rti/domain.js";
+import { decideRtiAppealBody, RTI_APPEAL_OUTCOMES, istToday } from "../src/modules/rti/validators.js";
+import { RTI_APPELLATE_ROLES, appealDecisionConflict, resolveResponder } from "../src/modules/rti/domain.js";
 import type { CitizenNoticeRow } from "../src/modules/engagement/schema.js";
 
 describe("D1 notice documentId", () => {
@@ -50,5 +50,41 @@ describe("D2 first-appeal decision", () => {
     expect(RTI_APPELLATE_ROLES).toContain("rti_appellate");
     expect(RTI_APPELLATE_ROLES).not.toContain("citizen_officer");
     expect(RTI_APPELLATE_ROLES).not.toContain("citizen_admin");
+  });
+});
+
+describe("D2 follow-up: separation of duties", () => {
+  const appellate = "7d2c9a10-3b5e-4f1a-8c66-0a1b2c3d4e5f";
+  const cpioUser = "0c1d2e3f-4a5b-4c6d-8e7f-9a0b1c2d3e4f";
+  const delegate = "11111111-2222-4333-8444-555555555555";
+  it("blocks an actor who recorded a response", () => {
+    expect(appealDecisionConflict({ actorId: delegate, responderIds: [delegate] })).toBe("RESPONDER");
+  });
+  it("blocks the ASSIGNED CPIO even when a delegate uploaded the response", () => {
+    expect(appealDecisionConflict({ actorId: cpioUser, responderIds: [delegate], assignedCpioUserId: cpioUser })).toBe("ASSIGNED_CPIO");
+  });
+  it("allows an independent appellate officer; an unmapped CPIO entry never blocks", () => {
+    expect(appealDecisionConflict({ actorId: appellate, responderIds: [delegate], assignedCpioUserId: cpioUser })).toBeNull();
+    expect(appealDecisionConflict({ actorId: appellate, responderIds: [], assignedCpioUserId: null })).toBeNull();
+  });
+  it("estab-event response records the human responder carried in the payload, else the envelope actor", () => {
+    const system = "99999999-9999-4999-8999-999999999999";
+    expect(resolveResponder(cpioUser, system)).toBe(cpioUser);
+    expect(resolveResponder(undefined, system)).toBe(system);
+    expect(resolveResponder("not-a-uuid", system)).toBe(system);
+    // the human CPIO recorded via the event is then blocked from deciding
+    expect(appealDecisionConflict({ actorId: cpioUser, responderIds: [resolveResponder(cpioUser, system)] })).toBe("RESPONDER");
+  });
+});
+
+describe("D2 follow-up: IST decision date", () => {
+  it("istToday rolls over at 18:30 UTC (00:00 IST)", () => {
+    expect(istToday(new Date("2026-11-26T18:29:00Z"))).toBe("2026-11-26");
+    expect(istToday(new Date("2026-11-26T18:31:00Z"))).toBe("2026-11-27");
+  });
+  it("accepts today's IST date at 00:30 IST (still the previous UTC day)", () => {
+    const base = { outcome: "allowed", reason: "Information to be furnished." };
+    const today = istToday();
+    expect(decideRtiAppealBody.safeParse({ ...base, decisionDate: today }).success).toBe(true);
   });
 });

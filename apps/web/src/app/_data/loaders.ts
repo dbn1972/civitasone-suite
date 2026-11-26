@@ -1285,7 +1285,8 @@ function buildDashboardKpis(
       note: health.status,
     });
   }
-  if (readiness) {
+  // B28: tenant roles receive only {overall} (no gates); the engineering score is platform-only.
+  if (readiness && readiness.gates.length > 0) {
     kpis.push({
       label: "Readiness score",
       value: `${readiness.overall}/100`,

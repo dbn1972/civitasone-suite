@@ -7,7 +7,7 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS, CONSUMED_EVENTS } from "../../topics.js";
 import { nextNumber, auditFailedCreate } from "../../shared/numbers.js";
 import * as repo from "./repo.js";
-import { computeRtiDeadline, toDateString } from "./domain.js";
+import { computeRtiDeadline, toDateString, resolveResponder } from "./domain.js";
 
 export function registerRtiConsumers(rawQueue: Queue): void {
   // #146 NOBYPASSRLS: every handler must run inside the message's tenant
@@ -141,14 +141,15 @@ export function registerRtiConsumers(rawQueue: Queue): void {
   });
 
   queue.subscribe(CONSUMED_EVENTS.estabRtiResponded, async (msg) => {
-    const p = msg.payload as { rtiId: string; tenantId: string; responseUrl: string };
+    const p = msg.payload as { rtiId: string; tenantId: string; responseUrl: string; respondedBy?: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const rti = await repo.findRtiByIdTx(tx, p.rtiId, msg.tenantId);
       if (!rti) return;
       await repo.insertResponse(tx, {
         tenantId: p.tenantId, rtiId: p.rtiId,
-        responseUrl: p.responseUrl, respondedBy: msg.actorId,
+        // HIGH-1: record the HUMAN responder carried by the event, not the relay/system envelope actor.
+        responseUrl: p.responseUrl, respondedBy: resolveResponder(p.respondedBy, msg.actorId),
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });
       await repo.updateRti(tx, p.rtiId, msg.tenantId, { status: "responded", updatedBy: msg.actorId });

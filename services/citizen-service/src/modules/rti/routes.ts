@@ -5,7 +5,7 @@ import type { FastifyInstance } from "fastify";
 import { ZodError, z } from "zod";
 import { resolveContext, requireRole, resolveCitizenId, isOfficer, assertOwnership, HttpError } from "../../shared/context.js";
 import { idParam, fileRtiBody, respondRtiBody, appealRtiBody, transferRtiBody, decideRtiAppealBody, rtiAppealParams } from "./validators.js";
-import { isAppealAllowed, RTI_APPELLATE_ROLES } from "./domain.js";
+import { isAppealAllowed, RTI_APPELLATE_ROLES, appealDecisionConflict } from "./domain.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 import { findCpioById } from "../cpio/repo.js";
@@ -65,8 +65,14 @@ export async function rtiRoutes(app: FastifyInstance): Promise<void> {
     if (!appeal) throw new HttpError(404, "NOT_FOUND", "appeal not found");
     if (appeal.appealType !== "first") throw new HttpError(409, "NOT_FIRST_APPEAL", "only a first appeal is decided by the appellate authority");
     if (appeal.status !== "filed") throw new HttpError(409, "APPEAL_ALREADY_DECIDED", `appeal is ${appeal.status}; only a filed appeal can be decided`);
-    if (rti.responses.some((r) => r.respondedBy === ctx.actorId)) {
-      throw new HttpError(403, "FORBIDDEN", "the officer who responded to this RTI cannot decide its appeal");
+    const assigned = await findCpioById(ctx.tenantId, rti.cpioRef);
+    const conflict = appealDecisionConflict({
+      actorId: ctx.actorId, responderIds: rti.responses.map((r) => r.respondedBy), assignedCpioUserId: assigned?.userId ?? null,
+    });
+    if (conflict) {
+      throw new HttpError(403, "FORBIDDEN", conflict === "RESPONDER"
+        ? "the officer who responded to this RTI cannot decide its appeal"
+        : "the CPIO assigned to this RTI cannot decide its appeal");
     }
     return sendAccepted(reply, acceptedResponseSchema, await commands.decideRtiAppeal(ctx, id, appealId, body));
   });

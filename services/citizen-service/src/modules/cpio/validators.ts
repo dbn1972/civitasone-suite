@@ -11,6 +11,7 @@ export const createCpioBody = z.object({
   designation:     safeText({ max: 200 }).optional(),
   publicAuthority: safeText({ max: 200 }),
   department:      safeText({ max: 200 }).optional(),
+  userId:          z.string().uuid().optional(),
   email:           z.string().email().max(320).optional(),
   phone:           safeText({ max: 32 }).optional(),
 });

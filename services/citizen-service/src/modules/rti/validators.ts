@@ -27,6 +27,11 @@ export type AppealRtiBody = z.infer<typeof appealRtiBody>;
 export const RTI_APPEAL_OUTCOMES = ["allowed", "partly_allowed", "rejected", "remanded"] as const;
 export type RtiAppealOutcome = typeof RTI_APPEAL_OUTCOMES[number];
 
+/** Today's calendar date in Asia/Kolkata (UTC+05:30, no DST), YYYY-MM-DD. */
+export function istToday(now: Date = new Date()): string {
+  return new Date(now.getTime() + 330 * 60_000).toISOString().slice(0, 10);
+}
+
 const isoDay = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "must be YYYY-MM-DD")
   .refine((s) => { const d = new Date(`${s}T00:00:00Z`); return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === s; }, "not a real calendar date");
 
@@ -40,7 +45,7 @@ export const decideRtiAppealBody = z.object({
   hearingDate:  isoDay.optional(),
   reason:       safeText({ max: 5000, multiline: true }),
 }).superRefine((b, ctx) => {
-  if (b.decisionDate > new Date().toISOString().slice(0, 10)) {
+  if (b.decisionDate > istToday()) {
     ctx.addIssue({ code: "custom", path: ["decisionDate"], message: "decisionDate cannot be in the future" });
   }
   if (b.hearingDate && b.hearingDate > b.decisionDate) {

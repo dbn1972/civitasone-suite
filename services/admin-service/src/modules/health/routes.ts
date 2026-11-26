@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 import { z } from "zod";
+import { hasAnyRole } from "@civitasone/auth";
 import { resolveContext, requireSuperAdmin, requireRole, TENANT_ADMIN_ROLES, HttpError } from "../../shared/context.js";
 import * as queries from "./queries.js";
 import { computeProductionReadiness } from "./readiness.js";
@@ -32,6 +33,10 @@ export async function healthRoutes(app: FastifyInstance): Promise<void> {
     const readiness = await computeProductionReadiness();
     if (!readiness) {
       return reply.send({ available: false, checkedAt: new Date().toISOString() });
+    }
+    // B28 / HIGH-3: the per-gate engineering detail is platform-only; tenant roles get the overall score.
+    if (!hasAnyRole(ctx, ["platform_admin", "super_admin"])) {
+      return reply.send({ overall: readiness.overall, checkedAt: readiness.checkedAt });
     }
     return reply.send(readiness);
   });
