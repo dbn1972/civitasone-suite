@@ -37,7 +37,7 @@ export function registerContactConsumers(rawQueue: Queue): void {
         email: p.email, phone: p.phone, company: p.company,
         designation: p.designation, city: p.city, country: p.country ?? "IN",
         gstin: p.gstin, pan: p.pan, pincode: p.pincode,
-        leadStatus: p.leadStatus, leadSource: p.leadSource,
+        leadStatus: p.leadStatus, leadSource: p.leadSource, businessLine: p.businessLine ?? null,
         ownerId: p.ownerId, accountId: p.accountId,
         tags: p.tags, marketingConsent: p.marketingConsent,
         consentDate: p.consentDate, lastActivityAt: p.lastActivityAt ? new Date(p.lastActivityAt) : null,
@@ -80,6 +80,7 @@ export function registerContactConsumers(rawQueue: Queue): void {
       // carries the reason code and transition audit. An updateContact message
       // queued before the PATCH route started refusing leadStatus is ignored too.
       if (p.leadSource !== undefined) patch.leadSource = p.leadSource;
+      if (p.businessLine !== undefined) patch.businessLine = p.businessLine;
       if (p.ownerId !== undefined) patch.ownerId = p.ownerId;
       if (p.accountId !== undefined) patch.accountId = p.accountId;
       if (p.tags !== undefined) patch.tags = p.tags;

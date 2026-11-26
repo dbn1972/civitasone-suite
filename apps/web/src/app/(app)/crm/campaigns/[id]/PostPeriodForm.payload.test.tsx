@@ -31,6 +31,7 @@ describe("PostPeriodForm request payload (GAP-CRM-CAMPAIGNS-DETAIL-04)", () => {
   it("sends spend 1500.50 as costMinor '150050' via PUT to the performance endpoint, then refreshes", async () => {
     renderWithIntl(<PostPeriodForm campaignId="c-123" currency="INR" />);
 
+    fireEvent.change(screen.getByLabelText(/^Campaign name/), { target: { value: "Diwali Outreach" } });
     fireEvent.change(screen.getByLabelText(/^Period start/), { target: { value: "2026-08-01" } });
     fireEvent.change(screen.getByLabelText("Spend (INR)"), { target: { value: "1500.50" } });
     fireEvent.change(screen.getByLabelText("Revenue (INR)"), { target: { value: "2000" } });
@@ -45,6 +46,7 @@ describe("PostPeriodForm request payload (GAP-CRM-CAMPAIGNS-DETAIL-04)", () => {
       periodStart: "2026-08-01",
       costMinor: "150050",
       revenueMinor: "200000",
+      campaignName: "Diwali Outreach",
       responses: 12,
       currency: "INR",
     });
@@ -54,6 +56,7 @@ describe("PostPeriodForm request payload (GAP-CRM-CAMPAIGNS-DETAIL-04)", () => {
   it("percent-encodes the campaign id in the request path (it can be a raw URL segment)", async () => {
     renderWithIntl(<PostPeriodForm campaignId="a/b?c#d" currency="INR" />);
 
+    fireEvent.change(screen.getByLabelText(/^Campaign name/), { target: { value: "Diwali Outreach" } });
     fireEvent.change(screen.getByLabelText(/^Period start/), { target: { value: "2026-08-01" } });
     fireEvent.change(screen.getByLabelText("Spend (INR)"), { target: { value: "1" } });
     fireEvent.change(screen.getByLabelText("Revenue (INR)"), { target: { value: "1" } });
@@ -67,6 +70,7 @@ describe("PostPeriodForm request payload (GAP-CRM-CAMPAIGNS-DETAIL-04)", () => {
   it("blocks a sub-paise amount before any request is made", async () => {
     renderWithIntl(<PostPeriodForm campaignId="c-123" currency="INR" />);
 
+    fireEvent.change(screen.getByLabelText(/^Campaign name/), { target: { value: "Diwali Outreach" } });
     fireEvent.change(screen.getByLabelText(/^Period start/), { target: { value: "2026-08-01" } });
     fireEvent.change(screen.getByLabelText("Spend (INR)"), { target: { value: "1.005" } });
     fireEvent.change(screen.getByLabelText("Revenue (INR)"), { target: { value: "1" } });
@@ -90,6 +94,7 @@ describe("PostPeriodForm request payload (GAP-CRM-CAMPAIGNS-DETAIL-04)", () => {
     fireEvent.change(currency, { target: { value: "usd" } });
     expect(screen.getByLabelText("Spend (USD)")).toBeInTheDocument();
 
+    fireEvent.change(screen.getByLabelText(/^Campaign name/), { target: { value: "Diwali Outreach" } });
     fireEvent.change(screen.getByLabelText(/^Period start/), { target: { value: "2026-08-01" } });
     fireEvent.change(screen.getByLabelText("Spend (USD)"), { target: { value: "10.25" } });
     fireEvent.change(screen.getByLabelText("Revenue (USD)"), { target: { value: "0" } });
@@ -103,6 +108,7 @@ describe("PostPeriodForm request payload (GAP-CRM-CAMPAIGNS-DETAIL-04)", () => {
     renderWithIntl(<PostPeriodForm campaignId="c-new" currency="INR" currencyEditable />);
 
     fireEvent.change(screen.getByLabelText(/^Currency/), { target: { value: "U1" } });
+    fireEvent.change(screen.getByLabelText(/^Campaign name/), { target: { value: "Diwali Outreach" } });
     fireEvent.change(screen.getByLabelText(/^Period start/), { target: { value: "2026-08-01" } });
     fireEvent.click(screen.getByRole("button", { name: "Post period" }));
 

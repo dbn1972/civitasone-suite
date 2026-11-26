@@ -12,6 +12,27 @@ export type ApprovalType = (typeof APPROVAL_TYPES)[number];
 
 export type ApprovalStatus = "pending" | "approved" | "rejected";
 
+/**
+ * GAP-CRM-QUOTATIONS-05 (owner decision C8, 2026-11-26): a tenant that has configured NO
+ * discount threshold row is not left unguarded -- the send gate applies this default. 1000 bps
+ * = 10% off the price-book reference price. A configured row (including one explicitly
+ * disabled by an admin) always wins; only the ABSENCE of a row falls back to the default.
+ */
+export const DEFAULT_DISCOUNT_THRESHOLD_BPS = 1000;
+
+export interface EffectiveThreshold {
+  maxDiscountBps: number;
+  enabled: boolean;
+  source: "configured" | "default";
+}
+
+export function effectiveDiscountThreshold(
+  row: { maxDiscountBps: number; enabled: boolean } | null,
+): EffectiveThreshold {
+  if (row === null) return { maxDiscountBps: DEFAULT_DISCOUNT_THRESHOLD_BPS, enabled: true, source: "default" };
+  return { maxDiscountBps: row.maxDiscountBps, enabled: row.enabled, source: "configured" };
+}
+
 /** True when the requested discount exceeds the tenant threshold and needs sign-off. */
 export function breachesThreshold(discountBps: number, maxDiscountBps: number): boolean {
   return discountBps > maxDiscountBps;

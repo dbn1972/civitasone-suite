@@ -256,9 +256,8 @@ describe("PipelineEditor (OP-002)", () => {
     fireEvent.click(screen.getByRole("button", { name: /^edit$/i }));
     await waitFor(() => expect(screen.getByLabelText(/pipeline name/i)).toHaveFocus());
   });
-  // GAP-CRM-PIPELINES-04 (W2 rescan): the Product scope offers the product catalogue, not only
-  // values other stages already use. It stays free text (scope matching is exact-string on the
-  // server and is not tied to a catalogue id/code), so these are suggestions.
+  // GAP-CRM-PIPELINES-04 (owner decision C3): the Product scope value is the catalogue product
+  // CODE (the server refuses anything else); the datalist labels each code with the product name.
   describe("Product scope suggestions (GAP-CRM-PIPELINES-04)", () => {
     const base = { category: "", unit: "each", taxRateBps: 0, priceMinor: "0", currency: "INR", activeFrom: "", activeTo: "" };
     const catalogue: qp.Product[] = [
@@ -280,16 +279,16 @@ describe("PipelineEditor (OP-002)", () => {
       return { container, input: input as HTMLInputElement };
     }
 
-    it("lists enabled catalogue products (name, code) plus already-used values; skips retired ones", async () => {
+    it("lists enabled catalogue products (code value, name label) plus already-used values; skips retired ones", async () => {
       const { container, input } = await openEditor();
       const listId = input.getAttribute("list")!;
       await waitFor(() => {
         const now = Array.from(container.querySelectorAll(`datalist[id="${listId}"] option`)).map((o) => o.getAttribute("value"));
-        expect(now).toContain("Learning Platform");
+        expect(now).toContain("LMS-01");
       });
       const values = Array.from(container.querySelectorAll(`datalist[id="${listId}"] option`)).map((o) => [o.getAttribute("value"), o.textContent]);
-      expect(values).toEqual(expect.arrayContaining([["Learning Platform", "LMS-01"], ["Legacy Suite", ""]]));
-      expect(values.map((v) => v[0])).not.toContain("Retired Gadget");
+      expect(values).toEqual(expect.arrayContaining([["LMS-01", "Learning Platform"], ["Legacy Suite", ""]]));
+      expect(values.map((v) => v[0])).not.toContain("OLD-09");
     });
 
     it("still accepts free text (suggestions only) and saves the typed scope", async () => {

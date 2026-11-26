@@ -30,6 +30,7 @@ function buildView(id: string, ctx: RequestContext, body: CreateContactBody, ver
     expectedValueMinor: null,
     leadStatus: body.leadStatus ?? "new",
     leadSource: body.leadSource ?? null,
+    businessLine: body.businessLine ?? null,
     ownerId: body.ownerId ?? ctx.actorId,
     accountId: body.accountId ?? null,
     tags: body.tags ?? [],

@@ -18,6 +18,7 @@ import {
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 import * as repo from "./repo.js";
+import { assertMasterValue } from "../../shared/master-values.js";
 import * as leadFieldRules from "../leads/field-rules-repo.js";
 import { validateRequiredFields } from "../leads/field-rules-domain.js";
 import { assertAccountLinkable } from "./account-guard.js";
@@ -34,6 +35,10 @@ export async function contactRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, CRM_ROLES);
     const body = createContactBody.parse(req.body);
+    // C6 (owner decision): a lead's business line must come from the tenant's master (open while it is empty).
+    if (body.businessLine !== undefined) {
+      body.businessLine = (await assertMasterValue(ctx.tenantId, "crm.business_lines", "business line", body.businessLine)) ?? body.businessLine;
+    }
     // F5: a merged / inactive / unknown account is a synchronous 422, not a 202 the consumer drops.
     await assertAccountLinkable(ctx.tenantId, body.accountId);
     // LM-001: the zod schema only knows the platform-wide minimum (name). Which
@@ -165,6 +170,9 @@ export async function contactRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, CRM_ROLES);
     const { id } = idParam.parse(req.params);
     const body = updateContactBody.parse(req.body);
+    if (body.businessLine !== undefined && body.businessLine !== null) {
+      body.businessLine = await assertMasterValue(ctx.tenantId, "crm.business_lines", "business line", body.businessLine);
+    }
     await assertAccountLinkable(ctx.tenantId, body.accountId);
     // UAT W6 P1: tenant-scoped existence read for EVERY caller (admins included) before
     // publishing; an unknown / deleted contact is a 404, not a queued no-op.

@@ -83,14 +83,59 @@ export interface ReferenceLineRow {
 }
 
 export async function referenceLines(tenantId: string, quotationId: string): Promise<ReferenceLineRow[]> {
+  // GAP-CRM-QUOTATIONS-05 (owner decision C8): the reference is the PRICE-BOOK price. The book
+  // is the highest-priority enabled book in the quotation currency with no segment /
+  // geography / channel restriction (a quotation carries no selection criteria, so only a
+  // general book can apply to it). A product the book does not price falls back to its
+  // catalogue price; a line with no product link has no reference and is never scored.
   return scopedRead(async (tx) => tx.execute(sql`
-    SELECT p.price_minor::text AS "refUnitMinor",
+    SELECT COALESCE(pbi.price_minor, p.price_minor)::text AS "refUnitMinor",
            li.unit_price_minor::text AS "unitPriceMinor",
            li.quantity
     FROM crm.quotation_line_items li
+    JOIN crm.quotations q ON q.id = li.quotation_id AND q.tenant_id = li.tenant_id
     LEFT JOIN crm.products p ON p.id = li.product_id AND p.tenant_id = li.tenant_id
+    LEFT JOIN LATERAL (
+      SELECT pb.id FROM crm.price_books pb
+      WHERE pb.tenant_id = li.tenant_id AND pb.enabled = true AND pb.currency = q.currency
+        AND pb.segment IS NULL AND pb.geography IS NULL AND pb.channel IS NULL
+      ORDER BY pb.priority DESC, pb.name ASC, pb.id ASC
+      LIMIT 1
+    ) book ON true
+    LEFT JOIN crm.price_book_items pbi
+      ON pbi.price_book_id = book.id AND pbi.product_id = li.product_id AND pbi.tenant_id = li.tenant_id
     WHERE li.tenant_id = ${tenantId} AND li.quotation_id = ${quotationId}
   `)) as unknown as ReferenceLineRow[];
+}
+
+/**
+ * C8 create-time warning input: the reference (price-book, else catalogue) unit price for each
+ * given product in a currency, using the same general-book rule as referenceLines. Products
+ * with no price anywhere are simply absent from the map.
+ */
+export async function referenceUnitPrices(
+  tenantId: string,
+  currency: string,
+  productIds: readonly string[],
+): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  if (productIds.length === 0) return out;
+  const rows = await scopedRead(async (tx) => tx.execute(sql`
+    SELECT p.id AS "productId", COALESCE(pbi.price_minor, p.price_minor)::text AS "refUnitMinor"
+    FROM crm.products p
+    LEFT JOIN LATERAL (
+      SELECT pb.id FROM crm.price_books pb
+      WHERE pb.tenant_id = p.tenant_id AND pb.enabled = true AND pb.currency = ${currency}
+        AND pb.segment IS NULL AND pb.geography IS NULL AND pb.channel IS NULL
+      ORDER BY pb.priority DESC, pb.name ASC, pb.id ASC
+      LIMIT 1
+    ) book ON true
+    LEFT JOIN crm.price_book_items pbi
+      ON pbi.price_book_id = book.id AND pbi.product_id = p.id AND pbi.tenant_id = p.tenant_id
+    WHERE p.tenant_id = ${tenantId} AND p.id IN (${sql.join(productIds.map((id) => sql`${id}::uuid`), sql`, `)})
+  `)) as unknown as Array<{ productId: string; refUnitMinor: string | null }>;
+  for (const r of rows) if (r.refUnitMinor !== null) out.set(r.productId, r.refUnitMinor);
+  return out;
 }
 
 /**

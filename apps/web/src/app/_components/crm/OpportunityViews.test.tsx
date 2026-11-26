@@ -184,7 +184,7 @@ describe("OpportunityViews (OP-004)", () => {
     // No dedicated calendar fetch and no extra kanban fetch for the calendar view.
     expect(op.getCalendar).not.toHaveBeenCalled();
     expect(vi.mocked(op.getKanban).mock.calls.length).toBe(kanbanCallsBefore);
-    expect(screen.getByText(/1 deal has no close date/i)).toBeInTheDocument();
+    expect(screen.getByText(/1 engagement has no close date/i)).toBeInTheDocument();
   });
 
   // GAP-CRM-OPPORTUNITIES-06: the board card name links to the edit record.

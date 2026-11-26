@@ -256,7 +256,7 @@ describe("StageAgeingDashboard stage NAME keying (GAP-CRM-OPPORTUNITY-AGEING-01)
       source: "api",
     });
     render(<StageAgeingDashboard />);
-    const alert = await screen.findByText(/saved under the key “site_visit_scheduled”, which matches no deal/i);
+    const alert = await screen.findByText(/saved under the key “site_visit_scheduled”, which matches no engagement/i);
     expect(alert).toHaveTextContent(/Choose the stage “Site Visit Scheduled” again/);
     expect(alert).toHaveAttribute("role", "alert");
     expect(screen.getByLabelText(/stage for limit 1/i)).toHaveAttribute("aria-invalid", "true");

@@ -12,6 +12,7 @@
  * Framework CRUD is synchronous + transactionally audited (the dedup-rules pattern);
  * the qualify submission is async CQRS (route computes outcome, consumer persists).
  */
+import { assertMasterValue } from "../../shared/master-values.js";
 import type { FastifyInstance } from "fastify";
 import { and, eq, sql } from "drizzle-orm";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
@@ -64,6 +65,10 @@ export async function qualificationRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
     const body = createFrameworkBody.parse(req.body);
+    // C6 (owner decision): business lines are a tenant-configured master (open while it is empty).
+    if (body.businessLine !== undefined) {
+      body.businessLine = (await assertMasterValue(ctx.tenantId, "crm.business_lines", "business line", body.businessLine)) ?? body.businessLine;
+    }
     const framework = await repo.createFramework(ctx.tenantId, ctx.actorId, ctx.correlationId, body);
     return reply.code(201).send({ data: framework });
   });
@@ -73,6 +78,9 @@ export async function qualificationRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ADMIN_ROLES);
     const { id } = frameworkIdParam.parse(req.params);
     const body = updateFrameworkBody.parse(req.body);
+    if (body.businessLine !== undefined && body.businessLine !== null) {
+      body.businessLine = await assertMasterValue(ctx.tenantId, "crm.business_lines", "business line", body.businessLine);
+    }
     let framework: Awaited<ReturnType<typeof repo.updateFramework>>;
     try {
       framework = await repo.updateFramework(ctx.tenantId, ctx.actorId, ctx.correlationId, id, body);

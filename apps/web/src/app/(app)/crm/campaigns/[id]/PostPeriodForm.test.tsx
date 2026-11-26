@@ -16,6 +16,8 @@ vi.mock("@/lib/crm/campaignPeriods", async (orig) => {
 beforeEach(() => vi.mocked(cp.postCampaignPeriod).mockReset());
 
 function fill() {
+  const name = screen.getByLabelText(/^Campaign name/) as HTMLInputElement;
+  if (!name.value) fireEvent.change(name, { target: { value: "Diwali Outreach" } });
   fireEvent.change(screen.getByLabelText(/^Period start/), { target: { value: "2026-08-01" } });
   fireEvent.click(screen.getByRole("button", { name: "Post period" }));
 }
@@ -29,12 +31,21 @@ describe("PostPeriodForm", () => {
   it("sends the campaign name with the period so the campaign can be shown by name (GAP-CRM-CAMPAIGNS-01)", async () => {
     vi.mocked(cp.postCampaignPeriod).mockResolvedValue(undefined as never);
     renderWithIntl(<PostPeriodForm campaignId="c1" currency="INR" campaignName="Diwali Push" />);
-    expect(screen.getByLabelText("Campaign name (optional)")).toHaveValue("Diwali Push");
-    fireEvent.change(screen.getByLabelText("Campaign name (optional)"), { target: { value: "Diwali Outreach" } });
+    expect(screen.getByLabelText(/^Campaign name/)).toHaveValue("Diwali Push");
+    fireEvent.change(screen.getByLabelText(/^Campaign name/), { target: { value: "Diwali Outreach" } });
     fill();
     await waitFor(() =>
       expect(cp.postCampaignPeriod).toHaveBeenCalledWith("c1", expect.objectContaining({ campaignName: "Diwali Outreach" })),
     );
+  });
+
+  it("marks the campaign name required and never posts without it (decision C1)", async () => {
+    renderWithIntl(<PostPeriodForm campaignId="c1" currency="INR" />);
+    expect(screen.getByLabelText(/^Campaign name/)).toBeRequired();
+    fireEvent.change(screen.getByLabelText(/^Period start/), { target: { value: "2026-08-01" } });
+    fireEvent.submit(screen.getByRole("form", { name: "Post a reporting period" }));
+    expect(await screen.findByText("Enter the campaign name.")).toBeInTheDocument();
+    expect(cp.postCampaignPeriod).not.toHaveBeenCalled();
   });
 
   it("renders in Hindi when the locale is hi", () => {

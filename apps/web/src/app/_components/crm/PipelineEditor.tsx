@@ -286,18 +286,17 @@ export function PipelineEditor() {
     };
   })();
 
-  // GAP-CRM-PIPELINES-04 (W2 rescan): Product scope offers the catalogue's products (by name,
-  // labelled with the code) alongside values already used by other stages. Pipeline scope is
-  // matched by EXACT string equality on the server, and nothing in the repo ties it to a
-  // catalogue id/code — so the field stays free text and these are suggestions only (see the
-  // owner question in the ledger).
+  // GAP-CRM-PIPELINES-04 (owner decision C3): the Product scope value is the catalogue product
+  // CODE (the server refuses anything else with UNKNOWN_PRODUCT_CODE). Options are keyed by
+  // code and labelled with the product name; codes already used by saved pipelines (but no
+  // longer enabled in the catalogue) are kept so an existing scope is still shown.
   const productOptions = (() => {
-    const byValue = new Map<string, string>();
+    const byCode = new Map<string, string>();
     for (const p of catalogue) {
-      if (p.enabled && p.name.trim()) byValue.set(p.name.trim(), p.code.trim());
+      if (p.enabled && p.code.trim()) byCode.set(p.code.trim(), p.name.trim());
     }
-    for (const v of scopeOptions.products) if (!byValue.has(v)) byValue.set(v, "");
-    return [...byValue.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+    for (const v of scopeOptions.products) if (!byCode.has(v)) byCode.set(v, "");
+    return [...byCode.entries()].sort((a, b) => a[0].localeCompare(b[0]));
   })();
 
   if (source === "loading") {
@@ -536,8 +535,8 @@ export function PipelineEditor() {
                 across saved pipelines + the current draft, so entries are reused
                 consistently rather than retyped (and mis-typed). */}
             <datalist id={`${headingId}-products`}>
-              {productOptions.map(([value, code]) => (
-                <option key={value} value={value}>{code}</option>
+              {productOptions.map(([value, label]) => (
+                <option key={value} value={value}>{label}</option>
               ))}
             </datalist>
             <datalist id={`${headingId}-regions`}>

@@ -2587,8 +2587,9 @@
       "post": "अवधि दर्ज करें",
       "posting": "दर्ज किया जा रहा है…",
       "submitted": "अवधि जमा हो गई। प्रसंस्करण पूरा होने पर आँकड़े दिखाई देंगे।",
-      "campaignName": "अभियान का नाम (वैकल्पिक)",
-      "campaignNamePlaceholder": "उदा. दीवाली आउटरीच"
+      "campaignName": "अभियान का नाम",
+      "campaignNamePlaceholder": "उदा. दीवाली आउटरीच",
+      "campaignNameRequired": "अभियान का नाम दर्ज करें।"
     },
     "editOpportunity": {
       "title": "अवसर संपादित करें",
@@ -2678,7 +2679,7 @@
         },
         "onboarding": {
           "title": "ग्राहक ऑनबोर्डिंग",
-          "description": "डील-पश्चात ऑनबोर्डिंग वर्कफ़्लो"
+          "description": "सहभागिता-पश्चात ऑनबोर्डिंग वर्कफ़्लो"
         },
         "grievances": {
           "title": "शिकायतें",
@@ -2746,7 +2747,7 @@
         },
         "qualificationFrameworks": {
           "title": "योग्यता फ़्रेमवर्क",
-          "description": "डील योग्यता मानदंड"
+          "description": "सहभागिता योग्यता मानदंड"
         },
         "leadReasonCodes": {
           "title": "लीड चरण कारण",
@@ -16219,7 +16220,7 @@
   },
   "crmOnboardingList": {
     "retry": "पुनः प्रयास करें",
-    "colCustomerDeal": "ग्राहक / सौदा",
+    "colCustomerDeal": "ग्राहक / सहभागिता",
     "unnamedCase": "अनाम प्रकरण",
     "ref": "संदर्भ {id}",
     "stage": "चरण",
@@ -16240,7 +16241,7 @@
     "emptyTitle": "कोई ऑनबोर्डिंग मामला नहीं",
     "emptyInStage": "\"{stage}\" चरण में कोई मामला नहीं।",
     "emptyWithKyc": "KYC \"{status}\" वाला कोई मामला नहीं।",
-    "emptyDefault": "डील जीतने के बाद मामले यहाँ दिखाई देंगे।",
+    "emptyDefault": "सहभागिता जीतने के बाद मामले यहाँ दिखाई देंगे।",
     "stage_initiated": "आरंभ किया गया",
     "stage_documents_submitted": "दस्तावेज़ जमा किए गए",
     "stage_verification": "सत्यापन",
@@ -16272,9 +16273,9 @@
     "loadErrorMessage": "यह आमतौर पर अस्थायी होता है। पुनः प्रयास करें — हम खाली बोर्ड को ऐसे नहीं दिखाएँगे मानो यहाँ कुछ है ही नहीं।",
     "retry": "पुनः प्रयास करें",
     "noCloseDatesTitle": "कोई समापन तिथि नहीं",
-    "undatedEmptyMessage": "{count} {count, plural, one {डील की} other {डील की}} कोई अपेक्षित समापन तिथि नहीं है, इसलिए कैलेंडर पर किसी को भी नहीं रखा जा सकता। उन्हें यहाँ देखने के लिए समापन तिथियाँ जोड़ें।",
+    "undatedEmptyMessage": "{count} {count, plural, one {सहभागिता की} other {सहभागिता की}} कोई अपेक्षित समापन तिथि नहीं है, इसलिए कैलेंडर पर किसी को भी नहीं रखा जा सकता। उन्हें यहाँ देखने के लिए समापन तिथियाँ जोड़ें।",
     "noExpectedCloseDate": "किसी भी अवसर की अपेक्षित समापन तिथि नहीं है।",
-    "undatedNote": "{count} {count, plural, one {डील की} other {डील की}} कोई समापन तिथि नहीं है और {count, plural, one {उसे} other {उन्हें}} यहाँ नहीं दिखाया गया है।"
+    "undatedNote": "{count} {count, plural, one {सहभागिता की} other {सहभागिता की}} कोई समापन तिथि नहीं है और {count, plural, one {उसे} other {उन्हें}} यहाँ नहीं दिखाया गया है।"
   },
   "crmOverdueTaskAlerts": {
     "statLabel": "विलंबित कार्य",
@@ -16525,9 +16526,9 @@
     "colAccount": "खाता",
     "colOpportunity": "अवसर",
     "colCreated": "निर्मित",
-    "opportunityLabel": "अवसर (डील) आईडी",
+    "opportunityLabel": "अवसर (सहभागिता) आईडी",
     "opportunityAria": "अवसर आईडी",
-    "opportunityPlaceholder": "कोटेशन को अनाथ न रखने के लिए किसी डील से जोड़ें",
+    "opportunityPlaceholder": "कोटेशन को अनाथ न रखने के लिए किसी सहभागिता से जोड़ें",
     "accountLabel": "खाता आईडी (वैकल्पिक)",
     "accountAria": "खाता आईडी",
     "accountPlaceholder": "ग्राहक खाता",
@@ -16951,7 +16952,7 @@
     "enabledForLimit": "सीमा {n} के लिए सक्षम",
     "enabled": "सक्षम",
     "paused": "रोका गया",
-    "legacyKeyAlert": "यह सीमा कुंजी “{key}” के अंतर्गत सहेजी गई थी, जो किसी भी डील से मेल नहीं खाती। चरण “{name}” फिर से चुनकर सहेजें, फिर यह पुरानी सीमा हटा दें।",
+    "legacyKeyAlert": "यह सीमा कुंजी “{key}” के अंतर्गत सहेजी गई थी, जो किसी भी सहभागिता से मेल नहीं खाती। चरण “{name}” फिर से चुनकर सहेजें, फिर यह पुरानी सीमा हटा दें।",
     "allPipelinesOption": "{stage} — सभी पाइपलाइनों पर लागू",
     "globalLimitNote": "यह सीमा हर पाइपलाइन पर लागू होती है। उसे सीमित करने के लिए पाइपलाइन चुनें, फिर चरण दोबारा चुनें।"
   },
@@ -17675,8 +17676,8 @@
     "kycStatus": "KYC स्थिति",
     "account": "खाता",
     "viewAccount": "खाता देखें",
-    "deal": "डील",
-    "viewDeal": "डील देखें",
+    "deal": "सहभागिता",
+    "viewDeal": "सहभागिता देखें",
     "kycReference": "KYC संदर्भ",
     "kycVerified": "KYC सत्यापित",
     "completed": "पूर्ण",

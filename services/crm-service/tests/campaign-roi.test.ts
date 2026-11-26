@@ -63,11 +63,14 @@ afterAll(async () => {
 
 async function upsert(campaignId: string, payload: Record<string, unknown>, roles = ["crm_admin"]) {
   const app = await buildApp();
+  // Decision C1: the producer must send campaignName, so every post carries one unless the test
+  // passes the key itself (including `campaignName: undefined` to prove a nameless post is refused).
+  const body = "campaignName" in payload ? payload : { campaignName: `Campaign ${campaignId.slice(-4)}`, ...payload };
   const res = await app.inject({
     method: "PUT",
     url: `/v1/crm/campaigns/${campaignId}/performance`,
     headers: headers(roles),
-    payload,
+    payload: body,
   });
   await app.close();
   await drainQueue();
@@ -439,21 +442,15 @@ describe("campaign display name (GAP-CRM-CAMPAIGNS-01)", () => {
     expect(detail.name).toBe("Diwali Outreach");
   });
 
-  it("omits `name` (not null) for a campaign whose feed never carried one", async () => {
-    await upsert(UNNAMED, { periodStart: "2026-01-01", costMinor: "100", revenueMinor: "100", responses: 1 });
-    const summary = (await read("/v1/crm/campaigns/roi-summary?limit=100")).json().data as Array<Record<string, unknown>>;
-    const row = summary.find((c) => c.campaignId === UNNAMED)!;
-    expect(row).toBeDefined();
-    expect("name" in row).toBe(false);
-    expect("name" in (await read(`/v1/crm/campaigns/${UNNAMED}/roi`)).json().data).toBe(false);
+  it("refuses a feed post that carries no campaignName (decision C1: the producer must send it)", async () => {
+    const res = await upsert(UNNAMED, { periodStart: "2026-01-01", costMinor: "100", revenueMinor: "100", responses: 1, campaignName: undefined });
+    expect(res.statusCode).toBe(400);
+    // ...and the same post WITH a name is accepted and applied.
+    const ok = await upsert(UNNAMED, { periodStart: "2026-01-01", costMinor: "100", revenueMinor: "100", responses: 1, campaignName: "Holi Drive" });
+    expect(ok.statusCode).toBe(202);
   });
 
-  it("keeps the stored name when a later period (or a replayed feed row) carries none, and lets a new name win", async () => {
-    await upsert(NAMED, { periodStart: "2026-02-01", costMinor: "10", revenueMinor: "20", responses: 1 });
-    // Replay of the first period without a name must not erase it either.
-    await upsert(NAMED, { periodStart: "2026-01-01", costMinor: "100", revenueMinor: "300", responses: 3 });
-    expect((await read(`/v1/crm/campaigns/${NAMED}/roi`)).json().data.name).toBe("Diwali Outreach");
-
+  it("lets a newly sent name win on a later period", async () => {
     await upsert(NAMED, { periodStart: "2026-03-01", costMinor: "1", revenueMinor: "1", responses: 0, campaignName: "Diwali 2026" });
     expect((await read(`/v1/crm/campaigns/${NAMED}/roi`)).json().data.name).toBe("Diwali 2026");
   });

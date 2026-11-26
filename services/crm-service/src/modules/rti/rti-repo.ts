@@ -123,6 +123,20 @@ export async function getRtiList(
   return { rows, total: ct?.total ?? 0 };
 }
 
+/** Distinct department_ref values in the tenant's RTI register (C7 authority list source). */
+export async function distinctDepartments(tenantId: string, limit = 500): Promise<string[]> {
+  const rows = (await scopedRead((tx) =>
+    tx.execute(sql`
+      SELECT DISTINCT btrim(department_ref) AS dept
+      FROM crm.rti_requests
+      WHERE tenant_id = ${tenantId} AND btrim(department_ref) <> ''
+      ORDER BY dept
+      LIMIT ${limit}
+    `),
+  )) as unknown as Array<{ dept: string }>;
+  return rows.map((r) => r.dept);
+}
+
 export async function getRtiById(
   tenantId: string,
   id: string,
