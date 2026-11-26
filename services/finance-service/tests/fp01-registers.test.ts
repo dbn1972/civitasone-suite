@@ -361,30 +361,23 @@ describe("debt register: lender, EMI schedule, instalment payment (GAP-FINANCE-D
   });
 });
 
-describe("guarantee register (GAP-FINANCE-EXPENDITURE-GUARANTEES-01/-02)", () => {
-  it("creates a guarantee with validity, beneficiary and linked reference; the list returns them", async () => {
-    capture();
-    const res = await inject("POST", "/v1/finance/guarantees", as(MAKER), {
-      entity: "Metro Rail Corporation", type: "pbg", amountMinor: "250000000", feePct: "1.25",
-      validUntil: "2031-09-30", beneficiary: "Public Works Department", linkedRef: "CON/2031/0042",
-    });
-    expect(res.statusCode).toBe(202);
-    await deliver();
-    const list = await inject("GET", "/v1/finance/guarantees", as(MAKER, ["finance_officer"]));
-    const row = (list.json() as Array<Record<string, any>>).find((r) => r.id === res.json().id)!;
-    expect(row).toMatchObject({
-      entity: "Metro Rail Corporation", amountMinor: "250000000", validUntil: "2031-09-30",
-      beneficiary: "Public Works Department", linkedRef: "CON/2031/0042", status: "active",
-    });
+describe("guarantee register is read-only in Finance (C26 / GAP-FINANCE-EXPENDITURE-GUARANTEES-04)", () => {
+  const body = {
+    entity: "Metro Rail Corporation", type: "pbg", amountMinor: "250000000", feePct: "1.25",
+    validUntil: "2031-09-30", beneficiary: "Public Works Department", linkedRef: "CON/2031/0042",
+  };
+  it("refuses recording a guarantee here with 409 GUARANTEE_OWNED_BY_PROCUREMENT (Procurement owns the instruments)", async () => {
+    const res = await inject("POST", "/v1/finance/guarantees", as(MAKER), body);
+    expect(res.statusCode).toBe(409);
+    expect(res.json()).toMatchObject({ code: "GUARANTEE_OWNED_BY_PROCUREMENT" });
   });
-
-  it("validates dates, type and fee", async () => {
-    const base = { entity: "X Ltd", type: "bg", amountMinor: "100", validUntil: "2031-09-30", beneficiary: "PWD" };
-    expect((await inject("POST", "/v1/finance/guarantees", as(MAKER), { ...base, validUntil: "2031-02-30" })).statusCode).toBe(400);
-    expect((await inject("POST", "/v1/finance/guarantees", as(MAKER), { ...base, type: "cash" })).statusCode).toBe(400);
-    expect((await inject("POST", "/v1/finance/guarantees", as(MAKER), { ...base, feePct: "12.5" })).statusCode).toBe(400);
-    expect((await inject("POST", "/v1/finance/guarantees", as(MAKER), { ...base, beneficiary: "" })).statusCode).toBe(400);
-    expect((await inject("POST", "/v1/finance/guarantees", as(MAKER, ["audit_officer"]), base)).statusCode).toBe(403);
+  it("still checks the role first: a non-finance role gets 403, not the ownership message", async () => {
+    expect((await inject("POST", "/v1/finance/guarantees", as(MAKER, ["audit_officer"]), body)).statusCode).toBe(403);
+  });
+  it("the read-only view still answers", async () => {
+    const list = await inject("GET", "/v1/finance/guarantees", as(MAKER, ["finance_officer"]));
+    expect(list.statusCode).toBe(200);
+    expect(Array.isArray(list.json())).toBe(true);
   });
 });
 

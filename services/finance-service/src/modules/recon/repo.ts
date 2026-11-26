@@ -4,7 +4,8 @@
  */
 import { and, eq, desc, sql } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
-import { reconRun, reconBreak } from "./schema.js";
+import { reconRun, reconBreak, reconPolicy } from "./schema.js";
+import { DEFAULT_WRITEOFF_SECOND_APPROVAL_MINOR } from "./writeoff-policy.js";
 import type { ReconRunRow, ReconRunInsert, ReconBreakRow, ReconBreakInsert } from "./schema.js";
 
 type Writer = Pick<typeof db, "insert" | "update" | "select">;
@@ -74,7 +75,10 @@ export async function getBreak(tenantId: string, id: string): Promise<ReconBreak
  */
 export async function getBreakTx(tx: Writer, tenantId: string, id: string): Promise<ReconBreakRow | null> {
   const rows = await (tx as typeof db).select().from(reconBreak)
-    .where(and(eq(reconBreak.tenantId, tenantId), eq(reconBreak.id, id))).limit(1);
+    .where(and(eq(reconBreak.tenantId, tenantId), eq(reconBreak.id, id))).limit(1)
+    // Row lock: two concurrent actions on one break (e.g. two first write-off requests) serialise here, so the second
+    // re-reads the first's writeoff_requested_by instead of overwriting it.
+    .for("update");
   return rows[0] ?? null;
 }
 
@@ -82,16 +86,46 @@ export async function updateBreakStatus(
   tx: Writer,
   tenantId: string,
   id: string,
-  patch: { status: string; resolutionNote?: string | null; resolvedBy?: string | null; resolvedAt?: Date | null },
+  patch: {
+    status: string; resolutionNote?: string | null; resolvedBy?: string | null; resolvedAt?: Date | null;
+    writeoffRequestedBy?: string | null; writeoffRequestedAt?: Date | null; writeoffRequestNote?: string | null;
+  },
 ): Promise<ReconBreakRow | undefined> {
   const set: Record<string, unknown> = { status: patch.status, updatedAt: new Date() };
   if (patch.resolutionNote !== undefined) set.resolutionNote = patch.resolutionNote;
   if (patch.resolvedBy !== undefined) set.resolvedBy = patch.resolvedBy;
   if (patch.resolvedAt !== undefined) set.resolvedAt = patch.resolvedAt;
+  if (patch.writeoffRequestedBy !== undefined) set.writeoffRequestedBy = patch.writeoffRequestedBy;
+  if (patch.writeoffRequestedAt !== undefined) set.writeoffRequestedAt = patch.writeoffRequestedAt;
+  if (patch.writeoffRequestNote !== undefined) set.writeoffRequestNote = patch.writeoffRequestNote;
   const rows = (await (tx as typeof db)
     .update(reconBreak)
     .set(set)
     .where(and(eq(reconBreak.tenantId, tenantId), eq(reconBreak.id, id)))
     .returning()) as ReconBreakRow[];
   return rows[0];
+}
+
+/** C30: the write-off second-approval threshold (paise) for the tenant; the platform default when none is set. */
+export async function getWriteoffThreshold(tenantId: string): Promise<{ thresholdMinor: bigint; isDefault: boolean }> {
+  const rows = await scopedRead((tx) =>
+    tx.select({ v: reconPolicy.writeoffSecondApprovalMinor }).from(reconPolicy).where(eq(reconPolicy.tenantId, tenantId)).limit(1),
+  );
+  return rows[0] ? { thresholdMinor: rows[0].v, isDefault: false } : { thresholdMinor: DEFAULT_WRITEOFF_SECOND_APPROVAL_MINOR, isDefault: true };
+}
+
+/** Tx variant (the consumer re-reads the threshold inside its own transaction). */
+export async function getWriteoffThresholdTx(tx: Writer, tenantId: string): Promise<bigint> {
+  const rows = await (tx as typeof db).select({ v: reconPolicy.writeoffSecondApprovalMinor }).from(reconPolicy)
+    .where(eq(reconPolicy.tenantId, tenantId)).limit(1);
+  return rows[0]?.v ?? DEFAULT_WRITEOFF_SECOND_APPROVAL_MINOR;
+}
+
+export async function upsertWriteoffThreshold(tx: Writer, tenantId: string, thresholdMinor: bigint, actorId: string): Promise<void> {
+  await (tx as typeof db).insert(reconPolicy)
+    .values({ tenantId, writeoffSecondApprovalMinor: thresholdMinor, updatedBy: actorId })
+    .onConflictDoUpdate({
+      target: reconPolicy.tenantId,
+      set: { writeoffSecondApprovalMinor: thresholdMinor, updatedBy: actorId, updatedAt: new Date(), version: sql`${reconPolicy.version} + 1` },
+    });
 }

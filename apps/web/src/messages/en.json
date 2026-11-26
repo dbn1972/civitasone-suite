@@ -3805,7 +3805,12 @@
     "vendorSearching": "Searching…",
     "vendorNoResults": "No matching active vendors",
     "vendorSearchFailed": "We couldn't search the vendors. Try again in a few minutes.",
-    "helpPayeeOfficerTyped": "Type the officer's name. Your role cannot search the employee directory, so no employee id is saved with this advance. The name is used only to issue and recover it; individual officers' names are masked for roles not authorised to see them."
+    "helpPayeeOfficerTyped": "Type the officer's name. Your role cannot search the employee directory, so no employee id is saved with this advance. The name is used only to issue and recover it; individual officers' names are masked for roles not authorised to see them.",
+    "labelRecoveryMode": "How will it be recovered?",
+    "recoveryUnset": "Not decided yet",
+    "recoverySalary": "From salary (officer advance)",
+    "recoveryCash": "Cash refund",
+    "recoveryAdjustBill": "Adjust against a bill"
   },
   "expenditureAdvancesTable": {
     "tabAll": "All",
@@ -3824,7 +3829,12 @@
     "colType": "Type",
     "kindAll": "All payees",
     "kindOfficer": "Officers",
-    "kindParty": "Parties"
+    "kindParty": "Parties",
+    "colRecovery": "Recovery",
+    "recoverySalary": "Salary",
+    "recoveryCash": "Cash",
+    "recoveryAdjustBill": "Against bill",
+    "figuresRestricted": "Restricted"
   },
   "expenditureBillDetail": {
     "breadcrumbLabel": "Breadcrumb",
@@ -21050,5 +21060,8 @@
       "status_busy": "Busy",
       "status_wrap_up": "Wrap-up",
       "status_offline": "Offline"
-    }
+    },
+  "financeGstPage": {
+    "ledgerCapped": "The ledger is capped at the first {limit} entries for this period; narrow the period or ask Finance for a full extract, as this list and its CSV export are incomplete."
+  }
 }

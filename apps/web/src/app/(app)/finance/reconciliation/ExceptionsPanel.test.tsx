@@ -241,4 +241,24 @@ describe("ExceptionsPanel", () => {
     expect(headers).not.toContain("Provider");
     expect(screen.getByText(/book-vs-bank · value_mismatch/)).toBeInTheDocument();
   });
+
+  // C30: a write-off above the approval limit waits for a second approver.
+  it("flags a pending write-off request, relabels the action as the second approval and offers decline", () => {
+    const pendingRow: ExceptionRow = {
+      ...OPEN_EXCEPTION, status: "investigating", deltaMinor: "-9000000",
+      writeoffRequestedBy: "44444444-4444-4444-4444-444444444444", writeoffRequestedAt: "2026-07-02T00:00:00.000Z",
+      writeoffRequestNote: "Bank charge differences carried since March.",
+    };
+    render(<ExceptionsPanel exceptions={[pendingRow]} actorNames={{ "44444444-4444-4444-4444-444444444444": "Meera Nair" }} />);
+    expect(screen.getByText(/waiting for a second approver/i)).toBeInTheDocument();
+    expect(screen.getByText(/Meera Nair/)).toBeInTheDocument();
+    expect(screen.getByLabelText("Approve write-off exception UTR12345")).toBeInTheDocument();
+    expect(screen.getByLabelText("Decline write-off exception UTR12345")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Write off exception UTR12345")).not.toBeInTheDocument();
+  });
+
+  it("offers no decline action when nothing is pending", () => {
+    render(<ExceptionsPanel exceptions={[OPEN_EXCEPTION]} />);
+    expect(screen.queryByLabelText("Decline write-off exception UTR12345")).not.toBeInTheDocument();
+  });
 });

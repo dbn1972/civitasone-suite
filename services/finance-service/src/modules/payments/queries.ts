@@ -262,6 +262,7 @@ export async function listAdvances(tenantId: string, limit: number, offset = 0) 
       status: resolveAdvanceStatus({ status: row.status, dueDate: row.dueDate ? String(row.dueDate) : null }),
       ...(row.sanctionAuthority ? { sanctionAuthority: row.sanctionAuthority } : {}),
       ...(row.reason ? { reason: row.reason } : {}),
+      ...(row.recoveryMode ? { recoveryMode: row.recoveryMode as "salary" | "cash" | "adjust_against_bill" } : {}),
     };
   });
 }

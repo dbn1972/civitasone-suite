@@ -226,7 +226,7 @@ describe("POST /v1/finance/journals — unbalanced journal rejection", () => {
         "content-type": "application/json",
       },
       payload: {
-        voucherNo: "VCH-TEST-BALANCED",
+        voucherNo: "AUTO", // C22: typed voucher numbers are refused (422); the server allocates
         type: "journal",
         postingDate: POSTING_DATE,
         lines: [

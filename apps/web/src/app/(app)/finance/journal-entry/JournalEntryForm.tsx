@@ -6,7 +6,7 @@ import Link from "next/link";
 import type { AccountSummary } from "@civitasone/types";
 import { formatMoney, todayIST } from "@/lib/formatters";
 import { parseMinorOrZero } from "@/lib/money";
-import { Alert, Button, ConfirmDialog, DateInput, EmptyState, Field, HelpTip, Input, RequiredLegend, Textarea } from "@/app/_components/ds";
+import { Alert, Button, ConfirmDialog, DateInput, EmptyState, Field, HelpTip, RequiredLegend, Textarea } from "@/app/_components/ds";
 import { AccountCombobox } from "./AccountCombobox";
 import { explain } from "@/lib/glossary";
 import { trackActivation } from "@/lib/activation";
@@ -49,21 +49,6 @@ function emptyLine(defaultCode = ""): JournalLine {
 function paiseOf(val: string): bigint {
   return parseMinorOrZero(val) ?? 0n;
 }
-/**
- * GAP-FINANCE-ACCOUNTING-VOUCHERS-NEW-05: conservative, configurable shape for
- * the voucher reference (finance-service accepts 1-64 chars; the gapless
- * number is allocated server-side on approval). Deliberately permissive until
- * Finance fixes a numbering series: letters, digits, space and . / _ -.
- */
-export const VOUCHER_NO_MAX = 64;
-export const VOUCHER_NO_PATTERN = /^[A-Za-z0-9][A-Za-z0-9 ./_-]*$/;
-export function voucherNoError(raw: string): string | null {
-  const v = raw.trim();
-  if (!v) return "Voucher number is required.";
-  if (v.length > VOUCHER_NO_MAX) return `Voucher number must be at most ${VOUCHER_NO_MAX} characters.`;
-  if (!VOUCHER_NO_PATTERN.test(v)) return "Use letters, numbers and - _ / . only, starting with a letter or number.";
-  return null;
-}
 const AMOUNT_ERROR = "Enter an amount with at most 2 decimals.";
 const AMOUNT_COMMA_ERROR = "Enter digits and an optional decimal point only - remove the commas (e.g. 100000.50).";
 function amountErrorFor(val: string): string {
@@ -103,7 +88,6 @@ export function balanceStatus(totalDebitPaise: bigint, totalCreditPaise: bigint)
 }
 
 type FieldErrors = {
-  voucherNo?: string;
   narration?: string;
   postingDate?: string;
   lines?: Record<number, string>;
@@ -122,7 +106,6 @@ export function JournalEntryForm({ accounts: allAccounts, redirectTo, periods }:
   const defaultDebit  = accounts.find((a) => a.type === "asset")?.code     ?? accounts[0]?.code ?? "";
   const defaultCredit = accounts.find((a) => a.type === "liability")?.code ?? accounts[1]?.code ?? "";
 
-  const [voucherNo,  setVoucherNo]  = useState("");
   const [narration,  setNarration]  = useState("");
   const [postingDate, setPostingDate] = useState(() => todayIST());
   const [lines, setLines] = useState<JournalLine[]>([
@@ -192,9 +175,6 @@ export function JournalEntryForm({ accounts: allAccounts, redirectTo, periods }:
   /* ── validation (per-field) ─────────────────────────────────── */
   function validate(): FieldErrors {
     const e: FieldErrors = {};
-    // JOURNAL-ENTRY-06: blank is allowed (server allocates); a typed reference must still be well-formed.
-    const voucherErr = voucherNo.trim() ? voucherNoError(voucherNo) : null;
-    if (voucherErr) e.voucherNo = voucherErr;
     if (!narration.trim()) e.narration = "Narration is required.";
     if (!postingDate) e.postingDate = "Posting date is required.";
     else if (dateCheck?.kind === "hard_close") {
@@ -248,9 +228,9 @@ export function JournalEntryForm({ accounts: allAccounts, redirectTo, periods }:
     formError.clear();
 
     const body = {
-      // GAP-FINANCE-JOURNAL-ENTRY-06: blank -> "AUTO"; finance-service allocates
-      // the gapless number on approval and enforces UNIQUE(tenant_id, voucher_no).
-      voucherNo:   voucherNo.trim() || "AUTO",
+      // C22 (owner-approved): the voucher number is ALWAYS server-allocated (gapless, per voucher type and
+      // financial year) when the entry is approved. There is no typed-number path; the server refuses one.
+      voucherNo:   "AUTO",
       type:        "journal" as const,
       postingDate,
       narration:   narration.trim(),
@@ -288,11 +268,10 @@ export function JournalEntryForm({ accounts: allAccounts, redirectTo, periods }:
       // distinct entry can't be deduped against this one's messageId.
       setIdempotencyKey(crypto.randomUUID());
       if (redirectTo) {
-        setPosted({ voucherNo: voucherNo.trim() || null, queued: res.status === 202 });
+        setPosted({ voucherNo: null, queued: res.status === 202 });
         return;
       }
       /* reset form */
-      setVoucherNo("");
       setNarration("");
       setPostingDate(todayIST());
       setLines([emptyLine(defaultDebit), emptyLine(defaultCredit)]);
@@ -309,7 +288,7 @@ export function JournalEntryForm({ accounts: allAccounts, redirectTo, periods }:
     // there once the dialog is gone (see focusAfterClose). Nothing was queued or posted (the server refuses before
     // enqueueing), so there is no redirect and no success panel, and the same idempotency key is safe to reuse for the
     // corrected submit.
-    const fieldToFix = resolved.fieldErrors.voucherNo ? "jv-voucher" : resolved.fieldErrors.postingDate ? "jv-date" : null;
+    const fieldToFix = resolved.fieldErrors.postingDate ? "jv-date" : null;
     if (fieldToFix) {
       focusAfterClose.current = fieldToFix;
       setConfirmOpen(false);
@@ -325,7 +304,6 @@ export function JournalEntryForm({ accounts: allAccounts, redirectTo, periods }:
     setPosted(null);
     setStatus("idle");
     setMessage("");
-    setVoucherNo("");
     setNarration("");
     setPostingDate(todayIST());
     setLines([emptyLine(defaultDebit), emptyLine(defaultCredit)]);
@@ -371,7 +349,6 @@ export function JournalEntryForm({ accounts: allAccounts, redirectTo, periods }:
   }
 
   /* ── render ─────────────────────────────────────────────────── */
-  const voucherErr = errors.voucherNo ?? formError.fieldError("voucherNo") ?? undefined;
   const dateErr = errors.postingDate ?? formError.fieldError("postingDate") ?? undefined;
   const narrationErr = errors.narration ?? formError.fieldError("narration") ?? undefined;
   const lineCols = "32px minmax(0, 3fr) minmax(0, 1fr) minmax(0, 1fr) 44px";
@@ -380,16 +357,12 @@ export function JournalEntryForm({ accounts: allAccounts, redirectTo, periods }:
       <RequiredLegend />
       {/* ── header fields (UX-R2: fits 1366 px; narration is the widest field, on its own row) ── */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 240px), 1fr))", gap: "12px 16px" }}>
-        <Field
-          id="jv-voucher"
-          className="field"
-          label={<>Voucher Number<HelpTip term="Voucher">{explain("Voucher")}</HelpTip></>}
-          hint="Optional. If left blank, a gapless voucher number is allocated when the entry is approved."
-          error={voucherErr}
-          validate={(v) => (v.trim() ? voucherNoError(v) ?? undefined : undefined)}
-        >
-          <Input placeholder="Leave blank to auto-number" maxLength={VOUCHER_NO_MAX} value={voucherNo} onChange={(e) => setVoucherNo(e.target.value)} />
-        </Field>
+        <div id="jv-voucher" className="field">
+          <span className="l">Voucher Number<HelpTip term="Voucher">{explain("Voucher")}</HelpTip></span>
+          <p className="muted" style={{ margin: 0, fontSize: 13 }}>
+            Numbered automatically when the entry is approved (one gapless series per voucher type and financial year).
+          </p>
+        </div>
         <Field id="jv-date" className="field" label="Posting Date" required hint="DD-MM-YYYY" error={dateErr}>
           <DateInput value={postingDate} onChange={setPostingDate} />
           {dateCheck && !dateErr && (
@@ -605,7 +578,6 @@ export function JournalEntryForm({ accounts: allAccounts, redirectTo, periods }:
             <p style={{ margin: 0 }}>
               Debit <strong>{formatMoney(totalDebitPaise)}</strong> · Credit{" "}
               <strong>{formatMoney(totalCreditPaise)}</strong>
-              {voucherNo.trim() ? <> · Voucher <strong>{voucherNo.trim()}</strong></> : null}
             </p>
           </>
         }

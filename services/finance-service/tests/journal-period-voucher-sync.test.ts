@@ -159,39 +159,24 @@ describe("POST /v1/finance/journals: period is checked before anything is queued
   });
 });
 
-describe("POST /v1/finance/journals: duplicate typed voucher number (VOUCHERS-NEW-05)", () => {
+describe("POST /v1/finance/journals: a typed voucher number is refused (C22, server-allocated only)", () => {
   useApp();
-  it("409 DUPLICATE_VOUCHER as a voucherNo field error when the number is taken (also by a pending draft)", async () => {
-    await draft(T, { voucherNo: "JV-2026-001" });
+  it("422 VOUCHER_NO_SERVER_ALLOCATED as a voucherNo field error for any typed number, and nothing is queued", async () => {
     const publish = vi.spyOn(queue, "publish");
-    const res = await post({ voucherNo: "JV-2026-001", postingDate: "2026-05-10" });
-    expect(res.statusCode).toBe(409);
-    expect(res.json()).toMatchObject({ code: "DUPLICATE_VOUCHER", fieldErrors: [{ field: "voucherNo", message: expect.stringMatching(/already exists/) }] });
+    for (const voucherNo of ["JV-2026-001", "JV-2026-NEW", "AUTO-1"]) {
+      const res = await post({ voucherNo, postingDate: "2026-05-10" });
+      expect(res.statusCode, voucherNo).toBe(422);
+      expect(res.json()).toMatchObject({ code: "VOUCHER_NO_SERVER_ALLOCATED", fieldErrors: [{ field: "voucherNo" }] });
+    }
     expect(publish).not.toHaveBeenCalled();
   });
 
-  it("a new number is accepted; blank and AUTO (any case) are never treated as duplicates", async () => {
-    for (const voucherNo of ["JV-2026-NEW", "AUTO", "auto", "Auto"]) {
+  it("blank and AUTO (any case) are accepted: each gets its own DRAFT- placeholder and a gapless number on approval", async () => {
+    for (const voucherNo of ["AUTO", "auto", "Auto"]) {
       const res = await post({ voucherNo, postingDate: "2026-05-10" });
       expect(res.statusCode, voucherNo).toBe(202);
     }
-    // two AUTO requests in a row are fine: each gets its own DRAFT- placeholder and a gapless number on approval
     expect((await post({ voucherNo: "AUTO", postingDate: "2026-05-11" })).statusCode).toBe(202);
-  });
-
-  it("is tenant-scoped: another tenant's identical number is not a duplicate", async () => {
-    await draft(OTHER, { voucherNo: "JV-2026-777" });
-    expect((await post({ voucherNo: "JV-2026-777", postingDate: "2026-05-10" })).statusCode).toBe(202);
-  });
-
-  it("a retry of the SAME request (same idempotency key) is not rejected as a duplicate of itself", async () => {
-    const key = randomUUID();
-    await draft(T, { id: idempotentId({ idempotencyKey: key, tenantId: T }), voucherNo: "JV-2026-RETRY" });
-    const retry = await post({ voucherNo: "JV-2026-RETRY", postingDate: "2026-05-10" }, { ...maker(), "x-idempotency-key": key });
-    expect(retry.statusCode).toBe(202);
-    // a DIFFERENT submission reusing the number is a duplicate
-    const other = await post({ voucherNo: "JV-2026-RETRY", postingDate: "2026-05-10" }, { ...maker(), "x-idempotency-key": randomUUID() });
-    expect(other.statusCode).toBe(409);
   });
 });
 

@@ -14,6 +14,8 @@ vi.mock("../src/modules/recon/repo.js", () => ({
   getBreak: (...a: unknown[]) => getBreak(...a),
   getBreakTx: vi.fn(),
   updateBreakStatus: vi.fn(),
+  // C30: the route reads the tenant's write-off threshold (Rs 50,000 placeholder) before queueing a write_off.
+  getWriteoffThreshold: vi.fn(async () => ({ thresholdMinor: 5_000_000n, isDefault: true })),
 }));
 vi.mock("../src/modules/recon/commands.js", () => ({
   applyExceptionActionCmd: (...a: unknown[]) => applyCmd(...a),

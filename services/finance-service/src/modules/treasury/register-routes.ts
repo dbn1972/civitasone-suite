@@ -15,7 +15,7 @@ import { findPeriodClose } from "../period-close/repo.js";
 import { requireDebtHeads } from "../approvals/repo.js";
 import { DomainError } from "../approvals/domain.js";
 import { financeJournals } from "../gl/schema.js";
-import { createDebtBody, createGuaranteeBody, emiParams, payEmiBody } from "./register-validators.js";
+import { createDebtBody, emiParams, payEmiBody } from "./register-validators.js";
 import { idParam } from "./validators.js";
 
 const FINANCE_ROLES = ["finance_officer", "finance_admin", "super_admin"];
@@ -43,18 +43,16 @@ async function glHeadsOr409(tenantId: string, bankHeadId?: string): Promise<void
 }
 
 export async function treasuryRegisterRoutes(app: FastifyInstance): Promise<void> {
-  app.post("/v1/finance/guarantees", async (req, reply) => {
+  // C26 / GAP-FINANCE-EXPENDITURE-GUARANTEES-04 (owner-approved 2026-11-26): PROCUREMENT owns guarantee instruments (EMD / bid
+  // security and performance guarantees, /v1/procurement/emd and /pbg). Finance keeps a READ-ONLY view (GET /v1/finance/guarantees),
+  // so recording a guarantee here is refused. The route stays (role-checked first, then a clear 409) instead of vanishing into a 404,
+  // so an old client learns where to go. The finance.guarantee.create consumer is kept for messages already in flight.
+  app.post("/v1/finance/guarantees", async (req) => {
     const ctx = resolveContext(req);
     requireRole(ctx, FINANCE_ROLES);
-    const body = createGuaranteeBody.parse(req.body);
-    const id = randomUUID();
-    await queue.publish(COMMANDS.guaranteeCreate, {
-      messageId: id, type: COMMANDS.guaranteeCreate,
-      tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
-      // paise cross the queue as a base-10 string (JSON has no bigint)
-      payload: { id, tenantId: ctx.tenantId, ...body, amountMinor: body.amountMinor.toString() },
-    });
-    return reply.code(202).send({ id, status: "accepted" });
+    throw new HttpError(409, "GUARANTEE_OWNED_BY_PROCUREMENT", "guarantees are recorded in Procurement; Finance has a read-only view", [
+      { field: "type", message: "Record or change a guarantee in Procurement (EMD / bank guarantee register). Finance only views it." },
+    ]);
   });
 
   app.post("/v1/finance/debt", async (req, reply) => {

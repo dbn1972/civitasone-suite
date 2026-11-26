@@ -45,9 +45,22 @@ export const reconBreak = reconSchema.table("recon_break", {
   resolutionNote: text("resolution_note"),
   resolvedBy:     uuid("resolved_by"),
   resolvedAt:     timestamp("resolved_at", { withTimezone: true }),
+  // C30 (migration 0191): a write-off above the tenant's threshold waits here for a second approver. All NULL = nothing pending.
+  writeoffRequestedBy: uuid("writeoff_requested_by"),
+  writeoffRequestedAt: timestamp("writeoff_requested_at", { withTimezone: true }),
+  writeoffRequestNote: text("writeoff_request_note"),
   createdAt:      timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:      timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   version:        integer("version").notNull().default(1),
+});
+
+/** C30 (migration 0191): per-tenant reconciliation policy. No row = the platform default threshold. */
+export const reconPolicy = reconSchema.table("recon_policy", {
+  tenantId:                    uuid("tenant_id").primaryKey(),
+  writeoffSecondApprovalMinor: bigint("writeoff_second_approval_minor", { mode: "bigint" }).notNull().default(5000000n),
+  updatedBy:                   uuid("updated_by").notNull(),
+  updatedAt:                   timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  version:                     integer("version").notNull().default(1),
 });
 
 export type ReconRunRow      = typeof reconRun.$inferSelect;
@@ -55,4 +68,4 @@ export type ReconRunInsert   = typeof reconRun.$inferInsert;
 export type ReconBreakRow    = typeof reconBreak.$inferSelect;
 export type ReconBreakInsert = typeof reconBreak.$inferInsert;
 
-export const schema = { reconRun, reconBreak };
+export const schema = { reconRun, reconBreak, reconPolicy };

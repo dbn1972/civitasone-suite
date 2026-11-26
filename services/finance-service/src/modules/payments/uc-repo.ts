@@ -24,6 +24,12 @@ export async function findSchemeByCode(tx: Q, tenantId: string, code: string): P
   return rows[0] ?? null;
 }
 
+/** C27: how many schemes this office has set up in Scheme Tracking (a UC must name one of them when there are any). */
+export async function countSchemes(tx: Q, tenantId: string): Promise<number> {
+  const rows = await tx.select({ n: sql<number>`count(*)::int` }).from(financeSchemes).where(eq(financeSchemes.tenantId, tenantId));
+  return rows[0]?.n ?? 0;
+}
+
 /** Sum of claiming UCs recorded against a grant reference (optionally excluding one UC). */
 export async function sumClaimedForGrantRef(tx: Q, tenantId: string, grantRef: string, excludeId?: string): Promise<bigint> {
   const rows = await tx.select({ total: sql<string>`coalesce(sum(${financeUC.amountMinor}), 0)::text` }).from(financeUC)

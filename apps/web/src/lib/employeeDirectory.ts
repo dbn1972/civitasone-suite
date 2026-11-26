@@ -9,7 +9,7 @@ import { HR_STAFF_ROLES } from "@/lib/auth/workRoles";
  *    (resolveManagerScope in hrms-service employee/routes.ts), so the list is empty or near-empty.
  *  - "payroll": GET /v1/payroll/employee-lookup (id / employee no / name / department only), gated to
  *    LOOKUP_ROLES and tenant-wide. It is what finance_officer can reach.
- *  - "none": the role is on neither list (finance_admin today), so a picker would only ever 403.
+ *  - "none": the role is on neither list (e.g. accounts_officer, procurement_officer), so a picker would only ever 403.
  *
  * Order matters. A tenant-wide HRMS role wins. Otherwise a payroll-lookup role (finance_officer) uses the
  * tenant-wide payroll lookup EVEN IF the user also carries the scoped employee or manager role, because
@@ -27,7 +27,7 @@ const HRMS_TENANT_WIDE_ROLES: readonly string[] = [...HR_STAFF_ROLES, "payroll_a
 /** Roles the HRMS list admits but scopes to the caller's direct reports (service: resolveManagerScope). */
 const HRMS_SCOPED_ROLES: readonly string[] = ["manager", "employee"];
 /** Mirrors payroll-service employee-lookup LOOKUP_ROLES. */
-const PAYROLL_LOOKUP_ROLES: readonly string[] = ["payroll_admin", "payroll_officer", "super_admin", "hr_admin", "finance_officer"];
+const PAYROLL_LOOKUP_ROLES: readonly string[] = ["payroll_admin", "payroll_officer", "super_admin", "hr_admin", "finance_officer", "finance_admin"];
 
 export function employeeDirectoryForRoles(roles: readonly string[]): EmployeeDirectory {
   if (roles.length === 0) return "hrms";

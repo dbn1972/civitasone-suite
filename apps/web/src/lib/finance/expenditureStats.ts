@@ -12,8 +12,8 @@ const ADVANCE_RECOVERED = new Set(["adjusted", "closed"]);
 
 export interface AdvanceStatInput {
   status: string;
-  balance: string;
-  adjustedAmount: string;
+  balance: string | null;
+  adjustedAmount: string | null;
   dueDate?: string | null;
 }
 

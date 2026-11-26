@@ -7,7 +7,7 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
 }));
 
-import { JournalEntryForm, voucherNoError } from "./JournalEntryForm";
+import { JournalEntryForm } from "./JournalEntryForm";
 
 const accounts: AccountSummary[] = [
   { code: "2202-cash", name: "Cash", type: "asset", currency: "INR", balanceDisplay: "0", status: "active" },
@@ -15,9 +15,6 @@ const accounts: AccountSummary[] = [
 ];
 
 function fillBalancedLines() {
-  // "Voucher Number" label wraps a nested HelpTip button (aria-label "What is
-  // Voucher?"), so the plain text query needs to be scoped to the input.
-  fireEvent.change(screen.getByLabelText("Voucher Number", { selector: "input" }), { target: { value: "JV-TEST-001" } });
   fireEvent.change(screen.getByLabelText(/^Posting Date/), { target: { value: "2026-04-15" } });
   fireEvent.change(screen.getByLabelText(/^Narration/), { target: { value: "Test entry" } });
   fireEvent.change(screen.getByLabelText("Head of account, line 1"), { target: { value: "2202-exp" } });
@@ -115,7 +112,6 @@ describe("JournalEntryForm", () => {
     const fetchSpy = vi.spyOn(globalThis, "fetch");
 
     render(<JournalEntryForm accounts={accounts} />);
-    fireEvent.change(screen.getByLabelText("Voucher Number", { selector: "input" }), { target: { value: "JV-TEST-002" } });
     fireEvent.change(screen.getByLabelText(/^Posting Date/), { target: { value: "2026-04-15" } });
     fireEvent.change(screen.getByLabelText(/^Narration/), { target: { value: "Unbalanced test" } });
     fireEvent.change(screen.getByLabelText("Head of account, line 1"), { target: { value: "2202-exp" } });
@@ -239,7 +235,7 @@ describe("JournalEntryForm", () => {
     await waitFor(() => expect(screen.getByText(/accepted for processing/)).toBeInTheDocument());
     expect(assign).not.toHaveBeenCalled();
     const link = screen.getByRole("link", { name: "View in General Ledger" });
-    expect(link.getAttribute("href")).toBe("/finance/accounting/general-ledger?posted=JV-TEST-001&state=queued");
+    expect(link.getAttribute("href")).toBe("/finance/accounting/general-ledger?state=queued");
     expect(screen.getByRole("button", { name: "Post another" })).toBeInTheDocument();
   });
 
@@ -309,27 +305,6 @@ describe("JournalEntryForm", () => {
   });
 });
 
-describe("voucherNoError (GAP-FINANCE-ACCOUNTING-VOUCHERS-NEW-05)", () => {
-  it("accepts ordinary series formats", () => {
-    expect(voucherNoError("JV-2026-001")).toBeNull();
-    expect(voucherNoError("PV/26-27/0042")).toBeNull();
-  });
-  it("rejects empty, over-long and odd-character references", () => {
-    expect(voucherNoError("  ")).toMatch(/required/);
-    expect(voucherNoError("A".repeat(65))).toMatch(/at most 64/);
-    expect(voucherNoError("-bad")).toMatch(/letters, numbers/);
-    expect(voucherNoError("JV<script>")).toMatch(/letters, numbers/);
-  });
-  it("shows the error under the field and blocks posting", () => {
-    render(<JournalEntryForm accounts={accounts} />);
-    // Balanced lines first: Post is disabled until the voucher balances (UX-R2), so the voucher error is what blocks.
-    fillBalancedLines();
-    fireEvent.change(screen.getByLabelText("Voucher Number", { selector: "input" }), { target: { value: "bad#no" } });
-    fireEvent.click(screen.getByRole("button", { name: "Post Journal Entry" }));
-    expect(screen.getByText(/Use letters, numbers and/)).toBeInTheDocument();
-    expect(screen.queryByText("Post this journal entry?")).not.toBeInTheDocument();
-  });
-});
 
 // GAP-FINANCE-JOURNAL-ENTRY-03: closed-period check on the posting date.
 describe("JournalEntryForm posting-date period check (GAP-FINANCE-JOURNAL-ENTRY-03)", () => {
@@ -427,29 +402,6 @@ describe("JournalEntryForm server field refusals (VOUCHERS-NEW-05 / -06)", () =>
   }
   const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 
-  it("a duplicate voucher number from the server shows under the input, keeps the form, focuses the field and does not redirect", async () => {
-    await submitAndConfirm(
-      json(409, { code: "DUPLICATE_VOUCHER", message: "voucher number already exists", fieldErrors: [{ field: "voucherNo", message: "This voucher number already exists. Enter a different number, or leave it blank to auto-number." }] }),
-      { redirectTo: "/finance/accounting/general-ledger" },
-    );
-    const input = screen.getByLabelText("Voucher Number", { selector: "input" });
-    await waitFor(() => expect(screen.getByText(/This voucher number already exists/)).toBeInTheDocument());
-    // under the input: the message is the field's described-by and the field is flagged invalid
-    expect(input).toHaveAttribute("aria-invalid", "true");
-    // UX-R5 Field: the hint and the error are both described-by (error id from the shared Field).
-    expect(input.getAttribute("aria-describedby")).toBe("jv-voucher-hint jv-voucher-error");
-    expect(document.getElementById("jv-voucher-error")).toHaveTextContent(/already exists/);
-    // the confirm dialog is closed so the message is not hidden behind it, and what was typed is kept
-    expect(screen.queryByText("Post this journal entry?")).not.toBeInTheDocument();
-    expect(input).toHaveValue("JV-TEST-001");
-    await waitFor(() => expect(input).toHaveFocus());
-    // no success panel, no link to the ledger: nothing was posted
-    expect(screen.queryByText(/Journal entry (posted|accepted)/)).not.toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: "View in General Ledger" })).not.toBeInTheDocument();
-    // the whole form is still there to correct and resubmit
-    expect(screen.getByRole("button", { name: "Post Journal Entry" })).toBeEnabled();
-  });
-
   it("a closed-period refusal (422 PERIOD_CLOSED) shows under the posting date, in plain words, and posts nothing", async () => {
     await submitAndConfirm(
       json(422, { code: "PERIOD_CLOSED", message: "cannot post to hard-closed period 2026-04", fieldErrors: [{ field: "postingDate", message: "This accounting period is closed. Choose a posting date in an open period." }] }),
@@ -468,19 +420,19 @@ describe("JournalEntryForm server field refusals (VOUCHERS-NEW-05 / -06)", () =>
   it("any other server failure still shows inside the confirm dialog, which stays open", async () => {
     await submitAndConfirm(json(500, { code: "INTERNAL", message: "internal error" }));
     await waitFor(() => expect(screen.getByText("Post this journal entry?")).toBeInTheDocument());
-    expect(document.getElementById("jv-voucher-error")).toBeNull();
   });
 });
 
-// GAP-FINANCE-JOURNAL-ENTRY-06
-describe("JournalEntryForm voucher number (GAP-FINANCE-JOURNAL-ENTRY-06)", () => {
+// C22 / GAP-FINANCE-ACCOUNTING-VOUCHERS-NEW-05: the voucher number is server-allocated; there is no typed-number input.
+describe("JournalEntryForm voucher number (C22: server-allocated only)", () => {
   beforeEach(() => vi.restoreAllMocks());
 
-  it("a blank voucher number is allowed and sent as AUTO (server allocates it)", async () => {
+  it("offers no voucher number input and always sends AUTO (the server allocates the gapless number)", async () => {
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({}), { status: 202 }));
     render(<JournalEntryForm accounts={accounts} />);
+    expect(screen.queryByLabelText("Voucher Number", { selector: "input" })).not.toBeInTheDocument();
+    expect(screen.getByText(/Numbered automatically when the entry is approved/)).toBeInTheDocument();
     fillBalancedLines();
-    fireEvent.change(screen.getByLabelText("Voucher Number", { selector: "input" }), { target: { value: "" } });
     fireEvent.click(screen.getByRole("button", { name: "Post Journal Entry" }));
     await waitFor(() => expect(screen.getByText("Post this journal entry?")).toBeInTheDocument());
     fireEvent.change(screen.getByLabelText("Reason / authority for posting (maker-checker)"), { target: { value: "Month-end" } });
@@ -488,46 +440,6 @@ describe("JournalEntryForm voucher number (GAP-FINANCE-JOURNAL-ENTRY-06)", () =>
     await waitFor(() => expect(fetchSpy).toHaveBeenCalled());
     const body = JSON.parse((fetchSpy.mock.calls[0][1] as RequestInit).body as string);
     expect(body.voucherNo).toBe("AUTO");
-  });
-
-  // finance-service answers 409 DUPLICATE_VOUCHER (with a voucherNo field error) before
-  // anything is queued, for a typed number that is already used in the tenant.
-  it("a 409 DUPLICATE_VOUCHER closes the dialog, shows the message under the voucher field and focuses it", async () => {
-    // Model the two browser behaviours that fireEvent.click + jsdom hide: (1) a real click focuses the
-    // trigger first, and Modal restores focus to that trigger when it closes; (2) the page behind an
-    // open Modal is `inert`, and a browser ignores focus() on an inert element. Focus must therefore
-    // land on the voucher field only AFTER the dialog has closed and torn both of those down.
-    const realFocus = HTMLElement.prototype.focus;
-    vi.spyOn(HTMLElement.prototype, "focus").mockImplementation(function (this: HTMLElement, ...args: Parameters<HTMLElement["focus"]>) {
-      if (this.closest("[inert]")) return;
-      return realFocus.apply(this, args);
-    });
-    const serverMsg = "This voucher number is already in use. Enter a different number, or leave it blank to auto-number.";
-    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(
-        JSON.stringify({ code: "DUPLICATE_VOUCHER", message: "voucher number already exists", fieldErrors: [{ field: "voucherNo", message: serverMsg }] }),
-        { status: 409 },
-      ),
-    );
-    render(<JournalEntryForm accounts={accounts} />);
-    fillBalancedLines(); // voucher "JV-TEST-001"
-    const trigger = screen.getByRole("button", { name: "Post Journal Entry" });
-    trigger.focus(); // a real click focuses the button before the click event
-    fireEvent.click(trigger);
-    await waitFor(() => expect(screen.getByText("Post this journal entry?")).toBeInTheDocument());
-    fireEvent.change(screen.getByLabelText("Reason / authority for posting (maker-checker)"), { target: { value: "Month-end" } });
-    fireEvent.click(screen.getByRole("button", { name: "Post entry" }));
-
-    await waitFor(() => expect(screen.queryByText("Post this journal entry?")).not.toBeInTheDocument());
-    const voucherInput = screen.getByLabelText("Voucher Number", { selector: "input" });
-    const fieldWrap = voucherInput.closest(".field") as HTMLElement;
-    expect(within(fieldWrap).getByText(serverMsg)).toHaveAttribute("role", "alert");
-    await waitFor(() => expect(voucherInput).toHaveFocus());
-    expect(trigger).not.toHaveFocus();
-    // The typed value is kept so the officer can correct it; nothing was posted or reset.
-    expect((voucherInput as HTMLInputElement).value).toBe("JV-TEST-001");
-    expect(screen.queryByText(/Journal entry accepted/)).not.toBeInTheDocument();
-    expect(fetchSpy).toHaveBeenCalledTimes(1);
   });
 });
 

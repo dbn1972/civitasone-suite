@@ -57,4 +57,21 @@ describe("AdvancesTable", () => {
     renderTable([adv("1", "employee")]);
     expect(screen.getByRole("button", { name: /export|csv/i })).toBeInTheDocument();
   });
+
+  // C25: personal-advance figures withheld from roles outside the balance set; recovery mode column.
+  it("shows 'Restricted' (never a fake 0) for withheld figures on an officer advance, and real figures elsewhere", () => {
+    renderTable([
+      adv("1", "employee", { amount: null, adjustedAmount: null, balance: null, balancesMasked: true }),
+      adv("2", "vendor", { amount: "250000", balance: "250000" }),
+    ]);
+    expect(screen.getAllByText("Restricted")).toHaveLength(3);
+    expect(screen.getAllByText("₹2,500.00").length).toBeGreaterThan(0);
+  });
+
+  it("shows the recovery mode, or a dash when it was not recorded", () => {
+    renderTable([adv("1", "employee", { recoveryMode: "salary" }), adv("2", "vendor", { recoveryMode: "adjust_against_bill" }), adv("3", "other")]);
+    expect(screen.getByRole("columnheader", { name: /^Recovery/ })).toBeInTheDocument();
+    expect(screen.getByText("Salary")).toBeInTheDocument();
+    expect(screen.getByText("Against bill")).toBeInTheDocument();
+  });
 });

@@ -31,6 +31,7 @@ export async function applyExceptionActionCmd(
   ctx: RequestContext,
   breakId: string,
   body: { action: string; note?: string | undefined },
+  actorRoles: readonly string[] = [],
 ): Promise<Accepted> {
   const id = randomUUID();
   await queue.publish(COMMANDS.reconExceptionAction, {
@@ -44,8 +45,26 @@ export async function applyExceptionActionCmd(
       id: breakId,
       tenantId: ctx.tenantId,
       action: body.action,
+      // C30: the consumer re-applies the write-off approval rule inside its transaction and needs the actor's roles.
+      actorRoles: [...actorRoles],
       ...(body.note ? { note: body.note } : {}),
     },
   });
   return { id: breakId, status: "accepted", correlationId: ctx.correlationId };
+}
+
+/** C30: set the tenant's write-off second-approval threshold (paise). Finance admin only (route); audited by the consumer. */
+export async function setWriteoffPolicyCmd(ctx: RequestContext, thresholdMinor: bigint): Promise<Accepted> {
+  const id = randomUUID();
+  await queue.publish(COMMANDS.reconWriteoffPolicySet, {
+    messageId: id,
+    type: COMMANDS.reconWriteoffPolicySet,
+    tenantId: ctx.tenantId,
+    actorId: ctx.actorId,
+    correlationId: ctx.correlationId,
+    schemaVersion: "1.0",
+    // paise cross the queue as a base-10 string (JSON has no bigint)
+    payload: { tenantId: ctx.tenantId, thresholdMinor: thresholdMinor.toString() },
+  });
+  return { id, status: "accepted", correlationId: ctx.correlationId };
 }

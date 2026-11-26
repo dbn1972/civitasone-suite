@@ -859,14 +859,18 @@ export type AdvanceSummary = {
   type: "employee" | "vendor" | "other";
   /** Free-text purpose entered at issue time (distinct from `type`). */
   purpose?: string;
-  amount: string;
+  /** null when the viewer's role may not see a personal advance's figures (C25); see balancesMasked. */
+  amount: string | null;
   disbursedDate: string;
   dueDate?: string;
-  adjustedAmount: string;
-  balance: string;
+  adjustedAmount: string | null;
+  balance: string | null;
+  balancesMasked?: boolean;
   status: "active" | "adjusted" | "overdue" | "closed";
   sanctionAuthority?: string;
   reason?: string;
+  /** How the advance is recovered (C25); absent when not recorded. */
+  recoveryMode?: "salary" | "cash" | "adjust_against_bill";
 };
 
 export type UCSummary = {

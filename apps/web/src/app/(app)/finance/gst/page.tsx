@@ -1,3 +1,4 @@
+import { getTranslations } from "next-intl/server";
 import { Alert, PageHeader, StatGrid, StatCard, Card } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
@@ -8,8 +9,11 @@ import { PeriodSelector } from "./PeriodSelector";
 import { GstConsole } from "./GstConsole";
 import type { SummaryRow, LedgerRow, ItcRow } from "./types";
 
-/** The endpoint default is 100 rows, which would silently truncate a busy month and its export. 500 is the maximum. */
-const GST_LEDGER_LIMIT = 500;
+/** The endpoint default is 100 rows and its maximum page is 500. The loader follows offset pages (C28, owner-approved: lift the 500-row cap on the CSV). */
+const GST_LEDGER_PAGE = 500;
+/** Safety ceiling on rows pulled into one render (40 pages). Hitting it is reported, never silent. */
+const GST_LEDGER_MAX_PAGES = 40;
+const GST_LEDGER_LIMIT = GST_LEDGER_PAGE * GST_LEDGER_MAX_PAGES;
 
 type SummaryResponse = { period: string; summary: SummaryRow[] };
 type ItcResponse = { period: string; reconciliation: ItcRow[] };
@@ -21,14 +25,28 @@ async function getSummary(period: string): Promise<LoaderResult<SummaryRow[]>> {
   });
 }
 
-async function getLedger(period: string): Promise<LoaderResult<LedgerRow[]>> {
-  return fetchJson<unknown, LedgerRow[]>(`/api/v1/finance/gst/ledger?period=${encodeURIComponent(period)}&limit=${GST_LEDGER_LIMIT}`, [], {
+async function getLedgerPage(period: string, offset: number): Promise<LoaderResult<LedgerRow[]>> {
+  return fetchJson<unknown, LedgerRow[]>(`/api/v1/finance/gst/ledger?period=${encodeURIComponent(period)}&limit=${GST_LEDGER_PAGE}&offset=${offset}`, [], {
     telemetryKey: "finance.gst.ledger",
     mapResponse: (p) => {
       const arr = Array.isArray(p) ? p : (p as { data?: LedgerRow[] })?.data;
       return Array.isArray(arr) ? arr : null;
     },
   });
+}
+
+/** All ledger rows for the period, page by page. A failed page fails the whole load: a partial list must not export as complete. */
+async function getLedger(period: string): Promise<LoaderResult<LedgerRow[]>> {
+  const first = await getLedgerPage(period, 0);
+  if (first.source === "error" || first.data.length < GST_LEDGER_PAGE) return first;
+  const rows = [...first.data];
+  for (let page = 1; page < GST_LEDGER_MAX_PAGES; page += 1) {
+    const next = await getLedgerPage(period, page * GST_LEDGER_PAGE);
+    if (next.source === "error") return { ...next, data: [] };
+    rows.push(...next.data);
+    if (next.data.length < GST_LEDGER_PAGE) break;
+  }
+  return { ...first, data: rows };
 }
 
 async function getItcReconciliation(period: string): Promise<LoaderResult<ItcRow[]>> {
@@ -39,6 +57,7 @@ async function getItcReconciliation(period: string): Promise<LoaderResult<ItcRow
 }
 
 export default async function GstConsolePage(props: { searchParams?: Promise<{ period?: string }> }) {
+  const tg = await getTranslations("financeGstPage");
   const searchParams = await props.searchParams;
   const requested = searchParams?.period;
   const periodValid = !!requested && PERIOD_PATTERN.test(requested);
@@ -119,7 +138,7 @@ export default async function GstConsolePage(props: { searchParams?: Promise<{ p
 
       {ledgerSource !== "error" && ledger.length >= GST_LEDGER_LIMIT && (
         <Alert variant="warning">
-          The ledger shows the first {GST_LEDGER_LIMIT} entries for this period; the list and its CSV export may be incomplete.
+          {tg("ledgerCapped", { limit: GST_LEDGER_LIMIT })}
         </Alert>
       )}
 

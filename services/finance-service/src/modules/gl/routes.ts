@@ -1,4 +1,3 @@
-import { idempotentId } from "@civitasone/auth";
 import { sendAccepted, sendValidated } from "@civitasone/schemas/validate";
 import { acceptedResponseSchema, listQuerySchema } from "@civitasone/schemas/common";
 import { GLEntrySummaryListSchema, FinancialStatementSummaryListSchema } from "@civitasone/schemas/web";
@@ -129,17 +128,14 @@ export async function glRoutes(app: FastifyInstance): Promise<void> {
     // without a budget provision for the year (GFR). The posting consumer re-checks both at posting time.
     await assertFiscalYearActiveHttp(ctx.tenantId, body.postingDate);
     attachBudgetWarnings(reply, await assertProvisionHttp(ctx.tenantId, body.lines.filter((l) => BigInt(l.debitMinor) > 0n).map((l) => String(l.accountCode)), body.postingDate, body.type, "lines"));
-    // GAP-FINANCE-ACCOUNTING-VOUCHERS-NEW-05 / GAP-FINANCE-JOURNAL-ENTRY-06 (same check, built by two clusters; one kept): a typed voucher number must be unique per tenant. The UNIQUE(tenant_id,
-    // voucher_no) index stays the authority for a true race (the consumer would dead-letter the loser), but a plain
-    // duplicate is answered here, as a field error on voucherNo, instead of a 202 followed by a silently dropped
-    // draft. A retry of THIS request (same idempotency key -> same journal id) is not a duplicate of itself.
+    // C22 (owner-approved 2026-11-26): the voucher number is ALWAYS server-allocated -- gapless, per voucher type and
+    // financial year, at approval time (nextVoucherNo in gl/consumer.ts postJournal). There is no typed-number path: a client that
+    // sends anything other than blank / "AUTO" is refused here with a field error, before anything is queued. (Internal
+    // posters -- payroll, depreciation, disposals, inventory -- build their own journals and never use this route.)
     if (!voucherNeedsAllocation(body.voucherNo)) {
-      const taken = await repo.findJournalByVoucherNo(ctx.tenantId, body.voucherNo);
-      if (taken && taken.id !== idempotentId(ctx)) {
-        throw new HttpError(409, "DUPLICATE_VOUCHER", "voucher number already exists", [
-          { field: "voucherNo", message: "This voucher number already exists. Enter a different number, or leave it blank to auto-number." },
-        ]);
-      }
+      throw new HttpError(422, "VOUCHER_NO_SERVER_ALLOCATED", "voucher numbers are allocated by the system", [
+        { field: "voucherNo", message: "Voucher numbers are allocated automatically when the entry is approved. Leave this blank." },
+      ]);
     }
     await assertKnownAccountCodes(ctx.tenantId, body.lines);
     // DOM-024: this now creates a pending_approval draft, not a posted

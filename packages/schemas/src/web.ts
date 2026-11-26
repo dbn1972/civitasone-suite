@@ -787,15 +787,19 @@ export const AdvanceSummarySchema = z.object({
   // returns amount/adjustedAmount/balance via .toString() (H3: paise can
   // exceed 2^53), which a plain z.number() here would 400 on real data (it
   // only passed before because the advances table was empty).
-  amount: zMoneyMinorString,
+  // C25: null (with balancesMasked) when the caller's role may not see a personal advance's figures; never a fake 0.
+  amount: zMoneyMinorString.nullable(),
   disbursedDate: z.string(),
   dueDate: z.string().optional(),
-  adjustedAmount: zMoneyMinorString.default(0),
-  balance: zMoneyMinorString,
+  adjustedAmount: zMoneyMinorString.nullable().default(0),
+  balance: zMoneyMinorString.nullable(),
+  balancesMasked: z.boolean().optional(),
   status: z.enum(["active", "adjusted", "overdue", "closed"]),
   // GAP-FINANCE-EXPENDITURE-ADVANCES-NEW-01: who sanctioned the advance and why.
   sanctionAuthority: z.string().optional(),
   reason: z.string().optional(),
+  // C25: how the advance is recovered; absent when not recorded.
+  recoveryMode: z.enum(["salary", "cash", "adjust_against_bill"]).optional(),
 });
 export const AdvanceSummaryListSchema = z.array(AdvanceSummarySchema);
 

@@ -98,9 +98,25 @@ describe("POST /v1/finance/utilization-certificates -- schemeCode", () => {
     expect(res.statusCode).toBe(202);
   });
 
-  it("202 with no scheme at all (an office without schemes can still certify)", async () => {
+  // C27 (owner-approved 2026-11-26): the scheme CODE is canonical when the office has schemes.
+  it("400 SCHEME_CODE_REQUIRED, on the schemeCode field, when the office has schemes and none is named", async () => {
     const res = await post(body());
-    expect(res.statusCode).toBe(202);
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe("SCHEME_CODE_REQUIRED");
+    expect(JSON.stringify(res.json())).toContain("schemeCode");
+  });
+
+  it("202 with no scheme at all when the office has NO schemes set up", async () => {
+    const app = await buildApp();
+    try {
+      const noSchemeTenant = "aaaaaaaa-1111-4000-8000-00000000f4a0";
+      const t = signToken({ sub: ACTOR, tid: noSchemeTenant, roles: ["finance_officer"], sid: "sess-f406b" }, SECRET);
+      const res = await app.inject({
+        method: "POST", url: "/v1/finance/utilization-certificates",
+        headers: { authorization: `Bearer ${t}`, "content-type": "application/json" }, payload: body(),
+      });
+      expect(res.statusCode).toBe(202);
+    } finally { await app.close(); }
   });
 });
 

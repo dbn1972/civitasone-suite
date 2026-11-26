@@ -6,7 +6,7 @@ import { describe, it, expect } from "vitest";
 import { computePaySnapshot, deviatingFields, fyStartYearOf, type SlipMonth } from "../src/modules/fnf/pay-snapshot.js";
 import { checkLoanTerms, formatLoanNo } from "../src/modules/loans/policy.js";
 import { exceedsCap, isValidSplitPct, toHundredths } from "../src/modules/costing-rules/split-cap.js";
-import { filterEmployees } from "../src/modules/employee-lookup/routes.js";
+import { filterEmployees, LOOKUP_ROLES } from "../src/modules/employee-lookup/routes.js";
 import { minorTotals } from "../src/modules/payroll/queries.js";
 import { escapeHtml, renderTemplate, safeFilenamePart } from "../src/shared/html.js";
 
@@ -138,5 +138,12 @@ describe("HTML escaping helpers (stored XSS)", () => {
   });
   it("filename parts cannot carry header/markup characters", () => {
     expect(safeFilenamePart('E"<1>\r\n')).toBe("E__1___");
+  });
+});
+
+// B17 (owner-approved 2026-11-26): finance_admin gets the same narrow lookup as finance_officer; nobody else is added.
+describe("employee-lookup LOOKUP_ROLES (B17)", () => {
+  it("is exactly the payroll, HR and finance operator roles, now including finance_admin", () => {
+    expect([...LOOKUP_ROLES].sort()).toEqual(["finance_admin", "finance_officer", "hr_admin", "payroll_admin", "payroll_officer", "super_admin"]);
   });
 });

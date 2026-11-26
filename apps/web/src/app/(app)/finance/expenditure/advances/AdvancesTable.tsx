@@ -5,7 +5,7 @@ import { useTranslations } from "next-intl";
 import { Segmented, DataTable } from "../../../../_components/ds";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import type { AdvanceSummary } from "@civitasone/types";
-import { formatIndianDate, humanizeStatus } from "@/lib/formatters";
+import { formatIndianDate, formatMoney, humanizeStatus } from "@/lib/formatters";
 import { useSeededResource } from "@/lib/sync/resource";
 
 // UX-017 (tranche 10): TABS used to double as both <Segmented>'s displayed
@@ -43,6 +43,12 @@ export function AdvancesTable({ advances, source = "api" }: { advances: AdvanceS
     source,
     (d) => d.length === 0,
   );
+
+  const recoveryLabel: Record<NonNullable<AdvanceSummary["recoveryMode"]>, string> = {
+    salary: t("recoverySalary"), cash: t("recoveryCash"), adjust_against_bill: t("recoveryAdjustBill"),
+  };
+  const moneyCell = (a: AdvanceSummary, v: string | null) =>
+    a.balancesMasked || v === null ? <span className="muted" title={t("figuresRestricted")}>{t("figuresRestricted")}</span> : formatMoney(v);
 
   const filtered = rows.filter(
     (a) =>
@@ -83,9 +89,12 @@ export function AdvancesTable({ advances, source = "api" }: { advances: AdvanceS
           { key: "beneficiary", label: t("colBeneficiary") },
           { key: "type", label: t("colType"), render: (a) => humanizeStatus(a.type) },
           { key: "purpose", label: t("colPurpose"), render: (a) => a.purpose ?? "—" },
-          { key: "amount", label: t("colAdvance"), align: "right", cellType: "amount" },
-          { key: "adjustedAmount", label: t("colSettled"), align: "right", cellType: "amount" },
-          { key: "balance", label: t("colBalance"), align: "right", cellType: "amount" },
+          // C25: a personal advance's figures are withheld (null + balancesMasked) from roles that may not see them. Say so
+          // in words; never print a fake 0 or a bare dash that reads as "no balance".
+          { key: "amount", label: t("colAdvance"), align: "right", render: (a) => moneyCell(a, a.amount) },
+          { key: "adjustedAmount", label: t("colSettled"), align: "right", render: (a) => moneyCell(a, a.adjustedAmount) },
+          { key: "balance", label: t("colBalance"), align: "right", render: (a) => moneyCell(a, a.balance) },
+          { key: "recoveryMode", label: t("colRecovery"), render: (a) => (a.recoveryMode ? recoveryLabel[a.recoveryMode] : "—") },
           { key: "disbursedDate", label: t("colDisbursed"), render: (a) => formatIndianDate(a.disbursedDate) },
           { key: "dueDate", label: t("colDue"), render: (a) => formatIndianDate(a.dueDate) },
           { key: "status", label: t("colStatus"), cellType: "status" },

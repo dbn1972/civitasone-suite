@@ -32,6 +32,31 @@ export function assertPayerNotPasser(billStatus: string, passerId: string | null
   }
 }
 
+/**
+ * C25 / GAP-FINANCE-EXPENDITURE-ADVANCES-03 (owner-approved 2026-11-26): roles that may see the AMOUNT, SETTLED amount and
+ * BALANCE of a personal (employee) advance -- finance_officer / finance_admin (the register's operators; super_admin as the
+ * deployment-wide override) and the payroll roles that recover it from salary. Everyone else who can read the register
+ * (accounts_officer, audit_officer, procurement_officer) gets the figures withheld (null + balancesMasked) on employee advances only.
+ * Vendor / other advances are organisation money and are never masked. audit_officer is NOT in the set: flagged for the owner
+ * (an auditor may need amounts; add it here, one line, if Finance wants that).
+ */
+export const ADVANCE_BALANCE_ROLES = ["finance_officer", "finance_admin", "super_admin", "payroll_admin", "payroll_officer"];
+
+/** How an advance is recovered (C25, migration 0190). */
+export const ADVANCE_RECOVERY_MODES = ["salary", "cash", "adjust_against_bill"] as const;
+export type AdvanceRecoveryMode = (typeof ADVANCE_RECOVERY_MODES)[number];
+
+type AdvanceMoneyRow = { type: string; amount: string; adjustedAmount: string; balance: string };
+export type MaskedAdvanceMoney<T extends AdvanceMoneyRow> = Omit<T, "amount" | "adjustedAmount" | "balance"> & {
+  amount: string | null; adjustedAmount: string | null; balance: string | null; balancesMasked?: true;
+};
+
+/** Withhold amount / settled / balance of personal advances from roles outside ADVANCE_BALANCE_ROLES. Returns the same array for an entitled role. */
+export function maskAdvanceBalances<T extends AdvanceMoneyRow>(rows: T[], roles: readonly string[]): Array<MaskedAdvanceMoney<T>> {
+  if (roles.some((r) => ADVANCE_BALANCE_ROLES.includes(r))) return rows as Array<MaskedAdvanceMoney<T>>;
+  return rows.map((r) => (r.type === "employee" ? { ...r, amount: null, adjustedAmount: null, balance: null, balancesMasked: true as const } : r));
+}
+
 /** "Asha Verma" -> "A*** V***". Blank input becomes "***". */
 export function maskPersonName(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
