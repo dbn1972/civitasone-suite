@@ -67,7 +67,7 @@ export function registerEngagementConsumers(rawQueue: Queue): void {
   queue.subscribe(COMMANDS.noticeCreate, async (msg) => {
     const p = msg.payload as {
       id: string; tenantId: string; noticeNo?: string; subject: string; body?: string;
-      department: string; type?: string; expiresAt?: string;
+      department: string; type?: string; documentId?: string; expiresAt?: string;
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
@@ -75,7 +75,7 @@ export function registerEngagementConsumers(rawQueue: Queue): void {
       const noticeNo = p.noticeNo ?? (await nextNumber(tx, "notice_no"));
       const inserted = await repo.insertNotice(tx, {
         id: p.id, tenantId: msg.tenantId, noticeNo, subject: p.subject, body: p.body ?? "",
-        department: p.department, noticeType: p.type ?? "general", status: "draft",
+        department: p.department, noticeType: p.type ?? "general", documentId: p.documentId ?? null, status: "draft",
         expiresAt: p.expiresAt ? new Date(p.expiresAt) : null,
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });

@@ -16,6 +16,7 @@ export const COMMANDS = {
   rtiFile:                 "citizen.rti.file",
   rtiResponseReceive:      "citizen.rti.response_receive",
   rtiAppeal:               "citizen.rti.appeal",
+  rtiAppealDecide:         "citizen.rti.appeal_decide",
   rtiTransfer:             "citizen.rti.transfer",
   // GAP-CITIZEN-RTI-03 — CPIO / public-authority directory maintenance.
   cpioDirectoryCreate:     "citizen.rti.cpio_directory_create",

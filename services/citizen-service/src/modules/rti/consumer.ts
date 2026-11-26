@@ -7,7 +7,7 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS, CONSUMED_EVENTS } from "../../topics.js";
 import { nextNumber, auditFailedCreate } from "../../shared/numbers.js";
 import * as repo from "./repo.js";
-import { computeRtiDeadline, toDateString } from "./domain.js";
+import { computeRtiDeadline, toDateString, resolveResponder } from "./domain.js";
 
 export function registerRtiConsumers(rawQueue: Queue): void {
   // #146 NOBYPASSRLS: every handler must run inside the message's tenant
@@ -124,15 +124,32 @@ export function registerRtiConsumers(rawQueue: Queue): void {
     await cache.invalidate(cache.makeKey(msg.tenantId, "rti", p.rtiId));
   });
 
+  // D2: first-appeal decision by the appellate authority (role + eligibility enforced at the route).
+  queue.subscribe(COMMANDS.rtiAppealDecide, async (msg) => {
+    const p = msg.payload as {
+      id: string; rtiId: string; tenantId: string; outcome: string; decisionDate: string; hearingDate?: string; reason: string;
+    };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const n = await repo.decideAppeal(tx, msg.tenantId, p.rtiId, p.id, msg.actorId, {
+        outcome: p.outcome, decisionDate: p.decisionDate, hearingDate: p.hearingDate ?? null, reason: p.reason,
+      });
+      // 0 rows = already decided / not a first appeal / unknown: ack without a false audit entry.
+      if (n > 0) await audit(tx, msg, "appeal_decide", "citizen_rti_appeal", p.id);
+    });
+    await cache.invalidate(cache.makeKey(msg.tenantId, "rti", p.rtiId));
+  });
+
   queue.subscribe(CONSUMED_EVENTS.estabRtiResponded, async (msg) => {
-    const p = msg.payload as { rtiId: string; tenantId: string; responseUrl: string };
+    const p = msg.payload as { rtiId: string; tenantId: string; responseUrl: string; respondedBy?: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const rti = await repo.findRtiByIdTx(tx, p.rtiId, msg.tenantId);
       if (!rti) return;
       await repo.insertResponse(tx, {
         tenantId: p.tenantId, rtiId: p.rtiId,
-        responseUrl: p.responseUrl, respondedBy: msg.actorId,
+        // HIGH-1: record the HUMAN responder carried by the event, not the relay/system envelope actor.
+        responseUrl: p.responseUrl, respondedBy: resolveResponder(p.respondedBy, msg.actorId),
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });
       await repo.updateRti(tx, p.rtiId, msg.tenantId, { status: "responded", updatedBy: msg.actorId });

@@ -42,6 +42,12 @@ export const citizenRtiAppeals = rtiSchema.table("citizen_rti_appeals", {
   appealType: varchar("appeal_type", { length: 16 }).notNull().default("first"),
   grounds:    text("grounds").notNull(),
   status:     varchar("status", { length: 24 }).notNull().default("filed"),
+  /** D2 (migration 0049): first-appeal decision by the rti_appellate role. */
+  outcome:        varchar("outcome", { length: 16 }),
+  decisionReason: text("decision_reason"),
+  hearingDate:    date("hearing_date"),
+  decisionDate:   date("decision_date"),
+  decidedBy:      uuid("decided_by"),
   createdAt:  timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:  timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy:  uuid("created_by").notNull(),

@@ -11,6 +11,8 @@ export const cpioDirectory = rtiSchema.table("cpio_directory", {
   designation:     text("designation"),
   publicAuthority: text("public_authority").notNull(),
   department:      text("department"),
+  /** identity-service user id of the CPIO (migration 0050); NULL = unmapped. */
+  userId:          uuid("user_id"),
   email:           text("email"),
   phone:           text("phone"),
   status:          varchar("status", { length: 16 }).notNull().default("active"),

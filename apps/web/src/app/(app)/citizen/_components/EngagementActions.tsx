@@ -87,6 +87,8 @@ export function NewAlertButton() {
   );
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 const NOTICE_TYPES = ["general", "statutory", "public_hearing", "tender"] as const;
 
 export function NewNoticeButton() {
@@ -95,6 +97,7 @@ export function NewNoticeButton() {
   const [subject, setSubject] = useState("");
   const [department, setDepartment] = useState("");
   const [noticeNo, setNoticeNo] = useState("");
+  const [documentId, setDocumentId] = useState("");
   const [type, setType] = useState<(typeof NOTICE_TYPES)[number]>("general");
   const [body, setBody] = useState("");
   const [expires, setExpires] = useState("");
@@ -104,18 +107,19 @@ export function NewNoticeButton() {
       confirmTitle={t("newNoticeTitle")}
       confirmDescription={t("draftNote")}
       confirmLabel={t("saveDraft")}
-      blockConfirm={subject.trim().length === 0 || department.trim().length === 0}
+      blockConfirm={subject.trim().length === 0 || department.trim().length === 0 || !(documentId.trim() === "" || UUID_RE.test(documentId.trim()))}
       onConfirm={async () => {
         await post("notices", {
           subject: subject.trim(),
           department: department.trim(),
           type,
           ...(noticeNo.trim() ? { noticeNo: noticeNo.trim() } : {}),
+          ...(documentId.trim() ? { documentId: documentId.trim() } : {}),
           ...(body.trim() ? { body: body.trim() } : {}),
           ...(toIsoOrUndefined(expires) ? { expiresAt: toIsoOrUndefined(expires) } : {}),
         });
       }}
-      onSuccess={() => { setSubject(""); setDepartment(""); setNoticeNo(""); setType("general"); setBody(""); setExpires(""); refresh(); }}
+      onSuccess={() => { setSubject(""); setDepartment(""); setNoticeNo(""); setDocumentId(""); setType("general"); setBody(""); setExpires(""); refresh(); }}
     >
       <label htmlFor="notice-subject" style={labelStyle}>{t("fieldSubject")}</label>
       <input id="notice-subject" value={subject} maxLength={300} onChange={(e) => setSubject(e.target.value)} style={inputStyle} />
@@ -123,6 +127,8 @@ export function NewNoticeButton() {
       <input id="notice-department" value={department} maxLength={128} onChange={(e) => setDepartment(e.target.value)} style={inputStyle} />
       <label htmlFor="notice-no" style={labelStyle}>{t("fieldNoticeNo")}</label>
       <input id="notice-no" value={noticeNo} maxLength={64} onChange={(e) => setNoticeNo(e.target.value)} style={inputStyle} />
+      <label htmlFor="notice-document-id" style={labelStyle}>{t("fieldDocumentId")}</label>
+      <input id="notice-document-id" value={documentId} maxLength={36} onChange={(e) => setDocumentId(e.target.value)} style={inputStyle} aria-invalid={documentId.trim() !== "" && !UUID_RE.test(documentId.trim())} />
       <label htmlFor="notice-type" style={labelStyle}>{t("fieldType")}</label>
       <select id="notice-type" value={type} onChange={(e) => setType(e.target.value as (typeof NOTICE_TYPES)[number])} style={inputStyle}>
         {NOTICE_TYPES.map((v) => <option key={v} value={v}>{t(`type_${v}`)}</option>)}

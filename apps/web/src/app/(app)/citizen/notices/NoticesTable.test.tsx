@@ -75,4 +75,14 @@ describe("NoticesTable", () => {
     // empty expiry -> em dash
     expect(within(row).getAllByText("—").length).toBeGreaterThan(0);
   });
+
+  it("D1: a notice with a documentId shows an Attached link to the document library; one without shows a dash", () => {
+    renderTable([
+      notice({ noticeNo: "DOC-1", subject: "Tender for ward 14 drainage", documentId: "5b0f3d1e-6c2a-4a58-9b7d-2f8f0c3e9a11" }),
+      notice({ noticeNo: "NODOC-1", subject: "General holiday notice", documentId: null }),
+    ]);
+    const link = screen.getByRole("link", { name: /Tender for ward 14 drainage/ });
+    expect(link).toHaveAttribute("href", "/documents/library");
+    expect(screen.getAllByRole("link")).toHaveLength(1);
+  });
 });

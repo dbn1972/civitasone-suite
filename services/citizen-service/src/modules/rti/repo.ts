@@ -42,6 +42,24 @@ export async function insertAppeal(tx: Writer, row: RtiAppealInsert): Promise<vo
   await tx.insert(citizenRtiAppeals).values(row);
 }
 
+/**
+ * D2: record the decision on a still-`filed` FIRST appeal. Returns the number of rows changed
+ * (0 = unknown id, other RTI, not a first appeal, or already decided).
+ */
+export async function decideAppeal(
+  tx: Writer, tenantId: string, rtiId: string, appealId: string, actorId: string,
+  d: { outcome: string; decisionDate: string; hearingDate: string | null; reason: string },
+): Promise<number> {
+  const rows = await tx.update(citizenRtiAppeals).set({
+    status: "decided", outcome: d.outcome, decisionDate: d.decisionDate, hearingDate: d.hearingDate,
+    decisionReason: d.reason, decidedBy: actorId, updatedBy: actorId, updatedAt: new Date(),
+  }).where(and(
+    eq(citizenRtiAppeals.id, appealId), eq(citizenRtiAppeals.tenantId, tenantId), eq(citizenRtiAppeals.rtiId, rtiId),
+    eq(citizenRtiAppeals.appealType, "first"), eq(citizenRtiAppeals.status, "filed"),
+  )).returning({ id: citizenRtiAppeals.id });
+  return rows.length;
+}
+
 export async function listResponses(rtiId: string) {
   // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
   // before this read — a bare db.select() runs with no RLS GUC set.

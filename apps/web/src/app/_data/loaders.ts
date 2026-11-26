@@ -1285,7 +1285,8 @@ function buildDashboardKpis(
       note: health.status,
     });
   }
-  if (readiness) {
+  // B28: tenant roles receive only {overall} (no gates); the engineering score is platform-only.
+  if (readiness && readiness.gates.length > 0) {
     kpis.push({
       label: "Readiness score",
       value: `${readiness.overall}/100`,
@@ -4976,6 +4977,8 @@ export type CitizenNotice = {
   published: string;
   expiry: string;
   type: string;
+  /** D1: document-service file id (null/absent = no attachment). */
+  documentId?: string | null;
   /** draft | published | withdrawn (citizens only ever receive published). */
   status: string;
 };

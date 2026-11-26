@@ -29,7 +29,7 @@ export const STAFF_ROLES = [
   "revenue_officer", "revenue_collector", "revenue_analyst", "estab_officer", "records_officer", "legal_officer",
   "vigilance_officer", "grievance_officer", "consent_officer", "sales_officer", "front_desk",
   "store_keeper", "store_officer", "warehouse_officer", "inventory_user", "inventory_manager", "asset_manager",
-  "project_manager", "project_officer", "helpdesk_user", "helpdesk_agent", "crm_user", "citizen_officer",
+  "project_manager", "project_officer", "helpdesk_user", "helpdesk_agent", "crm_user", "citizen_officer", "rti_appellate",
 ] as const;
 
 export const ADMIN_TIER_ROLES = [

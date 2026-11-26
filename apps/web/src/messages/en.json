@@ -1361,6 +1361,9 @@
     "colStatus": "Status"
   },
   "citizenFeedback": {
+    "movedTitle": "Feedback is collected through surveys",
+    "movedMessage": "Share your feedback by taking part in the citizen surveys published by your office.",
+    "movedAction": "Open surveys",
     "pageTitle": "Citizen Feedback",
     "pageSubtitle": "Feedback and suggestions submitted by citizens.",
     "emptyTitle": "No feedback yet",
@@ -1403,6 +1406,10 @@
     "track": "Track"
   },
   "citizenNotices": {
+    "noDocument": "—",
+    "colDocument": "Document",
+    "docAttached": "Attached",
+    "docAttachedAria": "Open document library for notice {subject}",
     "pageTitle": "Public Notices",
     "pageSubtitle": "Statutory and informational notices published by departments.",
     "statTotal": "Total Notices",
@@ -1548,6 +1555,20 @@
     "noActions": "No actions recorded yet."
   },
   "citizenRti": {
+    "decideAppeal": "Record decision",
+    "decideAppealTitle": "Record first-appeal decision",
+    "decideAppealDescription": "As the appellate authority under RTI Act s.19(1), record the outcome, hearing date and reasons. This decision is audited and cannot be changed.",
+    "decideAppealConfirm": "Record decision",
+    "appealOutcomeLabel": "Outcome",
+    "appealOutcomeHeading": "Decision",
+    "appealOutcome_allowed": "Allowed",
+    "appealOutcome_partly_allowed": "Partly allowed",
+    "appealOutcome_rejected": "Rejected",
+    "appealOutcome_remanded": "Remanded to CPIO",
+    "appealHearingDateLabel": "Hearing date",
+    "appealDecisionDateLabel": "Decision date",
+    "appealDecisionReasonLabel": "Reasons for the decision",
+    "noticeAppealDecided": "Appeal decision recorded.",
     "pageTitle": "RTI Applications",
     "pageSubtitle": "RTI applications, 30-day response tracking & transfers.",
     "statApplications": "RTI Applications",
@@ -19889,6 +19910,7 @@
     "unknownItem": "Unknown item"
   },
   "citizenEngagementActions": {
+    "fieldDocumentId": "Attached document ID (optional, from the Document library)",
     "newAlert": "New alert",
     "newAlertTitle": "New public alert",
     "newNotice": "New notice",

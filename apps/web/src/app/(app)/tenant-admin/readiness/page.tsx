@@ -4,6 +4,49 @@ import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { getTenantAdminDashboard, type ReadinessGate } from "@/app/_data/loaders";
 import { toResourceState } from "@/app/_data/useResource";
 import { toHumanError } from "@/lib/messages";
+import { getSessionRoles } from "@/lib/auth/roleGuard";
+
+// B28 (TENANT-ADMIN-READINESS-03): the gates below (queue-first writes, workers, k6, contract tests,
+// DB indexes, ...) are PLATFORM-ENGINEERING checks. Only platform_admin / super_admin see them; a tenant
+// admin gets TENANT_CHECKLIST instead, which lists only things a tenant can configure itself.
+const PLATFORM_READINESS_ROLES = ["platform_admin", "super_admin"] as const;
+
+// Tenant-fixable go-live steps. Each target is an existing /tenant-admin screen. There is no per-tenant
+// completion endpoint, so the rows are links to do the work, never fabricated Pass/Fail states.
+const TENANT_CHECKLIST: ReadonlyArray<{ key: string; label: string; description: string; href: string }> = [
+  { key: "orgHierarchy", label: "Set up your organisation structure", description: "Create departments, wings and units so staff and approvals map to your office.", href: "/tenant-admin/org-hierarchy" },
+  { key: "users", label: "Add your staff", description: "Create user accounts or invite officers to the platform.", href: "/tenant-admin/users" },
+  { key: "roles", label: "Assign roles", description: "Give each user only the roles their work needs.", href: "/tenant-admin/roles" },
+  { key: "mfa", label: "Review multi-factor sign-in", description: "Confirm your multi-factor authentication policy for staff accounts.", href: "/tenant-admin/mfa" },
+  { key: "sso", label: "Connect single sign-on (optional)", description: "Link your identity provider if your office uses one.", href: "/tenant-admin/sso" },
+  { key: "domain", label: "Confirm your domain", description: "Check the domain your office signs in from.", href: "/tenant-admin/domain" },
+  { key: "notifications", label: "Configure notifications", description: "Choose how staff and citizens are notified.", href: "/tenant-admin/notifications" },
+  { key: "settings", label: "Review tenant settings", description: "Check the organisation profile and module settings.", href: "/tenant-admin/settings" },
+];
+
+function TenantReadiness() {
+  return (
+    <div className="page-main wrap">
+      <PageHeader
+        title="Go-live Checklist"
+        subtitle="Steps your office can complete itself before go-live. Platform-level checks are handled by the platform team."
+      />
+      <Card title="Your setup checklist" padding>
+        <ul aria-label="Tenant setup items" style={{ listStyle: "none", padding: 0, margin: 0 }}>
+          {TENANT_CHECKLIST.map((item) => (
+            <li key={item.key} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 0", borderBottom: "1px solid var(--border)" }}>
+              <div style={{ flex: 1 }}>
+                <p style={{ margin: 0, fontWeight: 500, fontSize: 14 }}>{item.label}</p>
+                <p style={{ margin: "2px 0 0", fontSize: 12, color: "var(--ink2)" }}>{item.description}</p>
+              </div>
+              <Link href={item.href} className="lnk" style={{ fontSize: 13 }}>Open →</Link>
+            </li>
+          ))}
+        </ul>
+      </Card>
+    </div>
+  );
+}
 
 // GAP-TENANT-ADMIN-READINESS-01 / -03: display metadata for the live gate keys
 // returned by admin-service's /v1/admin/health/readiness. Each gate maps to a
@@ -29,6 +72,9 @@ function humaniseKey(key: string): string {
 }
 
 export default async function ReadinessPage() {
+  const isPlatform = getSessionRoles().some((r) => (PLATFORM_READINESS_ROLES as readonly string[]).includes(r));
+  // A tenant admin never fetches or sees the platform-engineering gate map.
+  if (!isPlatform) return <TenantReadiness />;
   const result = await getTenantAdminDashboard();
   const { data: dashboard, source } = result;
   const errored = toResourceState(result).status === "error";

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Card, DataTable, EmptyState, StatGrid, StatCard, Segmented, RefreshErrorState } from "../../../_components/ds";
@@ -20,6 +21,7 @@ type NoticeRow = {
   type: string;
   noticeStatus: "active" | "expired" | "draft" | "withdrawn";
   lifecycle: string;
+  documentId: string | null;
 } & Record<string, unknown>;
 
 type Filter = "active" | "expired" | "draft" | "all";
@@ -56,6 +58,7 @@ export function NoticesTable({ notices, source = "api", canAuthor = false }: { n
         // GAP-CITIZEN-NOTICES-05: a draft / withdrawn notice is never "active"; only published ones age into "expired".
         noticeStatus: n.status === "draft" || n.status === "withdrawn" ? n.status : isExpired(n.expiry) ? "expired" : "active",
         lifecycle: n.status,
+        documentId: n.documentId ?? null,
       })),
     [rows],
   );
@@ -144,6 +147,15 @@ export function NoticesTable({ notices, source = "api", canAuthor = false }: { n
               // GAP-CITIZEN-NOTICES-03: type is NOT a workflow status — render
               // the plain humanised value, no StatusPill colour semantics.
               { key: "type", label: t("colType") },
+              // D1 (CITIZEN-NOTICES-05): optional document-service attachment.
+              {
+                key: "documentId",
+                label: t("colDocument"),
+                render: (r: NoticeRow) => {
+                  if (!r.documentId) return t("noDocument");
+                  return <Link href="/documents/library" aria-label={t("docAttachedAria", { subject: r.subject })}>{t("docAttached")}</Link>;
+                },
+              },
               ...(canAuthor
                 ? [{ key: "actions", label: t("colActions"), render: (r: NoticeRow) => <PublishWithdrawActions kind="notices" id={r.id} status={r.lifecycle} /> }]
                 : []),

@@ -14,14 +14,14 @@ export function registerCpioConsumers(rawQueue: Queue): void {
   queue.subscribe(COMMANDS.cpioDirectoryCreate, async (msg) => {
     const p = msg.payload as {
       id: string; tenantId: string; name: string; designation?: string;
-      publicAuthority: string; department?: string; email?: string; phone?: string;
+      publicAuthority: string; department?: string; userId?: string; email?: string; phone?: string;
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       await repo.insertCpio(tx, {
         id: p.id, tenantId: p.tenantId, name: p.name,
         designation: p.designation ?? null, publicAuthority: p.publicAuthority,
-        department: p.department ?? null, email: p.email ?? null, phone: p.phone ?? null,
+        department: p.department ?? null, userId: p.userId ?? null, email: p.email ?? null, phone: p.phone ?? null,
         status: "active", createdBy: msg.actorId, updatedBy: msg.actorId,
       });
       // Audit in the same transaction as the write (CLAUDE.md §8).

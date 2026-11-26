@@ -1360,6 +1360,9 @@
     "colStatus": "स्थिति"
   },
   "citizenFeedback": {
+    "movedTitle": "प्रतिक्रिया सर्वेक्षणों के माध्यम से ली जाती है",
+    "movedMessage": "अपने कार्यालय द्वारा प्रकाशित नागरिक सर्वेक्षणों में भाग लेकर अपनी प्रतिक्रिया दें।",
+    "movedAction": "सर्वेक्षण खोलें",
     "pageTitle": "नागरिक प्रतिक्रिया",
     "pageSubtitle": "नागरिकों द्वारा प्रस्तुत प्रतिक्रिया और सुझाव।",
     "emptyTitle": "अभी तक कोई प्रतिक्रिया नहीं",
@@ -1402,6 +1405,10 @@
     "track": "ट्रैक करें"
   },
   "citizenNotices": {
+    "noDocument": "—",
+    "colDocument": "दस्तावेज़",
+    "docAttached": "संलग्न",
+    "docAttachedAria": "सूचना {subject} के लिए दस्तावेज़ लाइब्रेरी खोलें",
     "pageTitle": "सार्वजनिक सूचनाएं",
     "pageSubtitle": "विभागों द्वारा प्रकाशित सांविधिक और सूचनात्मक सूचनाएं।",
     "statTotal": "कुल सूचनाएं",
@@ -1547,6 +1554,20 @@
     "noActions": "अभी तक कोई कार्रवाई दर्ज नहीं की गई।"
   },
   "citizenRti": {
+    "decideAppeal": "निर्णय दर्ज करें",
+    "decideAppealTitle": "प्रथम अपील का निर्णय दर्ज करें",
+    "decideAppealDescription": "सूचना का अधिकार अधिनियम की धारा 19(1) के अंतर्गत अपीलीय प्राधिकारी के रूप में परिणाम, सुनवाई की तिथि और कारण दर्ज करें। यह निर्णय अंकेक्षित है और बदला नहीं जा सकता।",
+    "decideAppealConfirm": "निर्णय दर्ज करें",
+    "appealOutcomeLabel": "परिणाम",
+    "appealOutcomeHeading": "निर्णय",
+    "appealOutcome_allowed": "स्वीकार",
+    "appealOutcome_partly_allowed": "आंशिक रूप से स्वीकार",
+    "appealOutcome_rejected": "अस्वीकार",
+    "appealOutcome_remanded": "सीपीआईओ को वापस भेजा गया",
+    "appealHearingDateLabel": "सुनवाई की तिथि",
+    "appealDecisionDateLabel": "निर्णय की तिथि",
+    "appealDecisionReasonLabel": "निर्णय के कारण",
+    "noticeAppealDecided": "अपील का निर्णय दर्ज किया गया।",
     "pageTitle": "RTI आवेदन",
     "pageSubtitle": "RTI आवेदन, 30-दिवसीय प्रतिक्रिया ट्रैकिंग और स्थानांतरण।",
     "statApplications": "RTI आवेदन",
@@ -19868,6 +19889,7 @@
     "unknownItem": "अज्ञात वस्तु"
   },
   "citizenEngagementActions": {
+    "fieldDocumentId": "संलग्न दस्तावेज़ आईडी (वैकल्पिक, दस्तावेज़ लाइब्रेरी से)",
     "newAlert": "नई चेतावनी",
     "newAlertTitle": "नई सार्वजनिक चेतावनी",
     "newNotice": "नई सूचना",

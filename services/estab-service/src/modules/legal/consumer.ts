@@ -98,7 +98,7 @@ export function registerLegalConsumers(queue: Queue): void {
       await enqueue(tx, {
         topic: EVENTS.rtiResponded, eventType: EVENTS.rtiResponded,
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-        payload: { rtiId: p.rtiId, tenantId: p.tenantId, responseUrl: p.responseUrl },
+        payload: { rtiId: p.rtiId, tenantId: p.tenantId, responseUrl: p.responseUrl, respondedBy: msg.actorId },
       });
       await audit(tx, msg, "respond", "rti", p.rtiId);
     });
