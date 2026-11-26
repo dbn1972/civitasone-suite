@@ -11,8 +11,8 @@ function mockApi() {
     const url = String(input);
     if (url.includes("/identity/users")) {
       return { ok: true, status: 200, json: async () => ({ data: [
-        { id: SELF, name: "Me Myself" },
-        { id: OTHER, name: "Other Person" },
+        { id: SELF, displayName: "Me Myself" },
+        { id: OTHER, displayName: "Other Person" },
       ] }) } as unknown as Response;
     }
     if (url.includes("/policy/roles")) {

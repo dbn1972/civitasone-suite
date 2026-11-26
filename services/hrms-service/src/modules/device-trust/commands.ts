@@ -19,3 +19,18 @@ export async function recordDeviceExport(ctx: RequestContext, rowCount: number, 
   });
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }
+
+/** GAP2-ADMIN-DEVICES-01: records that an admin revealed the clear IP of one device. */
+export async function recordDeviceIpReveal(ctx: RequestContext, deviceId: string): Promise<Accepted> {
+  const id = randomUUID();
+  await queue.publish(COMMANDS.deviceIpRevealed, {
+    messageId: id,
+    type: COMMANDS.deviceIpRevealed,
+    tenantId: ctx.tenantId,
+    actorId: ctx.actorId,
+    correlationId: ctx.correlationId,
+    schemaVersion: "1.0",
+    payload: { id, tenantId: ctx.tenantId, deviceId },
+  });
+  return { id, status: "accepted", correlationId: ctx.correlationId };
+}

@@ -1,50 +1,26 @@
 import type { EntityOption } from "@/app/_components/ds";
-import { failStrict, type StrictOpt } from "./strict";
-import { fetchAllPages } from "@/lib/fetchAllPages";
-import { recordLoaderFallback } from "@/app/_data/loaderTelemetry";
-
-type IdentityUserRow = { id: string; name: string; designation?: string };
-
-function toOption(row: IdentityUserRow): EntityOption {
-  return { id: row.id, label: row.name, sublabel: row.designation };
-}
+import type { StrictOpt } from "./strict";
+import { searchDirectoryUsers, resolveDirectoryUsers } from "@/lib/directory/searchUsers";
 
 /**
- * EntityPicker adapters for identity-service users (GAP-HR-PROMOTION-05's
- * "initiating officer" / "forward to" pickers). Same client-side-filter
- * shape as lib/entityAdapters/payStructure.ts and ./designation.ts: this
- * calls the exact same `/api/proxy/v1/identity/users?limit=200` request
- * PromoteWithApproval.tsx already made directly (no new backend route, no
- * change to role/tenant scoping -- see that route's own access rules,
- * unchanged here), just wrapped in the shared search(q)/resolve(ids)
- * contract so the wizard gets a searchable picker instead of a plain
- * <select> with a silent raw-ID fallback on fetch failure.
+ * EntityPicker adapters for identity-service users (GAP-HR-PROMOTION-05 "initiating
+ * officer" / "forward to", helpdesk ticket assignment, contract obligation owner,
+ * works authority pickers).
+ *
+ * These pickers are used by non-admin officers, so they go through identity-services
+ * open, tenant-scoped, non-PII directory (`GET /v1/identity/users/directory`, any
+ * authenticated member of the caller own tenant) -- NOT the ADMIN-gated
+ * `/identity/users` list (403 for non-admins) and not the unregistered
+ * `/v1/identity/users` path. The directory returns only { id, displayName }:
+ * there is no designation, so options carry a label and no sublabel.
+ *
+ *   - search: name type-ahead, min 2 chars, capped at 20 rows (server contract).
+ *   - resolve: batch label lookup by id (UUIDs only, 200 per request).
  */
-async function fetchAll(signal?: AbortSignal, opts?: StrictOpt): Promise<IdentityUserRow[]> {
-  // The list answers at most 200 rows per call; walk the pages so a tenant with more users is searchable in full.
-  const all = await fetchAllPages(async (limit, offset) => {
-    const res = await fetch(`/api/proxy/v1/identity/users?limit=${limit}&offset=${offset}`, { signal });
-    failStrict(res, opts);
-    if (!res.ok) return null;
-    const body = (await res.json()) as { data?: IdentityUserRow[] } | IdentityUserRow[];
-    return Array.isArray(body) ? body : (body.data ?? []);
-  });
-  if (all && !all.complete) recordLoaderFallback({ key: "entity-picker.identity-users", reason: "truncated", path: "/api/proxy/v1/identity/users", timestamp: new Date().toISOString() });
-  return all ? all.rows : [];
-}
-
 export async function searchIdentityUsers(query: string, signal: AbortSignal, opts?: StrictOpt): Promise<EntityOption[]> {
-  const rows = await fetchAll(signal, opts);
-  const q = query.trim().toLowerCase();
-  const filtered = q
-    ? rows.filter((r) => r.name.toLowerCase().includes(q) || (r.designation ?? "").toLowerCase().includes(q))
-    : rows;
-  return filtered.map(toOption);
+  return searchDirectoryUsers(query, signal, opts);
 }
 
 export async function resolveIdentityUsers(ids: string[]): Promise<EntityOption[]> {
-  if (ids.length === 0) return [];
-  const idSet = new Set(ids);
-  const rows = await fetchAll();
-  return rows.filter((r) => idSet.has(r.id)).map(toOption);
+  return resolveDirectoryUsers(ids);
 }

@@ -276,6 +276,26 @@ export async function deviceTrustRoutes(app: FastifyInstance): Promise<void> {
     return sendAccepted(reply, acceptedResponseSchema, await deviceCommands.recordDeviceExport(ctx, body.rowCount, body.filtered === true));
   });
 
+  // ─── ADMIN: IP REVEAL AUDIT ───────────────────────────────────────────
+
+  /**
+   * POST /v1/hrms/devices/reveal-ip -- GAP2-ADMIN-DEVICES-01: the admin devices table shows the
+   * last IP masked; revealing it is reported here (body { deviceId } = trusted_devices.device_id)
+   * so it lands on the audit trail. Same roles as the list endpoint. 404 for a device the caller's
+   * tenant never registered, so the audit trail cannot be filled with invented device ids.
+   */
+  app.post("/v1/hrms/devices/reveal-ip", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ["hr_admin", "it_admin", "super_admin"]);
+    const { deviceId } = deviceIdParam.parse(req.body);
+    const found = await withTenantGuc(ctx.tenantId, (pool) => pool.query(
+      `SELECT 1 FROM hrms.trusted_devices WHERE tenant_id = $1 AND device_id = $2 LIMIT 1`,
+      [ctx.tenantId, deviceId],
+    ));
+    if (found.rows.length === 0) throw new HttpError(404, "NOT_FOUND", "device not found");
+    return sendAccepted(reply, acceptedResponseSchema, await deviceCommands.recordDeviceIpReveal(ctx, deviceId));
+  });
+
   // ─── ADMIN: BLOCK DEVICE ──────────────────────────────────────────────
 
   /** PATCH /v1/hrms/devices/:id/block — block a specific device (reason required, 3-200 chars) */

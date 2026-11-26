@@ -92,4 +92,21 @@ export function registerDeviceTrustConsumers(queue: Queue): void {
     });
     log.info({ id: msg.messageId }, "Processed device_trust.export_recorded");
   });
+
+  // GAP2-ADMIN-DEVICES-01: audit-on-reveal of a device clear IP.
+  queue.subscribe(COMMANDS.deviceIpRevealed, async (msg) => {
+    const p = msg.payload as { deviceId?: string };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      await enqueue(tx, {
+        topic: AUDIT, eventType: AUDIT,
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: {
+          service: "hrms", action: "reveal_ip", resourceType: "device", resourceId: p.deviceId ?? "unknown",
+          outcome: "success",
+        },
+      });
+    });
+    log.info({ id: msg.messageId }, "Processed device_trust.ip_revealed");
+  });
 }

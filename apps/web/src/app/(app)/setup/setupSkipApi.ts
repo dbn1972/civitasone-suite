@@ -6,7 +6,7 @@ import { SETUP_SKIPPED_STEPS_KEY } from "@/lib/setupSteps";
  * GAP-SETUP-HOME-02 — persist a per-tenant setup-step deferral.
  *
  * The deferral is stored in the generic tenant-settings key/value store
- * (tenant-service `/v1/settings`, proxied as `/api/proxy/v1/tenant/settings`),
+ * (tenant-service `/v1/settings`, proxied as `/api/proxy/v1/settings`),
  * which already provides CQRS + a mandatory audit event + tenant scoping +
  * admin role gating. The value under `setup.skipped_steps` is the full array of
  * skipped step keys; we read the current list, union the new key, and PUT the
@@ -20,7 +20,7 @@ export async function persistSkippedStep(stepKey: string): Promise<boolean> {
   try {
     const current = await readSkippedSteps();
     const next = Array.from(new Set([...current, stepKey]));
-    const res = await fetch("/api/proxy/v1/tenant/settings", {
+    const res = await fetch("/api/proxy/v1/settings", {
       method: "PUT",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ key: SETUP_SKIPPED_STEPS_KEY, value: next }),
@@ -36,7 +36,7 @@ export async function unskipStep(stepKey: string): Promise<boolean> {
   try {
     const current = await readSkippedSteps();
     const next = current.filter((k) => k !== stepKey);
-    const res = await fetch("/api/proxy/v1/tenant/settings", {
+    const res = await fetch("/api/proxy/v1/settings", {
       method: "PUT",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ key: SETUP_SKIPPED_STEPS_KEY, value: next }),
@@ -49,7 +49,7 @@ export async function unskipStep(stepKey: string): Promise<boolean> {
 
 async function readSkippedSteps(): Promise<string[]> {
   try {
-    const res = await fetch(`/api/proxy/v1/tenant/settings/${encodeURIComponent(SETUP_SKIPPED_STEPS_KEY)}`, {
+    const res = await fetch(`/api/proxy/v1/settings/${encodeURIComponent(SETUP_SKIPPED_STEPS_KEY)}`, {
       cache: "no-store",
     });
     if (!res.ok) return [];

@@ -76,6 +76,8 @@ export const COMMANDS = {
   loanExportRecorded:       "hrms.loan.export_recorded",
   // GAP-ADMIN-DEVICES-04: audit-on-export for the device-trust CSV (employee + device data).
   deviceExportRecorded:     "hrms.device_trust.export_recorded",
+  // GAP2-ADMIN-DEVICES-01: audit-on-reveal of a device clear IP (the list shows it masked).
+  deviceIpRevealed:         "hrms.device_trust.ip_revealed",
   salaryAdvanceCreate:      "hrms.salary_advance.create",
   salaryAdvanceApprove:     "hrms.salary_advance.approve",
   salaryAdvanceReject:      "hrms.salary_advance.reject",
