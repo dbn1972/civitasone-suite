@@ -1,5 +1,6 @@
 import { ModuleHub } from "../../_components/ModuleHub";
 import { IDENTITY_ADMIN_ROLES } from "@/lib/auth/identityRoles";
+import { IdentityPosture } from "./IdentityPosture";
 
 export default function Page() {
   return (
@@ -38,6 +39,8 @@ export default function Page() {
           roles: IDENTITY_ADMIN_ROLES,
         },
       ]}
-    />
+    >
+      <IdentityPosture />
+    </ModuleHub>
   );
 }

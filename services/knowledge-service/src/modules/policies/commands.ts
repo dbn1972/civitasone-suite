@@ -99,6 +99,7 @@ export async function submitForReview(
     assertTransition(row.status as PolicyStatus, "under_review");
     await repo.update(tx as unknown as repo.Writer, id, {
       status: "under_review",
+      rejectReason: null,
       reviewerId: body.reviewerId ?? row.reviewerId ?? null,
       updatedBy: ctx.actorId,
       updatedAt: new Date(),
@@ -148,6 +149,7 @@ export async function rejectPolicy(
     // Return to draft with reason — the reviewer (not the author) rejects.
     await repo.update(tx as unknown as repo.Writer, id, {
       status: "draft",
+      rejectReason: body.reason,
       updatedBy: ctx.actorId,
       updatedAt: new Date(),
     });

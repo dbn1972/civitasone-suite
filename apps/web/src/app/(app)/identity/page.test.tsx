@@ -15,6 +15,9 @@ function sessionWithRoles(roles: string[]) {
   mockGet.mockReturnValue({ value: makeJwt({ sub: "user-1", roles }) });
 }
 
+// B30: the posture panel is an async server component with its own test.
+vi.mock("./IdentityPosture", () => ({ IdentityPosture: () => null }));
+
 import Page from "./page";
 
 describe("Identity hub — GAP-IDENTITY-HOME-01/02/03/04", () => {

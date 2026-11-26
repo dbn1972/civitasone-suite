@@ -22,7 +22,16 @@ function iso(v: Date | string | null): string | null {
   return v instanceof Date ? v.toISOString() : v;
 }
 
-export function toView(r: PolicyRow): PolicyView {
+/**
+ * B27 / GAP-KNOWLEDGE-POLICIES-DETAIL-04: the rejection reason is internal review
+ * feedback — visible to the author and approver-role viewers only. No viewer
+ * (internal callers: review-due, assistant grounding) fails closed to null.
+ */
+export function canSeeRejectReason(r: Pick<PolicyRow, "authorId">, viewer?: Viewer): boolean {
+  return !!viewer && (viewer.privileged || viewer.actorId === r.authorId);
+}
+
+export function toView(r: PolicyRow, viewer?: Viewer): PolicyView {
   return {
     id: r.id,
     tenantId: r.tenantId,
@@ -39,6 +48,7 @@ export function toView(r: PolicyRow): PolicyView {
     supersedesId: r.supersedesId,
     version: r.version,
     publishedAt: iso(r.publishedAt),
+    rejectReason: canSeeRejectReason(r, viewer) ? (r.rejectReason ?? null) : null,
     createdAt: iso(r.createdAt)!,
     updatedAt: iso(r.updatedAt)!,
   };
@@ -83,7 +93,7 @@ export async function listByTenant(
       .limit(limit)
       .offset(offset),
   );
-  return rows.map(toView);
+  return rows.map((r) => toView(r, viewer));
 }
 
 export async function getById(tenantId: string, id: string, viewer?: Viewer): Promise<PolicyView | null> {
@@ -91,7 +101,7 @@ export async function getById(tenantId: string, id: string, viewer?: Viewer): Pr
     tx.select().from(policyDocuments)
       .where(and(eq(policyDocuments.id, id), eq(policyDocuments.tenantId, tenantId), ...visibilityConds(viewer))),
   );
-  return rows.length ? toView(rows[0]!) : null;
+  return rows.length ? toView(rows[0]!, viewer) : null;
 }
 
 /** Published documents whose review date is on or before `asOf`. */
@@ -106,7 +116,7 @@ export async function reviewDue(tenantId: string, asOf: string): Promise<PolicyV
       ))
       .orderBy(policyDocuments.reviewDueDate),
   );
-  return rows.map(toView);
+  return rows.map((r) => toView(r));
 }
 
 /** Published policies grounding the assistant, matched by keyword. */
@@ -125,7 +135,7 @@ export async function searchPublished(
       .orderBy(desc(policyDocuments.publishedAt))
       .limit(limit),
   );
-  return rows.map(toView);
+  return rows.map((r) => toView(r));
 }
 
 export async function listAckEmployeeIds(tenantId: string, policyId: string): Promise<string[]> {

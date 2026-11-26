@@ -156,3 +156,25 @@ export function getIdentityWebauthnCredentials(): Promise<LoaderResult<WebauthnC
     },
   );
 }
+
+/**
+ * B30 / GAP-IDENTITY-HOME-03: tenant posture counts for the Identity hub, read
+ * from identity-service GET /identity/security/summary (gateway: /api/identity/...).
+ * The endpoint returns active users and MFA adoption; it has NO pending-invite
+ * count, so that figure is deliberately not shown (never fabricated).
+ */
+export type IdentityPosture = { activeUsers: number; mfaAdoptionRate: number };
+
+export function getIdentityPosture(): Promise<LoaderResult<IdentityPosture | null>> {
+  return fetchJson<unknown, IdentityPosture | null>("/api/identity/security/summary", null, {
+    revalidateSeconds: 60,
+    telemetryKey: "identity.posture",
+    mapResponse: (payload) => {
+      if (!isRecord(payload)) return null;
+      const users = Number(payload.activeUsers);
+      const mfa = Number(payload.mfaAdoptionRate);
+      if (!Number.isFinite(users) || !Number.isFinite(mfa)) return null;
+      return { activeUsers: Math.max(0, Math.floor(users)), mfaAdoptionRate: Math.min(100, Math.max(0, Math.round(mfa))) };
+    },
+  });
+}

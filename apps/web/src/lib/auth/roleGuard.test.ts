@@ -75,3 +75,13 @@ describe("getSessionTenantId", () => {
     expect(getSessionTenantId()).toBeNull();
   });
 });
+
+describe("THEME_MODULE_ROLES (GAP-THEMES-BRANDING-05)", () => {
+  it("admits tenant_admin, matching theme-service branding routes", async () => {
+    const { THEME_MODULE_ROLES, THEME_ADMIN_ROLES } = await import("./roleGuard");
+    expect(THEME_MODULE_ROLES).toContain("tenant_admin");
+    expect(THEME_MODULE_ROLES).toContain("theme_user");
+    // publish/edit set stays narrow
+    expect(THEME_ADMIN_ROLES).not.toContain("tenant_admin");
+  });
+});

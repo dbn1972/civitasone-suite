@@ -18,6 +18,7 @@ export const policyDocuments = domainSchema.table("policy_documents", {
   supersedesId: uuid("supersedes_id"),
   version: integer("version").notNull().default(1),
   publishedAt: timestamp("published_at", { withTimezone: true }),
+  rejectReason: text("reject_reason"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy: uuid("created_by").notNull(),
@@ -54,6 +55,8 @@ export type PolicyView = {
   supersedesId: string | null;
   version: number;
   publishedAt: string | null;
+  /** Latest reviewer rejection reason; only populated for the author and approver-role viewers. */
+  rejectReason: string | null;
   createdAt: string;
   updatedAt: string;
 };

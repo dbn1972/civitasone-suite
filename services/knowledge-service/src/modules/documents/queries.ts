@@ -91,6 +91,14 @@ export async function publishDocument(
   return repo.setStatusAudited(tenantId, id, actor, published);
 }
 
+export async function archiveDocument(
+  tenantId: string, id: string, actor: { actorId: string; correlationId: string }, reason: string,
+): Promise<repo.ArchiveOutcome> {
+  const outcome = await repo.archiveAudited(tenantId, id, actor, reason);
+  if (outcome === "ok") await cache.invalidateResource(tenantId, RESOURCE);
+  return outcome;
+}
+
 export async function setDocumentStatus(tenantId: string, id: string, status: string): Promise<boolean> {
   return repo.updateStatusDirect(tenantId, id, status);
 }

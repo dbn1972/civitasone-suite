@@ -833,7 +833,8 @@ export const MEETING_MINUTES_APPROVE_ROLES = [
  * from anyone outside it.
  */
 export const THEME_ADMIN_ROLES = ["theme_admin", "super_admin"];
-export const THEME_MODULE_ROLES = ["theme_user", ...THEME_ADMIN_ROLES];
+// tenant_admin: branding routes admit it server-side (theme-service branding/routes.ts ROLES).
+export const THEME_MODULE_ROLES = ["theme_user", ...THEME_ADMIN_ROLES, "tenant_admin"];
 
 /**
  * GAP-FIELD-VISITS-03 (PII/DPDP): roles permitted to see a field worker's

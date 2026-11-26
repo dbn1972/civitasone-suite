@@ -18,6 +18,8 @@ export type PolicyDetail = PolicySummary & {
   body: string;
   reviewerId: string | null;
   supersedesId: string | null;
+  /** Latest reviewer rejection reason; the API returns it to author + approvers only. */
+  rejectReason?: string | null;
   publishedAt: string | null;
   createdAt: string;
 };

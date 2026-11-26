@@ -86,6 +86,16 @@ describe("Policy detail page", () => {
     expect(link).toHaveAttribute("href", "/knowledge/policies/old-1");
   });
 
+  it("GAP-DETAIL-04: shows the reviewer rejection reason on a returned draft", async () => {
+    getKnowledgePolicyMock.mockResolvedValue({
+      data: policy({ status: "draft", rejectReason: "Clause 4.2 conflicts with the 2026 leave rules; please revise." }),
+      source: "api",
+    });
+    getPolicyAcknowledgementsMock.mockResolvedValue({ data: { acknowledgedCount: 0, employeeIds: [] }, source: "api" });
+    render(await Page({ params: Promise.resolve({ id: "p1" }) }));
+    expect(screen.getByText(/Clause 4.2 conflicts/)).toBeInTheDocument();
+  });
+
   it("GAP-DETAIL-05: already-acknowledged user sees the acknowledged note, not the button", async () => {
     getSessionUserIdMock.mockReturnValue("emp-123");
     getKnowledgePolicyMock.mockResolvedValue({ data: policy(), source: "api" });
