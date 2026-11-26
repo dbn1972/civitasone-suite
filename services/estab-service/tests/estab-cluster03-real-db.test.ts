@@ -39,7 +39,8 @@ const T_DESK_ENROLLED = "c0ff33aa-0000-4000-8000-0000000c0302"; // the caller's 
 const T_DESK_OTHER_OPS = "c0ff33aa-0000-4000-8000-0000000c0303"; // operators exist, the caller is not one
 const T_MAIN = "c0ff33aa-0000-4000-8000-0000000c0304"; // handover + guesthouse
 const T_FOREIGN = "c0ff33aa-0000-4000-8000-0000000c0305";
-const TENANTS = [T_DESK_NONE, T_DESK_ENROLLED, T_DESK_OTHER_OPS, T_MAIN, T_FOREIGN];
+const T_SCOPE = "c0ff33aa-0000-4000-8000-0000000c0306"; // division-admin scope (B25)
+const TENANTS = [T_DESK_NONE, T_DESK_ENROLLED, T_DESK_OTHER_OPS, T_MAIN, T_FOREIGN, T_SCOPE];
 
 const ACTOR = randomUUID(); // the officer's login id (Keycloak subject)
 const EMP = randomUUID(); // the same officer's hrms employee id
@@ -144,8 +145,14 @@ describe("GET /v1/estab/files/held-count (GAP-ESTAB-HANDOVER-03)", () => {
     expect(res.json()).toEqual({ officerId: OUTGOING, count: 4, movableCount: 2 });
   });
 
-  it("is readable by the division admin the charge-handover screen admits, and refused to an unrelated role", async () => {
+  it("is readable by a division admin for officers of their own division (B25), and refused to an unrelated role", async () => {
     await seedDesk();
+    // The caller (EMP) and the outgoing officer sit on desks in the same division.
+    await sqlClient.begin(async (s) => {
+      const tx = s as unknown as Tx;
+      await insertOperator(tx, T_MAIN, EMP, "Admin");
+      await insertOperator(tx, T_MAIN, OUTGOING, "Admin");
+    });
     const ok = await get(T_MAIN, `/v1/estab/files/held-count?officerId=${OUTGOING}`, ["estab_division_admin"]);
     expect(ok.statusCode).toBe(200);
     expect(ok.json().movableCount).toBe(2);
@@ -222,13 +229,59 @@ describe("POST /v1/estab/handovers authority (GAP-ESTAB-HANDOVER-02)", () => {
   it("a clerk-level estab_officer cannot move another desk's files (403)", async () => {
     expect((await post(["estab_officer"], payload())).statusCode).toBe(403);
   });
-  it("an administrator is accepted (202)", async () => {
-    expect((await post(["estab_division_admin"], payload())).statusCode).toBe(202);
+  it("estab_admin is tenant-wide and accepted (202)", async () => {
     expect((await post(["estab_admin"], payload())).statusCode).toBe(202);
+  });
+  it("a division admin with no operator desk is refused (403): authority is derived from the desk (B25)", async () => {
+    const res = await post(["estab_division_admin"], payload());
+    expect(res.statusCode).toBe(403);
+    expect(res.json().code).toBe("NO_OPERATOR_DESK");
   });
   it("handing a desk to the same officer is refused (400), not recorded as a no-op charge transfer", async () => {
     const res = await post(["estab_admin"], { fromOfficerId: OUTGOING, toOfficerId: OUTGOING, reason: "transfer" });
     expect(res.statusCode).toBe(400);
+  });
+});
+
+describe("POST /v1/estab/handovers division scope (GAP-ESTAB-HANDOVER-02, B25)", () => {
+  const post = (body: unknown) =>
+    app.inject({ method: "POST", url: "/v1/estab/handovers", headers: headers(T_SCOPE, ["estab_division_admin"]), payload: body as object });
+
+  it("a division admin may hand over an officer of their own division (202)", async () => {
+    const from = randomUUID(); const to = randomUUID();
+    await sqlClient.begin(async (s) => {
+      const tx = s as unknown as Tx;
+      await insertOperator(tx, T_SCOPE, EMP, "Establishment-I");
+      await insertOperator(tx, T_SCOPE, from, "Establishment-I");
+      await insertOperator(tx, T_SCOPE, to, "Establishment-I");
+    });
+    expect((await post({ fromOfficerId: from, toOfficerId: to, reason: "transfer" })).statusCode).toBe(202);
+  });
+
+  it("a division admin is refused (403) for an officer of another division", async () => {
+    const from = randomUUID(); const to = randomUUID();
+    await sqlClient.begin(async (s) => {
+      const tx = s as unknown as Tx;
+      await insertOperator(tx, T_SCOPE, EMP, "Establishment-I");
+      await insertOperator(tx, T_SCOPE, from, "Accounts");
+      await insertOperator(tx, T_SCOPE, to, "Accounts");
+    });
+    const res = await post({ fromOfficerId: from, toOfficerId: to, reason: "transfer" });
+    expect(res.statusCode).toBe(403);
+    expect(res.json().code).toBe("OUTSIDE_DIVISION_SCOPE");
+  });
+
+  it("a division admin is refused (403) when the receiving officer sits in another division", async () => {
+    const from = randomUUID(); const to = randomUUID();
+    await sqlClient.begin(async (s) => {
+      const tx = s as unknown as Tx;
+      await insertOperator(tx, T_SCOPE, EMP, "Establishment-I");
+      await insertOperator(tx, T_SCOPE, from, "Establishment-I");
+      await insertOperator(tx, T_SCOPE, to, "Accounts");
+    });
+    const res = await post({ fromOfficerId: from, toOfficerId: to, reason: "transfer" });
+    expect(res.statusCode).toBe(403);
+    expect(res.json().code).toBe("RECIPIENT_OUTSIDE_DIVISION_SCOPE");
   });
 });
 

@@ -16,6 +16,12 @@ import { eq } from "drizzle-orm";
 import { runWithTenant } from "@civitasone/db";
 import { signToken } from "@civitasone/auth";
 import type { FastifyInstance } from "fastify";
+// B23: signing a note now needs the open approval task; this suite is about 404 vs 202, not that gate.
+vi.mock("../src/shared/workflow-client.js", async (orig) => ({
+  ...(await orig<typeof import("../src/shared/workflow-client.js")>()),
+  actorHoldsOpenFileTask: vi.fn(async () => true),
+}));
+
 import { buildApp } from "../src/app.js";
 import { db, sqlClient } from "../src/shared/db.js";
 import { queue } from "../src/shared/infra.js";

@@ -30,7 +30,7 @@ export const createFileBody = z.object({
   fileNo:         z.string().min(1).optional(),
   section:        z.string().min(1).optional(),
   subject:        z.string().min(1),
-  dept:           z.string().min(1),
+  dept:           z.string().trim().min(1),
   priority:       z.enum(["normal", "urgent", "immediate"]).default("normal"),
   classification: z.enum(["top_secret", "secret", "confidential", "restricted", "public"]).default("public"),
   // SECURITY: optional — the officer a file is routed to at creation must
@@ -149,7 +149,7 @@ export const addAttachmentBody = z.object({
 export type AddAttachmentBody = z.infer<typeof addAttachmentBody>;
 
 export const openFileFromInwardBody = z.object({
-  dept:           z.string().min(1),
+  dept:           z.string().trim().min(1),
   // SECURITY: optional — defaults to ctx.actorId server-side when omitted
   // (same rationale as createFileBody.currentWith above).
   currentWith:    z.string().uuid().optional(),

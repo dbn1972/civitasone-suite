@@ -3,6 +3,7 @@ import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS } from "../../topics.js";
 import * as repo from "./repo.js";
+import { findOverlappingRule } from "./bands.js";
 import { invalidateResolverCache } from "./resolver.js";
 import type { CreateApprovalRuleBody, UpdateApprovalRuleBody } from "./validators.js";
 
@@ -16,6 +17,19 @@ export function registerApprovalRuleConsumers(queue: Queue): void {
     const p = msg.payload as CreatePayload;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      // B22 backstop: two creates racing past the route check must not both land an overlapping band.
+      const clash = findOverlappingRule(await repo.listActiveRulesForSourceTx(tx, p.tenantId, p.sourceType), p);
+      if (clash) {
+        await enqueue(tx, {
+          topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
+          tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+          payload: {
+            service: "estab", action: "approval_rule.create_rejected_overlap", resourceType: "approval_rule",
+            resourceId: p.id, outcome: "rejected", metadata: { overlapsRuleId: clash.id },
+          },
+        });
+        return;
+      }
       await repo.insertRule(tx, {
         id: p.id,
         tenantId: p.tenantId,
@@ -53,6 +67,29 @@ export function registerApprovalRuleConsumers(queue: Queue): void {
       const existing = await repo.findRuleByIdTx(tx, p.id, p.tenantId);
       if (!existing) return;
       sourceType = existing.sourceType;
+
+      // B22 backstop for updates: a band move or (re)activation racing past the route check must not
+      // leave two active bands overlapping.
+      const bandChanged = p.patch.minAmountMinor !== undefined || p.patch.maxAmountMinor !== undefined;
+      const willBeActive = p.patch.active ?? existing.active;
+      if (willBeActive && (bandChanged || (p.patch.active === true && !existing.active))) {
+        const next = {
+          minAmountMinor: p.patch.minAmountMinor ?? existing.minAmountMinor,
+          maxAmountMinor: p.patch.maxAmountMinor !== undefined ? p.patch.maxAmountMinor : existing.maxAmountMinor,
+        };
+        const clash = findOverlappingRule(await repo.listActiveRulesForSourceTx(tx, p.tenantId, existing.sourceType), next, p.id);
+        if (clash) {
+          await enqueue(tx, {
+            topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
+            tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+            payload: {
+              service: "estab", action: "approval_rule.update_rejected_overlap", resourceType: "approval_rule",
+              resourceId: p.id, outcome: "rejected", metadata: { overlapsRuleId: clash.id },
+            },
+          });
+          return;
+        }
+      }
 
       const patch: Parameters<typeof repo.updateRule>[2] = { updatedBy: msg.actorId };
       if (p.patch.label !== undefined) patch.label = p.patch.label;

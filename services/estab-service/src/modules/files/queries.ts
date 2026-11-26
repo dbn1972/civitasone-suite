@@ -304,3 +304,8 @@ export async function getAttachmentForDownload(
 export async function getFile(tenantId: string, id: string) {
   return getFileDetail(tenantId, id);
 }
+
+/** Raw notings (author id included) for the allowed-actions computation; never sent to the client. */
+export async function listNotingsForActions(_tenantId: string, fileId: string) {
+  return repo.findNotingsByFile(fileId);
+}

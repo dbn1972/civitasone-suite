@@ -69,7 +69,7 @@ export async function signNoting(ctx: RequestContext, fileId: string, notingId: 
     messageId: randomUUID(),
     type: COMMANDS.notingSign,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
-    payload: { fileId, notingId, tenantId: ctx.tenantId },
+    payload: { fileId, notingId, tenantId: ctx.tenantId, actorRoles: ctx.roles },
   });
   await cache.invalidate(cache.makeKey(ctx.tenantId, "file", fileId));
   return { id: notingId, status: "accepted", correlationId: ctx.correlationId };

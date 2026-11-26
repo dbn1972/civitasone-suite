@@ -12,6 +12,8 @@ import { invalidateFileLists } from "./queries.js";
 import * as recordsRepo from "../records/repo.js";
 import { emitModuleDecisionCallback } from "../linkage/consumer.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
+import { actorHoldsOpenFileTask } from "../../shared/workflow-client.js";
+import { isNotingAuthor } from "./allowedActions.js";
 
 const log = pino({ name: "files-consumer" });
 const AUDIT_TOPIC = "audit.event.record";
@@ -214,6 +216,16 @@ export function registerFilesConsumers(rawQueue: Queue): void {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const noting = await repo.findNotingByIdTx(tx, p.notingId, p.tenantId);
       if (!noting || noting.fileId !== p.fileId || noting.noteStatus !== "draft") return;
+      // B23 (consumer half of the route gate): only the draft's author may submit it. officerId is
+      // forced to the actor at write time, so a different msg.actorId is never the author.
+      if (!isNotingAuthor(noting, msg.actorId)) {
+        await enqueue(tx, {
+          topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
+          tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+          payload: { service: "estab", action: "noting_submit_rejected_not_author", resourceType: "noting", resourceId: p.notingId, outcome: "rejected" },
+        });
+        return;
+      }
       // GAP-ESTAB-FILES-DETAIL-01: a closed / archived file takes no new submission. Without this
       // guard the submit below also flipped the file's status back to "active", silently
       // re-opening a closed file (reopen is the only sanctioned way back).
@@ -342,9 +354,22 @@ export function registerFilesConsumers(rawQueue: Queue): void {
   });
 
   queue.subscribe(COMMANDS.notingSign, async (msg) => {
-    const p = msg.payload as { fileId: string; notingId: string; tenantId: string };
+    const p = msg.payload as { fileId: string; notingId: string; tenantId: string; actorRoles?: string[] };
+    // B23 (consumer half of the route gate): the signer must hold the open approval task. The workflow
+    // call is made BEFORE the transaction (no network I/O while a connection is held). null =
+    // workflow unreachable: throw so the queue retries rather than dropping or allowing the sign.
+    const holds = await actorHoldsOpenFileTask({ tenantId: p.tenantId, actorId: msg.actorId, roles: p.actorRoles ?? [], fileId: p.fileId });
+    if (holds === null) throw new Error("workflow-service unavailable: cannot verify current approver for noting sign");
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      if (!holds) {
+        await enqueue(tx, {
+          topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
+          tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+          payload: { service: "estab", action: "noting_sign_rejected_not_current_approver", resourceType: "noting", resourceId: p.notingId, outcome: "rejected" },
+        });
+        return;
+      }
       const noting = await repo.findNotingByIdTx(tx, p.notingId, p.tenantId);
       if (!noting || noting.fileId !== p.fileId) return;
       // Already-signed notes are immutable (DB trigger also enforces this).
@@ -356,6 +381,16 @@ export function registerFilesConsumers(rawQueue: Queue): void {
           topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
           tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
           payload: { service: "estab", action: "noting_sign_rejected_read_only_file", resourceType: "file", resourceId: p.fileId, outcome: "rejected" },
+        });
+        return;
+      }
+      // B23: noting-level half of the gate: only the file's latest unsigned note may be signed here.
+      const latest = await repo.findLatestUnsignedNoting(tx, p.fileId, p.tenantId);
+      if (!latest || latest.id !== noting.id) {
+        await enqueue(tx, {
+          topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
+          tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+          payload: { service: "estab", action: "noting_sign_rejected_not_latest_unsigned", resourceType: "noting", resourceId: p.notingId, outcome: "rejected" },
         });
         return;
       }

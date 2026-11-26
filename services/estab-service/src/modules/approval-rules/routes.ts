@@ -10,7 +10,9 @@ import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 import { findRuleById } from "./repo.js";
 import { resolveApproval } from "./resolver.js";
-import { assertApproverRolesKnown, getApproverRoleCatalogue } from "./roleCatalogue.js";
+import { assertApproverRolesKnownForTenant, loadApproverRoleCatalogue } from "./roleCatalogue.js";
+import { findOverlappingRule, describeBand } from "./bands.js";
+import { listActiveRulesForSource } from "./repo.js";
 
 const ADMIN_ROLES = ["estab_admin", "super_admin", "tenant_admin"];
 const READER_ROLES = [...ADMIN_ROLES, "estab_officer", "audit_officer"];
@@ -28,7 +30,7 @@ export async function approvalRulesRoutes(app: FastifyInstance): Promise<void> {
     // GAP-ESTAB-APPROVAL-MATRIX-03: the approver roles a rule may name travel with the list, so
     // the matrix form knows its choices in the same read (see roleCatalogue.ts for how the
     // list is configured; configured:false means no list was declared).
-    return reply.send({ data, approverRoles: getApproverRoleCatalogue() });
+    return reply.send({ data, approverRoles: await loadApproverRoleCatalogue(ctx.tenantId) });
   });
 
   /** Get one rule. */
@@ -59,7 +61,12 @@ export async function approvalRulesRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
     const body = createApprovalRuleBody.parse(req.body);
-    assertApproverRolesKnown(body.steps);
+    await assertApproverRolesKnownForTenant(ctx.tenantId, body.steps);
+    // B22: a new active rule may not overlap an existing active band of the same source type.
+    const clash = findOverlappingRule(await listActiveRulesForSource(ctx.tenantId, body.sourceType), body);
+    if (clash) {
+      throw new HttpError(409, "OVERLAPPING_BAND", `amount band ${describeBand(body)} overlaps active rule "${clash.label}" ${describeBand(clash)}`);
+    }
     const result = await commands.createApprovalRule(ctx, body);
     return sendAccepted(reply, acceptedResponseSchema, result);
   });
@@ -70,9 +77,27 @@ export async function approvalRulesRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ADMIN_ROLES);
     const { id } = idParam.parse(req.params);
     const body = updateApprovalRuleBody.parse(req.body);
-    assertApproverRolesKnown(body.steps);
+    await assertApproverRolesKnownForTenant(ctx.tenantId, body.steps);
     // UAT W8-A: tenant-scoped existence read; an unknown rule answers 404, not 202.
-    if (!(await findRuleById(id, ctx.tenantId))) throw new HttpError(404, "NOT_FOUND", "approval rule not found");
+    const existing = await findRuleById(id, ctx.tenantId);
+    if (!existing) throw new HttpError(404, "NOT_FOUND", "approval rule not found");
+    // B22: only a patch that moves the band or (re)activates the rule can create an overlap; label /
+    // chain / deactivation edits on a legacy overlapping rule stay allowed.
+    const bandChanged = body.minAmountMinor !== undefined || body.maxAmountMinor !== undefined;
+    const willBeActive = body.active ?? existing.active;
+    if (willBeActive && (bandChanged || (body.active === true && !existing.active))) {
+      const next = {
+        minAmountMinor: body.minAmountMinor ?? existing.minAmountMinor,
+        maxAmountMinor: body.maxAmountMinor !== undefined ? body.maxAmountMinor : existing.maxAmountMinor,
+      };
+      if (next.maxAmountMinor !== null && next.maxAmountMinor <= next.minAmountMinor) {
+        throw new HttpError(400, "VALIDATION_FAILED", "maxAmountMinor must be greater than minAmountMinor");
+      }
+      const clash = findOverlappingRule(await listActiveRulesForSource(ctx.tenantId, existing.sourceType), next, id);
+      if (clash) {
+        throw new HttpError(409, "OVERLAPPING_BAND", `amount band ${describeBand(next)} overlaps active rule "${clash.label}" ${describeBand(clash)}`);
+      }
+    }
     const result = await commands.updateApprovalRule(ctx, id, body);
     return sendAccepted(reply, acceptedResponseSchema, result);
   });

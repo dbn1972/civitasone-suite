@@ -19,9 +19,12 @@ import {
 } from "./classAccess.js";
 import { isTopSecret, isFileReadOnly, roleMayAccessClassification, isConfidentialOrAbove } from "./domain.js";
 import {
-  isMoveAllowed, isAccessAllowed, isActiveOperator,
+  isMoveAllowed, isAccessAllowed, isActiveOperator, assertDepartmentInMaster,
   clearanceRankFor, tenantHasOperators, CLASSIFICATION_RANK,
 } from "../operators/eligibility.js";
+import { actorHoldsOpenFileTask } from "../../shared/workflow-client.js";
+import { computeAllowedActions, isNotingAuthor, latestUnsigned } from "./allowedActions.js";
+import { assertMayHandOverFrom } from "../handover/scope.js";
 import { resolveActorEmployeeId, HrmsUnavailableError } from "../../shared/hrms-client.js";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -80,6 +83,7 @@ export async function filesRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ESTAB_ROLES);
     const body = createFileBody.parse(req.body);
+    await assertDepartmentInMaster(ctx.tenantId, body.dept);
     await assertRoleMayAccess(ctx, body.classification, "create_denied_role");
     assertClassifiedHolder(ctx, body.classification, body.currentWith);
     // GAP-ESTAB-WORKSPACE-03: a file may only be CREATED at a classification
@@ -168,6 +172,13 @@ export async function filesRoutes(app: FastifyInstance): Promise<void> {
     await assertFileClassAccess(ctx, id, "submit_denied_role");
     const body = submitNotingBody.parse(req.body);
     await assertFileWritable(ctx.tenantId, id);
+    // B23: only the author of the draft may submit it. A missing / foreign noting falls through to the
+    // consumer's existing no-op exactly as before; a noting that exists on this file but is someone
+    // else's is refused here.
+    const toSubmit = await queries.getNoting(ctx.tenantId, body.notingId);
+    if (toSubmit && toSubmit.fileId === id && !isNotingAuthor(toSubmit, ctx.actorId)) {
+      throw new HttpError(403, "NOT_NOTING_AUTHOR", "only the officer who wrote this draft may submit it for approval");
+    }
     return sendAccepted(reply, acceptedResponseSchema, await commands.submitNotingForApproval(ctx, id, body));
   });
 
@@ -184,6 +195,17 @@ export async function filesRoutes(app: FastifyInstance): Promise<void> {
     const noting = await queries.getNoting(ctx.tenantId, notingId);
     if (!noting || noting.fileId !== id) throw new HttpError(404, "NOT_FOUND", "noting not found on this file");
     await assertFileWritable(ctx.tenantId, id);
+    // B23: the task is file-level, so the sign must also be NOTING-level: only the latest unsigned
+    // note on the file (the one the approver is actually deciding) may be signed.
+    const target = latestUnsigned(await queries.listNotingsForActions(ctx.tenantId, id));
+    if (!target || target.id !== notingId) {
+      throw new HttpError(409, "NOT_LATEST_UNSIGNED_NOTING", "only the latest unsigned note on this file can be signed");
+    }
+    // B23: only the current approver (the actor holding the open file_noting workflow task) may sign.
+    // Fails closed: an unreachable workflow-service is a 503, never an implicit yes.
+    const holds = await actorHoldsOpenFileTask({ tenantId: ctx.tenantId, actorId: ctx.actorId, roles: ctx.roles, fileId: id });
+    if (holds === null) throw new HttpError(503, "WORKFLOW_UNAVAILABLE", "cannot confirm you are the current approver right now; try again shortly");
+    if (!holds) throw new HttpError(403, "NOT_CURRENT_APPROVER", "only the current approver on this file's approval chain may sign; submit the draft for approval instead");
     return sendAccepted(reply, acceptedResponseSchema, await commands.signNoting(ctx, id, notingId));
   });
 
@@ -341,6 +363,7 @@ export async function filesRoutes(app: FastifyInstance): Promise<void> {
     // D12: omitted classification => inherit the DAK's own (Ordinary unless reclassified).
     const inwardRow = parsed.classification ? null : await queries.getInward(ctx.tenantId, id);
     const body = { ...parsed, classification: parsed.classification ?? inwardRow?.classification ?? "public" } as typeof parsed & { classification: string };
+    await assertDepartmentInMaster(ctx.tenantId, body.dept);
     await assertRoleMayAccess(ctx, body.classification, "open_file_denied_role");
     assertClassifiedHolder(ctx, body.classification, body.currentWith);
     // GAP-ESTAB-WORKSPACE-03: same clearance gate as direct file creation —
@@ -409,6 +432,8 @@ export async function filesRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, [...READER_ROLES, "estab_division_admin"]);
     const { officerId } = z.object({ officerId: z.string().uuid() }).parse(req.query);
+    // B25: a caller admitted ONLY as a division admin sees counts for their own division(s) alone.
+    if (!READER_ROLES.some((r) => ctx.roles.includes(r))) await assertMayHandOverFrom(ctx, officerId);
     const counts = await queries.countFilesByHolder(ctx.tenantId, officerId);
     return reply.send({ officerId, count: counts.live, movableCount: counts.movable });
   });
@@ -587,7 +612,13 @@ export async function filesRoutes(app: FastifyInstance): Promise<void> {
         breakGlass: true,
       });
     }
-    return reply.send(file);
+    // B23: what THIS caller may do with the draft / note, so the UI offers only allowed actions.
+    const readOnly = isFileReadOnly(await queries.getFileStatus(ctx.tenantId, id));
+    const holdsOpenTask = readOnly ? false : await actorHoldsOpenFileTask({ tenantId: ctx.tenantId, actorId: ctx.actorId, roles: ctx.roles, fileId: id });
+    const allowedActions = computeAllowedActions({
+      notings: await queries.listNotingsForActions(ctx.tenantId, id), actorId: ctx.actorId, readOnly, holdsOpenTask,
+    });
+    return reply.send({ ...file, allowedActions });
   });
 
   await app.register(noteSheetPrintRoutes);

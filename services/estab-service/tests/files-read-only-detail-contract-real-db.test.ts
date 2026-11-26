@@ -22,6 +22,12 @@ import { MemoryQueue, type Queue, type Handler } from "@civitasone/queue";
 import { runWithTenant, withTenantConsumer } from "@civitasone/db";
 import { signToken } from "@civitasone/auth";
 import { EstabFileDetailSchema } from "@civitasone/schemas/web";
+const { actorHoldsOpenFileTask } = vi.hoisted(() => ({ actorHoldsOpenFileTask: vi.fn(async () => true as boolean | null) }));
+vi.mock("../src/shared/workflow-client.js", async (orig) => ({
+  ...(await orig<typeof import("../src/shared/workflow-client.js")>()),
+  actorHoldsOpenFileTask,
+}));
+
 import { buildApp } from "../src/app.js";
 import { db, sqlClient } from "../src/shared/db.js";
 import { cache, queue as sharedQueue } from "../src/shared/infra.js";
@@ -259,6 +265,34 @@ describe("GAP-ESTAB-FILES-DETAIL-01 — closed / archived files are read-only", 
     const topics = publish.mock.calls.map((c) => c[0]);
     expect(topics).toContain(COMMANDS.notingSubmit);
     expect(topics).toContain(COMMANDS.notingSign);
+  });
+
+  it("B23: signing needs the open approval task (403 NOT_CURRENT_APPROVER; 503 when workflow cannot answer); nothing is enqueued", async () => {
+    const fileId = await seedFile({ status: "active" });
+    const notingId = await seedDraftNote(fileId);
+    const publish = vi.spyOn(sharedQueue, "publish");
+    const sign = () => app.inject({ method: "POST", url: `/v1/estab/files/${fileId}/notings/${notingId}/sign`, headers: headers(), payload: {} });
+    actorHoldsOpenFileTask.mockResolvedValueOnce(false);
+    const no = await sign();
+    expect(no.statusCode).toBe(403);
+    expect(no.json().code).toBe("NOT_CURRENT_APPROVER");
+    actorHoldsOpenFileTask.mockResolvedValueOnce(null);
+    expect((await sign()).statusCode).toBe(503);
+    expect(publish).not.toHaveBeenCalled();
+  });
+
+  it("B23: only the draft's author may submit it (403 NOT_NOTING_AUTHOR for anyone else)", async () => {
+    const fileId = await seedFile({ status: "active" });
+    const notingId = await seedDraftNote(fileId);
+    const publish = vi.spyOn(sharedQueue, "publish");
+    const stranger = `Bearer ${signToken({ sub: PEER, tid: TENANT, roles: ["estab_officer"], sid: "sess-c02-peer" }, SECRET, 3600)}`;
+    const res = await app.inject({
+      method: "POST", url: `/v1/estab/files/${fileId}/submit-for-approval`,
+      headers: { authorization: stranger, "x-tenant-id": TENANT }, payload: { notingId },
+    });
+    expect(res.statusCode).toBe(403);
+    expect(res.json().code).toBe("NOT_NOTING_AUTHOR");
+    expect(publish).not.toHaveBeenCalled();
   });
 
   it("an unknown file id falls through to the consumer no-op, as before (not a 409)", async () => {

@@ -48,8 +48,13 @@ const HRMS_URL = process.env.HRMS_SERVICE_URL ?? "http://127.0.0.1:3012";
 const FETCH_TIMEOUT_MS = 2000;
 const CACHE_TTL_SECONDS = 30;
 
-export type EmployeeDisplay = { fullName: string; departmentName: string };
-type EmployeeSummary = { id: string; fullName: string; departmentName: string; userRef?: string | null };
+/** `designationName` is the HRMS designation master name (B26); present only when HRMS returned one. */
+export type EmployeeDisplay = { fullName: string; departmentName: string; designationName?: string };
+type EmployeeSummary = { id: string; fullName: string; departmentName: string; designationName?: string; userRef?: string | null };
+
+function displayOf(e: EmployeeSummary): EmployeeDisplay {
+  return { fullName: e.fullName, departmentName: e.departmentName, ...(e.designationName ? { designationName: e.designationName } : {}) };
+}
 
 /**
  * Best-effort, tenant-scoped id → display-name/department map. Never throws:
@@ -69,7 +74,7 @@ export async function getEmployeeDisplayMap(tenantId: string, ids?: readonly str
   );
   const map = new Map<string, EmployeeDisplay>();
   for (const e of rows ?? []) {
-    map.set(e.id, { fullName: e.fullName, departmentName: e.departmentName });
+    map.set(e.id, displayOf(e));
   }
   return map;
 }
@@ -96,7 +101,7 @@ export async function getEmployeeDisplayMapByIds(tenantId: string, ids: readonly
     ]));
     for (const rows of parts) {
       for (const e of rows) {
-        const d = { fullName: e.fullName, departmentName: e.departmentName };
+        const d = displayOf(e);
         map.set(e.id, d);
         if (e.userRef) map.set(e.userRef, d);
       }

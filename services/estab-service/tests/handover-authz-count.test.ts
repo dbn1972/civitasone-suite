@@ -54,13 +54,33 @@ describe("POST /v1/estab/handovers — authz gate (HANDOVER-02)", () => {
     expect(res.statusCode).toBe(403);
   });
 
-  it("returns 202 (or 422 for unknown operator) for an estab_division_admin", async () => {
+  it("returns 403 for an estab_division_admin who holds no operator desk (B25: scope comes from the desk)", async () => {
     const app = await buildApp();
     const res = await app.inject({
       method: "POST",
       url: "/v1/estab/handovers",
       headers: {
         authorization: `Bearer ${makeToken(["estab_division_admin"])}`,
+        "content-type": "application/json",
+      },
+      payload: {
+        fromOfficerId: randomUUID(),
+        toOfficerId: randomUUID(),
+        reason: "transfer",
+      },
+    });
+    await app.close();
+    expect(res.statusCode).toBe(403);
+    expect(res.json().code).toBe("NO_OPERATOR_DESK");
+  });
+
+  it("returns 202 (or 422 for unknown operator) for an estab_admin, who is tenant-wide", async () => {
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/estab/handovers",
+      headers: {
+        authorization: `Bearer ${makeToken(["estab_admin"])}`,
         "content-type": "application/json",
       },
       payload: {
