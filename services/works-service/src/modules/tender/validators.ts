@@ -15,6 +15,10 @@ export const createPreTenderSchema = z.object({
   // leaving it null (which rendered a meaningless derived status).
   openingDate: z.string().datetime({ offset: true }).optional(),
   fees: zMoneyMinorString.optional(),
+  // C35 (TENDERS-NEW-02): optional; the register shows an em dash until populated.
+  tenderAmountMinor: zMoneyMinorString.optional(),
+  approvingAuthorityId: z.string().uuid().optional(),
+  contractorClassId: z.string().uuid().optional(),
 });
 
 export const createTenderSchema = z.object({

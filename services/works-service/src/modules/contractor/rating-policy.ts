@@ -1,14 +1,17 @@
 /**
  * GAP-WORKS-CONTRACTORS-DETAIL-04: the cooling-off period between two ratings of the same contractor by the same
  * officer. The length is a POLICY value that is not in the repository, so it is configuration, not code:
- * WORKS_CONTRACTOR_RATING_COOLDOWN_DAYS (whole days). Unset, empty, zero, negative or not a whole number means "no
- * cooldown": nothing is blocked and the web shows no warning until an owner sets a value.
+ * WORKS_CONTRACTOR_RATING_COOLDOWN_DAYS (whole days). OWNER DECISION C33 (2026-11-26): the default is 90 days and the
+ * cooldown is blocking (409 RATING_COOLDOWN). Unset or blank means the 90-day default; an explicit 0 turns it off;
+ * negative / non-numeric / fractional values mean "no cooldown" rather than a guess.
  */
 const MAX_COOLDOWN_DAYS = 3650;
+export const DEFAULT_RATING_COOLDOWN_DAYS = 90;
 
 export function ratingCooldownDays(env: Record<string, string | undefined> = process.env): number {
   const raw = env.WORKS_CONTRACTOR_RATING_COOLDOWN_DAYS?.trim();
-  if (!raw || !/^\d+$/.test(raw)) return 0;
+  if (!raw) return DEFAULT_RATING_COOLDOWN_DAYS;
+  if (!/^\d+$/.test(raw)) return 0;
   const days = Number(raw);
   return days > 0 && days <= MAX_COOLDOWN_DAYS ? days : 0;
 }
