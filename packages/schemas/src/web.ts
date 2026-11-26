@@ -3628,6 +3628,8 @@ export const CitizenNoticeSchema = z.object({
   published: z.string(),
   expiry: z.string(),
   type: z.string(),
+  /** D1: document-service file id, null when the notice has no attachment. */
+  documentId: z.string().nullable().optional(),
   status: z.string(),
 });
 export const CitizenSurveySchema = z.object({

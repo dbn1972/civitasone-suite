@@ -207,4 +207,30 @@ describe("RTIDetailClient -- GAP-CITIZEN-RTI-DETAIL-06 transfer history", () => 
     expect(screen.getByText("Transferred from Sanitation Dept to Water Works")).toBeInTheDocument();
     expect(screen.getByText(formatIndianDate("2026-03-05T04:30:00Z"))).toBeInTheDocument();
   });
+
+  // D2 (CITIZEN-RTI-DETAIL-06)
+  describe("first-appeal decision", () => {
+    const filed = { id: "ap-1", appealType: "first", grounds: "No reply within 30 days.", status: "filed", createdAt: "2026-10-01T00:00:00Z", outcome: null, decisionDate: null, hearingDate: null, decisionReason: null };
+    const decided = { ...filed, id: "ap-2", status: "decided", outcome: "partly_allowed", hearingDate: "2026-10-20", decisionDate: "2026-10-27", decisionReason: "Records of Ward 14 to be furnished within 10 days." };
+
+    it("shows the outcome, hearing and decision dates of a decided appeal", () => {
+      renderClient({ initialRti: { ...mockRti, appeals: [decided] }, initialSource: "api" });
+      expect(screen.getByText(enMessages.citizenRti.appealOutcome_partly_allowed)).toBeInTheDocument();
+      expect(screen.getByText("Records of Ward 14 to be furnished within 10 days.")).toBeInTheDocument();
+    });
+
+    it("offers Record decision on a filed first appeal only to the appellate authority", () => {
+      const rti = { ...mockRti, appeals: [filed] };
+      const { unmount } = renderClient({ initialRti: rti, initialSource: "api" });
+      expect(screen.queryByRole("button", { name: enMessages.citizenRti.decideAppeal })).toBeNull();
+      unmount();
+      renderClient({ initialRti: rti, initialSource: "api", canDecideAppeal: true });
+      expect(screen.getByRole("button", { name: enMessages.citizenRti.decideAppeal })).toBeInTheDocument();
+    });
+
+    it("does not offer Record decision once the appeal is decided", () => {
+      renderClient({ initialRti: { ...mockRti, appeals: [decided] }, initialSource: "api", canDecideAppeal: true });
+      expect(screen.queryByRole("button", { name: enMessages.citizenRti.decideAppeal })).toBeNull();
+    });
+  });
 });

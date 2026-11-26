@@ -9,6 +9,7 @@ import { PageHeader, EmptyState, StatusPill, ActionButton, Button } from "@/app/
 import { formatIndianDate, daysUntilIST } from "@/lib/formatters";
 import { isRtiClosed } from "@/lib/rtiStatus";
 import type { RtiDetail } from "../../_data/loaders";
+import { RtiAppealDecision } from "./RtiAppealDecision";
 
 const inputStyle = { width: "100%", padding: 8, minHeight: 44, marginBottom: 8, borderRadius: 8, border: "1px solid var(--line)" } as const;
 const labelStyle = { display: "block", fontSize: 12, color: "var(--muted)", marginBottom: 4, fontWeight: 600 } as const;
@@ -53,6 +54,7 @@ export function RTIDetailClient({
   id,
   initialRti = null,
   initialSource = "error",
+  canDecideAppeal = false,
 }: {
   id: string;
   /**
@@ -65,6 +67,8 @@ export function RTIDetailClient({
   initialRti?: RtiDetail | null;
   /** "api" = trust initialRti (even if null -- that's a real not-found). "error" = the server loader couldn't get an answer; fall back to the original always-fetch-on-mount behavior. */
   initialSource?: "api" | "error";
+  /** D2: true for rti_appellate / super_admin; shows the first-appeal decision form. UI gating only. */
+  canDecideAppeal?: boolean;
 }) {
   const t = useTranslations("citizenRti");
   const router = useRouter();
@@ -304,6 +308,20 @@ export function RTIDetailClient({
                     <li key={a.id} className="cur">
                       <div className="t">{a.appealType === "cic" ? t("appealCicShort") : t("appealFirstShort")} — {a.status}</div>
                       <div className="d">{formatIndianDate(a.createdAt)}</div>
+                      {a.outcome ? (
+                        <div style={{ fontSize: 13, marginTop: 4 }}>
+                          <span style={{ fontWeight: 600 }}>{t("appealOutcomeHeading")}: </span>
+                          <strong>{t(`appealOutcome_${a.outcome}`)}</strong>
+                          {a.hearingDate ? <> · {t("appealHearingDateLabel")}: {formatIndianDate(a.hearingDate)}</> : null}
+                          {a.decisionDate ? <> · {t("appealDecisionDateLabel")}: {formatIndianDate(a.decisionDate)}</> : null}
+                          {a.decisionReason ? <div style={{ color: "var(--muted)", whiteSpace: "pre-wrap" }}>{a.decisionReason}</div> : null}
+                        </div>
+                      ) : null}
+                      {canDecideAppeal && a.appealType === "first" && a.status === "filed" ? (
+                        <div style={{ marginTop: 8 }}>
+                          <RtiAppealDecision rtiId={rti.id} appealId={a.id} onDone={() => afterMutate(t("noticeAppealDecided"))} />
+                        </div>
+                      ) : null}
                       {a.grounds ? (
                         <div style={{ fontSize: 13, color: "var(--muted)", marginTop: 4 }}>
                           <span style={{ fontWeight: 600 }}>{t("appealGroundsHeading")}: </span>

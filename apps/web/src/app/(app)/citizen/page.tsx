@@ -40,11 +40,12 @@ export default async function Page() {
     { title: t("tileRequests"), href: "/citizen/requests", section: t("sectionEngagement") },
     { title: t("tileRti"), href: "/citizen/rti", section: t("sectionEngagement") },
     { title: t("tileGrievances"), href: "/citizen/grievances", section: t("sectionEngagement") },
-    { title: t("tileFeedback"), href: "/citizen/feedback", section: t("sectionEngagement") },
+    // D3 (CITIZEN-FEEDBACK-03): no separate feedback endpoint — the Feedback tile
+    // opens the existing citizen surveys module (replaces the former Surveys tile).
+    { title: t("tileFeedback"), href: "/citizen/surveys", section: t("sectionEngagement") },
     { title: t("tilePortal"), href: "/citizen/portal", section: t("sectionEngagement") },
     { title: t("tileAlerts"), href: "/citizen/alerts", section: t("sectionEngagement") },
     { title: t("tileNotices"), href: "/citizen/notices", section: t("sectionEngagement") },
-    { title: t("tileSurveys"), href: "/citizen/surveys", section: t("sectionEngagement") },
   ];
 
   return (

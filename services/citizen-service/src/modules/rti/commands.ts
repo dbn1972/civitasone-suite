@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { RequestContext } from "@civitasone/types";
 import { queue, cache } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
-import type { FileRtiBody, RespondRtiBody, AppealRtiBody, TransferRtiBody } from "./validators.js";
+import type { FileRtiBody, RespondRtiBody, AppealRtiBody, TransferRtiBody, DecideRtiAppealBody } from "./validators.js";
 
 export type Accepted = { id: string; status: string; correlationId: string };
 
@@ -38,6 +38,17 @@ export async function appealRti(ctx: RequestContext, id: string, body: AppealRti
     payload: { id: appealId, rtiId: id, tenantId: ctx.tenantId, appealType: body.appealType, grounds: body.grounds, ownerCitizenId: body.ownerCitizenId ?? null },
   });
   await cache.invalidate(cache.makeKey(ctx.tenantId, "rti", id));
+  return { id: appealId, status: "accepted", correlationId: ctx.correlationId };
+}
+
+/** D2: the appellate authority (rti_appellate) records the first-appeal decision. */
+export async function decideRtiAppeal(ctx: RequestContext, rtiId: string, appealId: string, body: DecideRtiAppealBody): Promise<Accepted> {
+  await queue.publish(COMMANDS.rtiAppealDecide, {
+    messageId: randomUUID(), type: COMMANDS.rtiAppealDecide,
+    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+    payload: { id: appealId, rtiId, tenantId: ctx.tenantId, ...body },
+  });
+  await cache.invalidate(cache.makeKey(ctx.tenantId, "rti", rtiId));
   return { id: appealId, status: "accepted", correlationId: ctx.correlationId };
 }
 

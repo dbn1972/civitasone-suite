@@ -31,6 +31,8 @@ export const citizenNotices = engagementSchema.table("citizen_notices", {
   body:        text("body").notNull().default(""),
   department:  varchar("department", { length: 128 }).notNull(),
   noticeType:  varchar("notice_type", { length: 24 }).notNull().default("general"),
+  /** D1: optional pointer to a document-service file (cross-service, no FK). Migration 0048. */
+  documentId:  uuid("document_id"),
   status:      varchar("status", { length: 16 }).notNull().default("draft"),
   publishedAt: timestamp("published_at", { withTimezone: true }),
   expiresAt:   timestamp("expires_at", { withTimezone: true }),

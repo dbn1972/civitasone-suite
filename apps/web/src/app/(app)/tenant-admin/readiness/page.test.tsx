@@ -6,6 +6,11 @@ vi.mock("@/app/_data/loaders", async () => {
   const actual = await vi.importActual<typeof import("@/app/_data/loaders")>("@/app/_data/loaders");
   return { ...actual, getTenantAdminDashboard: (...args: unknown[]) => getTenantAdminDashboardMock(...args) };
 });
+const sessionRoles = { value: ["platform_admin"] as string[] };
+vi.mock("@/lib/auth/roleGuard", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/auth/roleGuard")>("@/lib/auth/roleGuard");
+  return { ...actual, getSessionRoles: () => sessionRoles.value };
+});
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 
 import ReadinessPage from "./page";
@@ -18,7 +23,10 @@ function dashboard(readiness: unknown, source: "api" | "error" = "api") {
 }
 
 describe("ReadinessPage — GAP-TENANT-ADMIN-READINESS-01/-02/-03/-04", () => {
-  beforeEach(() => getTenantAdminDashboardMock.mockReset());
+  beforeEach(() => {
+    getTenantAdminDashboardMock.mockReset();
+    sessionRoles.value = ["platform_admin"];
+  });
 
   it("renders rows from the live gate map, not a fixed constant (-01)", async () => {
     getTenantAdminDashboardMock.mockResolvedValue(
@@ -96,5 +104,38 @@ describe("ReadinessPage — GAP-TENANT-ADMIN-READINESS-01/-02/-03/-04", () => {
     getTenantAdminDashboardMock.mockResolvedValue(dashboard(null, "error"));
     render(await ReadinessPage());
     expect(screen.getByText("Overall Readiness").closest(".stat")).toHaveTextContent("—");
+  });
+
+  // B28 (TENANT-ADMIN-READINESS-03)
+  it("B28: a tenant_admin never sees platform-engineering gates and the gate map is not even fetched", async () => {
+    sessionRoles.value = ["tenant_admin"];
+    getTenantAdminDashboardMock.mockResolvedValue(
+      dashboard({ overall: 50, productionReady: false, allGreen: false, gates: [{ key: "k6Present", passed: false }, { key: "perfIndexes", passed: false }] }),
+    );
+    render(await ReadinessPage());
+    expect(getTenantAdminDashboardMock).not.toHaveBeenCalled();
+    expect(screen.queryByText("Load tests present")).toBeNull();
+    expect(screen.queryByText("Performance indexes")).toBeNull();
+    expect(screen.queryByRole("list", { name: "Readiness items" })).toBeNull();
+    expect(screen.queryByText("Overall Readiness")).toBeNull();
+  });
+
+  it("B28: a tenant_admin gets a tenant-fixable checklist of real /tenant-admin screens", async () => {
+    sessionRoles.value = ["tenant_admin"];
+    render(await ReadinessPage());
+    const list = screen.getByRole("list", { name: "Tenant setup items" });
+    const links = within(list).getAllByRole("link");
+    expect(links.length).toBeGreaterThanOrEqual(6);
+    for (const a of links) expect(a.getAttribute("href")).toMatch(/^\/tenant-admin\/[a-z-]+$/);
+    // No fabricated Pass/Fail states.
+    expect(within(list).queryByText("Pass")).toBeNull();
+    expect(within(list).queryByText("Fail")).toBeNull();
+  });
+
+  it("B28: super_admin still sees the platform gates", async () => {
+    sessionRoles.value = ["super_admin"];
+    getTenantAdminDashboardMock.mockResolvedValue(dashboard({ overall: 100, productionReady: true, allGreen: true, gates: [{ key: "k6Present", passed: true }] }));
+    render(await ReadinessPage());
+    expect(screen.getByText("Load tests present")).toBeInTheDocument();
   });
 });

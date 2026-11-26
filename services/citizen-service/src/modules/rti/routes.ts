@@ -4,8 +4,8 @@ import { RTISummaryListSchema } from "@civitasone/schemas/web";
 import type { FastifyInstance } from "fastify";
 import { ZodError, z } from "zod";
 import { resolveContext, requireRole, resolveCitizenId, isOfficer, assertOwnership, HttpError } from "../../shared/context.js";
-import { idParam, fileRtiBody, respondRtiBody, appealRtiBody, transferRtiBody } from "./validators.js";
-import { isAppealAllowed } from "./domain.js";
+import { idParam, fileRtiBody, respondRtiBody, appealRtiBody, transferRtiBody, decideRtiAppealBody, rtiAppealParams } from "./validators.js";
+import { isAppealAllowed, RTI_APPELLATE_ROLES } from "./domain.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 import { findCpioById } from "../cpio/repo.js";
@@ -47,6 +47,28 @@ export async function rtiRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(409, "APPEAL_NOT_ALLOWED", "appeal not allowed before a response or the 30-day statutory deadline");
     }
     return sendAccepted(reply, acceptedResponseSchema, await commands.appealRti(ctx, id, { ...body, ownerCitizenId: owner.citizenId }));
+  });
+
+  /**
+   * D2 (CITIZEN-RTI-DETAIL-06): the appellate authority decides a FIRST appeal.
+   * Only rti_appellate (or super_admin); the appeal must belong to this RTI, be a first appeal
+   * and still be `filed`. The CPIO who answered the RTI cannot decide the appeal against their own response.
+   */
+  app.post("/v1/citizen/rti/:id/appeals/:appealId/decide", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, [...RTI_APPELLATE_ROLES]);
+    const { id, appealId } = rtiAppealParams.parse(req.params);
+    const body = decideRtiAppealBody.parse(req.body);
+    const rti = await queries.getRti(ctx.tenantId, id);
+    if (!rti) throw new HttpError(404, "NOT_FOUND", "rti request not found");
+    const appeal = rti.appeals.find((a) => a.id === appealId);
+    if (!appeal) throw new HttpError(404, "NOT_FOUND", "appeal not found");
+    if (appeal.appealType !== "first") throw new HttpError(409, "NOT_FIRST_APPEAL", "only a first appeal is decided by the appellate authority");
+    if (appeal.status !== "filed") throw new HttpError(409, "APPEAL_ALREADY_DECIDED", `appeal is ${appeal.status}; only a filed appeal can be decided`);
+    if (rti.responses.some((r) => r.respondedBy === ctx.actorId)) {
+      throw new HttpError(403, "FORBIDDEN", "the officer who responded to this RTI cannot decide its appeal");
+    }
+    return sendAccepted(reply, acceptedResponseSchema, await commands.decideRtiAppeal(ctx, id, appealId, body));
   });
 
   app.get("/v1/citizen/rti", async (req, reply) => {

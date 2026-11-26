@@ -31,3 +31,6 @@ export function isAppealAllowed(args: { hasResponse: boolean; deadline: Date | s
   const now = args.now ?? new Date();
   return now.getTime() > deadline.getTime();
 }
+
+/** D2: RTI Act 2005 s.19(1) first appeals are decided by the appellate authority, not the CPIO tier. */
+export const RTI_APPELLATE_ROLES: readonly string[] = ["rti_appellate", "super_admin"];

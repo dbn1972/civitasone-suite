@@ -28,6 +28,8 @@ export const createNoticeBody = z.object({
   body:       safeText({ max: 8000, min: 0, multiline: true }).optional(),
   department: safeText({ max: 128 }),
   type:       z.enum(NOTICE_TYPES).optional(),
+  /** D1: id of a file already uploaded to document-service (documents.files.id). */
+  documentId: z.string().uuid().optional(),
   expiresAt:  futureIso.optional(),
 });
 export type CreateNoticeBody = z.infer<typeof createNoticeBody>;

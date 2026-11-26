@@ -111,6 +111,11 @@ export interface RtiAppeal {
   grounds: string;
   status: string;
   createdAt: string;
+  /** D2: first-appeal decision (null until the appellate authority decides). */
+  outcome?: string | null;
+  decisionDate?: string | null;
+  hearingDate?: string | null;
+  decisionReason?: string | null;
 }
 
 /** One RTI Act s.6(3) transfer (GET /v1/citizen/rti/:id -> .transfers[]), oldest first. */
@@ -163,6 +168,10 @@ function toRtiAppeal(r: Record<string, unknown>): RtiAppeal {
     grounds: str(r.grounds),
     status: str(r.status),
     createdAt: str(r.createdAt),
+    outcome: r.outcome ? str(r.outcome) : null,
+    decisionDate: r.decisionDate ? str(r.decisionDate) : null,
+    hearingDate: r.hearingDate ? str(r.hearingDate) : null,
+    decisionReason: r.decisionReason ? str(r.decisionReason) : null,
   };
 }
 

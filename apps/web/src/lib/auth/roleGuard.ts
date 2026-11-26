@@ -1078,6 +1078,12 @@ export const AI_AGENT_ADMIN_ROLES = ["ai_admin", "super_admin"];
 export const CITIZEN_OFFICER_ROLES = ["citizen_officer", "citizen_admin", "super_admin"];
 
 /**
+ * D2 (CITIZEN-RTI-DETAIL-06): roles that may DECIDE a first RTI appeal (RTI Act s.19(1)).
+ * Mirrors citizen-service rti/routes.ts RTI_APPELLATE_ROLES; the server is authoritative.
+ */
+export const RTI_APPELLATE_ROLES = ["rti_appellate", "super_admin"];
+
+/**
  * GAP2-DESIGNER-HOME-01: roles permitted to AUTHOR citizen services in the
  * Service Designer (create/submit/publish a service definition). Mirrors
  * citizen-service's catalogue ADMIN_ROLES (modules/catalogue/routes.ts:

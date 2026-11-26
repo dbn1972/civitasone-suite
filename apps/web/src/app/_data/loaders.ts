@@ -4976,6 +4976,8 @@ export type CitizenNotice = {
   published: string;
   expiry: string;
   type: string;
+  /** D1: document-service file id (null/absent = no attachment). */
+  documentId?: string | null;
   /** draft | published | withdrawn (citizens only ever receive published). */
   status: string;
 };
