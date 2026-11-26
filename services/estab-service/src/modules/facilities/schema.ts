@@ -52,6 +52,10 @@ export const estabRoomBookings = facilitiesSchema.table("estab_room_bookings", {
   chargesMinor: bigint("charges_minor", { mode: "bigint" }).notNull().default(0n),
   currency:     char("currency", { length: 3 }).notNull().default("INR"),
   status:       varchar("status", { length: 24 }).notNull().default("booked"),
+  // Migration 0062: approve / reject decision (maker-checker: decidedBy != createdBy).
+  decidedBy:      uuid("decided_by"),
+  decidedAt:      timestamp("decided_at", { withTimezone: true }),
+  decisionReason: text("decision_reason"),
   createdAt:    timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:    timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy:    uuid("created_by").notNull(),
@@ -97,6 +101,8 @@ export const estabIssues = facilitiesSchema.table("estab_issues", {
   version:     integer("version").notNull().default(1),
 });
 
+export type RoomRow           = typeof estabRooms.$inferSelect;
+export type RoomInsert        = typeof estabRooms.$inferInsert;
 export type GuesthouseRow     = typeof estabGuesthouses.$inferSelect;
 export type GuesthouseInsert  = typeof estabGuesthouses.$inferInsert;
 export type RoomBookingRow    = typeof estabRoomBookings.$inferSelect;

@@ -3,9 +3,9 @@ import type { RequestContext } from "@civitasone/types";
 import { queue, cache } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
 import * as repo from "./repo.js";
-import { checkNoRoomOverlap } from "./domain.js";
+import { checkNoRoomOverlap, assertRoomBookingTransition, DomainError, type RoomBookingAction } from "./domain.js";
 import { HttpError } from "../../shared/context.js";
-import type { CreateGuesthouseBody, BookRoomBody, CheckoutBody, AddBookBody, IssueBookBody, RenewIssueBody, ReturnIssueBody, EditBookBody, WithdrawBookBody } from "./validators.js";
+import type { AddRoomBody, RejectRoomBookingBody, CreateGuesthouseBody, BookRoomBody, CheckoutBody, AddBookBody, IssueBookBody, RenewIssueBody, ReturnIssueBody, EditBookBody, WithdrawBookBody } from "./validators.js";
 
 export type Accepted = { id: string; status: string; correlationId: string };
 
@@ -44,7 +44,71 @@ export async function bookRoom(ctx: RequestContext, body: BookRoomBody): Promise
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }
 
+/** Loads the booking (tenant-scoped) and refuses a transition its current status does not allow (409). */
+async function loadForTransition(ctx: RequestContext, bookingId: string, action: RoomBookingAction) {
+  const booking = await repo.findRoomBookingById(bookingId, ctx.tenantId);
+  if (!booking) throw new HttpError(404, "NOT_FOUND", "room booking not found");
+  try {
+    assertRoomBookingTransition(booking.status, action);
+  } catch (e) {
+    if (e instanceof DomainError) throw new HttpError(409, e.code, e.message);
+    throw e;
+  }
+  return booking;
+}
+
+/**
+ * Maker-checker: the officer who raised a room booking cannot approve or reject it. Enforced here
+ * (sync 403, nothing enqueued) and again in the consumer as defence in depth.
+ */
+function assertNotRequester(ctx: RequestContext, createdBy: string, verb: string): void {
+  if (createdBy === ctx.actorId) {
+    throw new HttpError(403, "MAKER_CHECKER_VIOLATION", `A room booking cannot be ${verb} by the officer who requested it`);
+  }
+}
+
+export async function approveRoomBooking(ctx: RequestContext, bookingId: string): Promise<Accepted> {
+  const booking = await loadForTransition(ctx, bookingId, "approve");
+  assertNotRequester(ctx, booking.createdBy, "approved");
+  await queue.publish(COMMANDS.roomApprove, {
+    messageId: randomUUID(), type: COMMANDS.roomApprove,
+    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+    payload: { bookingId, tenantId: ctx.tenantId },
+  });
+  await cache.invalidate(cache.makeKey(ctx.tenantId, "guesthouse_bookings", "list:50"));
+  return { id: bookingId, status: "accepted", correlationId: ctx.correlationId };
+}
+
+export async function rejectRoomBooking(ctx: RequestContext, bookingId: string, body: RejectRoomBookingBody): Promise<Accepted> {
+  const booking = await loadForTransition(ctx, bookingId, "reject");
+  assertNotRequester(ctx, booking.createdBy, "rejected");
+  await queue.publish(COMMANDS.roomReject, {
+    messageId: randomUUID(), type: COMMANDS.roomReject,
+    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+    payload: { bookingId, tenantId: ctx.tenantId, reason: body.reason },
+  });
+  await cache.invalidate(cache.makeKey(ctx.tenantId, "guesthouse_bookings", "list:50"));
+  return { id: bookingId, status: "accepted", correlationId: ctx.correlationId };
+}
+
+export async function addRoom(ctx: RequestContext, body: AddRoomBody): Promise<Accepted> {
+  if (!(await repo.getGuesthouseById(ctx.tenantId, body.guesthouseId))) {
+    throw new HttpError(404, "NOT_FOUND", "guesthouse not found");
+  }
+  if (await repo.findRoomByNo(ctx.tenantId, body.guesthouseId, body.roomNo)) {
+    throw new HttpError(409, "ROOM_EXISTS", `room ${body.roomNo} already exists in this guesthouse`);
+  }
+  const id = randomUUID();
+  await queue.publish(COMMANDS.roomAdd, {
+    messageId: id, type: COMMANDS.roomAdd,
+    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+    payload: { id, tenantId: ctx.tenantId, ...body },
+  });
+  return { id, status: "accepted", correlationId: ctx.correlationId };
+}
+
 export async function checkin(ctx: RequestContext, bookingId: string): Promise<Accepted> {
+  await loadForTransition(ctx, bookingId, "checkin");
   await queue.publish(COMMANDS.roomCheckin, {
     messageId: randomUUID(),
     type: COMMANDS.roomCheckin,
@@ -56,6 +120,7 @@ export async function checkin(ctx: RequestContext, bookingId: string): Promise<A
 }
 
 export async function checkout(ctx: RequestContext, bookingId: string, body: CheckoutBody): Promise<Accepted> {
+  await loadForTransition(ctx, bookingId, "checkout");
   await queue.publish(COMMANDS.roomCheckout, {
     messageId: randomUUID(),
     type: COMMANDS.roomCheckout,

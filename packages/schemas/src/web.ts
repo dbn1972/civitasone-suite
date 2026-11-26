@@ -2199,7 +2199,10 @@ export const GuesthouseBookingSummarySchema = z.object({
   roomType: z.string().optional(),
   roomNo: z.string().optional(),
   purposeOfVisit: z.string().optional(),
-  status: z.enum(["pending", "confirmed", "checked_in", "checked_out", "cancelled"]),
+  status: z.enum(["pending", "confirmed", "checked_in", "checked_out", "cancelled", "rejected"]),
+  /** Officer who raised the booking (maker); the approver must be someone else. */
+  requestedBy: z.string().optional(),
+  decisionReason: z.string().optional(),
 });
 export const GuesthouseBookingSummaryListSchema = z.array(GuesthouseBookingSummarySchema);
 

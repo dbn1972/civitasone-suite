@@ -5,7 +5,7 @@ import { PageHeader, StatCard, StatGrid, EmptyState, RefreshErrorState, Button }
 import { toHumanError } from "@/lib/messages";
 import { formatIndianDate, formatIndianDateTime } from "@/lib/formatters";
 import { countGuesthouseStats } from "@/lib/estab/guesthouseStats";
-import { getSessionRoles, ESTAB_DFA_DRAFTER_ROLES } from "@/lib/auth/roleGuard";
+import { getSessionRoles, getSessionUserId, ESTAB_DFA_DRAFTER_ROLES } from "@/lib/auth/roleGuard";
 import { BookingsTable, type BookingRow } from "./BookingsTable";
 
 // A booking instant carries a time of day; a bare calendar date (YYYY-MM-DD) does not, and is shown as
@@ -30,6 +30,7 @@ export default async function GuesthousePage() {
     checkOut: bookingWhen(b.checkOutDate),
     status: b.status.replace(/_/g, " "),
     statusRaw: b.status,
+    requestedBy: b.requestedBy,
   }));
 
   return (
@@ -69,7 +70,7 @@ export default async function GuesthousePage() {
             }
           />
         ) : (
-          <BookingsTable rows={rows} canOperate={canOperate} />
+          <BookingsTable rows={rows} canOperate={canOperate} canApprove={canOperate} viewerId={getSessionUserId()} />
         )}
       </div>
     </>

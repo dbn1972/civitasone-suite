@@ -19,6 +19,20 @@ export const bookRoomBody = z.object({
 });
 export type BookRoomBody = z.infer<typeof bookRoomBody>;
 
+export const rejectRoomBookingBody = z.object({
+  reason: z.string().trim().min(3).max(500),
+});
+export type RejectRoomBookingBody = z.infer<typeof rejectRoomBookingBody>;
+
+export const addRoomBody = z.object({
+  guesthouseId: z.string().uuid(),
+  roomNo:       z.string().trim().min(1).max(20),
+  // DB CHECK estab_rooms_type_check (migration 0034): standard | suite | meeting.
+  type:         z.enum(["standard", "suite", "meeting"]).default("standard"),
+  capacity:     z.number().int().min(1).max(20).default(1),
+});
+export type AddRoomBody = z.infer<typeof addRoomBody>;
+
 export const checkinBody  = z.object({});
 export const checkoutBody = z.object({ chargesMinor: z.number().int().nonnegative().default(0) });
 export type CheckoutBody = z.infer<typeof checkoutBody>;

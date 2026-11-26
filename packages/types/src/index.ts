@@ -2051,7 +2051,10 @@ export type GuesthouseBookingSummary = {
   roomType?: string;
   roomNo?: string;
   purposeOfVisit?: string;
-  status: "pending" | "confirmed" | "checked_in" | "checked_out" | "cancelled";
+  status: "pending" | "confirmed" | "checked_in" | "checked_out" | "cancelled" | "rejected";
+  /** Officer who raised the booking (maker); the approver must be someone else. */
+  requestedBy?: string;
+  decisionReason?: string;
 };
 
 export type ComplianceSummary = {
