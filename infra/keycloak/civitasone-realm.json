@@ -323,6 +323,154 @@
       {
         "name": "records_officer",
         "description": "Records officer: manages record categories, disposal, weed-out, archival and record-room transfers (estab-service records management)."
+      },
+      {
+        "name": "report_admin",
+        "description": "Reports administrator: can unmask PII in report exports (sole gate)."
+      },
+      {
+        "name": "analytics_admin",
+        "description": "Analytics administrator: manage KPIs, dashboards and AI insights."
+      },
+      {
+        "name": "cdp_admin",
+        "description": "CDP administrator: manage customer profiles, segments and events."
+      },
+      {
+        "name": "cdp_steward",
+        "description": "CDP data steward: resolve identities and approve DSAR actions."
+      },
+      {
+        "name": "court_admin",
+        "description": "Court administrator: manage court cases, cause lists and registry."
+      },
+      {
+        "name": "registrar",
+        "description": "Court registrar: scrutiny, registration and cause-list management."
+      },
+      {
+        "name": "judge",
+        "description": "Judicial officer: hearings and orders."
+      },
+      {
+        "name": "court_clerk",
+        "description": "Court clerk: case data entry and notices."
+      },
+      {
+        "name": "field_admin",
+        "description": "Field-service administrator: visits, tasks and routing."
+      },
+      {
+        "name": "grant_admin",
+        "description": "Grants administrator: schemes, sanctions and disbursement."
+      },
+      {
+        "name": "grant_officer",
+        "description": "Grants officer: applications and installment scheduling."
+      },
+      {
+        "name": "grant_reviewer",
+        "description": "Grants reviewer: review and recommend grant applications."
+      },
+      {
+        "name": "knowledge_admin",
+        "description": "Knowledge administrator: restricted/confidential documents and policies."
+      },
+      {
+        "name": "loyalty_admin",
+        "description": "Loyalty administrator: manual accrual and program management."
+      },
+      {
+        "name": "notification_admin",
+        "description": "Notifications administrator: templates, campaigns and channels."
+      },
+      {
+        "name": "recommendation_admin",
+        "description": "Recommendations administrator: triggers, matrices and NBA."
+      },
+      {
+        "name": "telephony_admin",
+        "description": "Telephony administrator: queues, IVR, DID and broadcasts."
+      },
+      {
+        "name": "telephony_supervisor",
+        "description": "Telephony supervisor: agent presence and queue oversight."
+      },
+      {
+        "name": "protocol_officer",
+        "description": "Visitor protocol officer: VIP visit grants and protocol."
+      },
+      {
+        "name": "security_guard",
+        "description": "Visitor security guard: gate check-in/out and turnstile."
+      },
+      {
+        "name": "facility_admin",
+        "description": "Visitor facility administrator: locations, devices and badges."
+      },
+      {
+        "name": "workflow_admin",
+        "description": "Workflow administrator: process design, SLA and assignment."
+      },
+      {
+        "name": "stock_admin",
+        "description": "Stock administrator: inventory control and e-way bills."
+      },
+      {
+        "name": "stock_manager",
+        "description": "Stock manager: entries, items and logistics."
+      },
+      {
+        "name": "dao",
+        "description": "Divisional Accounts Officer: works bill checking and finalization."
+      },
+      {
+        "name": "sdo",
+        "description": "Sub-Divisional Officer: works tender and bill approvals."
+      },
+      {
+        "name": "estimator",
+        "description": "Works estimator: estimates and measurement books."
+      },
+      {
+        "name": "works_operator",
+        "description": "Works operator: data entry for works execution."
+      },
+      {
+        "name": "works_viewer",
+        "description": "Works viewer: read-only works access."
+      },
+      {
+        "name": "estab_deputy_secretary",
+        "description": "Establishment Deputy Secretary: approval chain authority."
+      },
+      {
+        "name": "estab_division_admin",
+        "description": "Establishment division administrator: files and allotment."
+      },
+      {
+        "name": "planning_officer",
+        "description": "Planning officer: inspection planning and survey approvals."
+      },
+      {
+        "name": "rti_pio",
+        "description": "RTI Public Information Officer: first-level RTI responses."
+      },
+      {
+        "name": "rti_appellate",
+        "description": "RTI Appellate Authority: RTI appeal decisions."
+      },
+      {
+        "name": "identity_admin",
+        "description": "Identity administrator: posting readers and access review."
+      },
+      {
+        "name": "location_admin",
+        "description": "Location/GIS administrator: location masters and layers."
+      },
+      {
+        "name": "metadata_admin",
+        "description": "Metadata administrator: forms, lookups, numbering and rules."
       }
     ]
   },
