@@ -16,6 +16,12 @@ import * as queries from "./queries.js";
 const PIO_ROLES        = ["legal_officer", "legal_admin", "rti_pio", "super_admin"];
 const APPELLATE_ROLES  = ["legal_admin", "rti_appellate", "super_admin"];
 const READER_ROLES     = [...PIO_ROLES, "audit_officer"];
+// The appellate authority decides appeals (APPELLATE_ROLES) but must also be
+// able to READ the application + request text / timeline / appeals it is ruling
+// on — without this it got 403 on the GET application routes. Scoped to the
+// application read surfaces only; the PIO-only write routes and the proactive
+// disclosure log stay on PIO_ROLES / READER_ROLES.
+const APPLICATION_READER_ROLES = [...READER_ROLES, "rti_appellate"];
 
 export async function rtiRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/legal/rti/applications", async (req, reply) => {
@@ -27,14 +33,14 @@ export async function rtiRoutes(app: FastifyInstance): Promise<void> {
 
   app.get("/v1/legal/rti/applications", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, READER_ROLES);
+    requireRole(ctx, APPLICATION_READER_ROLES);
     const q = listQuerySchema.parse(req.query);
     return reply.send(await queries.listApplications(ctx.tenantId, q.limit));
   });
 
   app.get("/v1/legal/rti/applications/:id", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, READER_ROLES);
+    requireRole(ctx, APPLICATION_READER_ROLES);
     const { id } = idParam.parse(req.params);
     const found = await queries.getApplication(ctx.tenantId, id);
     if (!found) throw new HttpError(404, "NOT_FOUND", "rti application not found");

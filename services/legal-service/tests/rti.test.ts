@@ -350,6 +350,32 @@ describe("RTI routes + consumer integration", () => {
     expect(typeof body.daysRemaining).toBe("number");
   });
 
+  // The appellate authority can DECIDE an appeal (APPELLATE_ROLES) but must also
+  // be able to READ the application it is ruling on. APP_APPEAL has a filed
+  // first appeal (APPEAL_1), so the appellate can see the case + request text.
+  it("appellate authority (rti_appellate) reads the application it has an appeal for", async () => {
+    const res = await app.inject({
+      method: "GET", url: `/v1/legal/rti/applications/${APP_APPEAL}`,
+      headers: { authorization: `Bearer ${token(["rti_appellate"], TENANT_A, ACTOR_B)}`, "x-tenant-id": TENANT_A },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.applicationNo).toBe("RTI-AP-1");
+    expect(body.requestText).toBe("r");
+    expect(Array.isArray(body.appeals)).toBe(true);
+    expect(body.appeals.some((a: { id: string }) => a.id === APPEAL_1)).toBe(true);
+  });
+
+  // Over-exposure guard: the appellate read grant is scoped to the application
+  // read surfaces. The proactive-disclosure log remains PIO/audit only.
+  it("appellate authority (rti_appellate) is still 403 on the disclosure log", async () => {
+    const res = await app.inject({
+      method: "GET", url: "/v1/legal/rti/disclosures",
+      headers: { authorization: `Bearer ${token(["rti_appellate"], TENANT_A, ACTOR_B)}`, "x-tenant-id": TENANT_A },
+    });
+    expect(res.statusCode).toBe(403);
+  });
+
   // ── route → command coverage: every mutation endpoint accepts (202) ────────
   const H = { authorization: `Bearer ${token(["rti_pio"], TENANT_A, ACTOR_A)}`, "content-type": "application/json" };
   const HA = { authorization: `Bearer ${token(["rti_appellate"], TENANT_A, ACTOR_B)}`, "content-type": "application/json" };
