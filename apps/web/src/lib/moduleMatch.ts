@@ -123,6 +123,10 @@ export const MODULE_ALIASES: Readonly<Record<string, readonly string[]>> = {
   journey: ["journeys"],
   journeys: ["journey"],
   revenue: ["finance"],
+  // works-service is projected to the finance-cluster `projects` key
+  // (MODULE_CATALOGUE works.gatewayKeys=["projects"]); without this the /works
+  // ModuleGate never matches a composed tenant list and hides the page for all.
+  works: ["projects"],
 };
 
 export type ModuleSwitches = { hr: boolean; payroll: boolean; recruitment: boolean };

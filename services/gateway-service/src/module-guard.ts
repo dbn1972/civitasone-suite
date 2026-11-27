@@ -59,12 +59,24 @@ const moduleGuardBreaker = new CircuitBreaker({
 /** Map route name to module key for enforcement */
 const ROUTE_TO_MODULE: Record<string, string> = {
   finance: "finance",
+  // GAP-MODULEGATE-PARITY: revenue-service (/api/v1/revenue) is the Revenue &
+  // Receipts surface of the finance backbone. MODULE_CATALOGUE revenue.gatewayKeys
+  // = ["finance"] (revenue hardDeps finance), so it is entitled through the finance
+  // key. Gate it so a direct API call is subscription-enforced, matching the web
+  // ModuleGate moduleKey="revenue" (resolved to finance via MODULE_ALIASES). Was
+  // unmapped => fail-open: any authenticated tenant could call it.
+  revenue: "finance",
   procurement: "procurement",
   hrms: "hrms",
   hr: "hrms",
   payroll: "payroll",
   project: "projects",
   projects: "projects",
+  // GAP-MODULEGATE-PARITY: works-service (/api/v1/works) is Works & Contracts
+  // Execution. MODULE_CATALOGUE works.gatewayKeys = ["projects"], so gate it on the
+  // projects key (web ModuleGate moduleKey="works" resolves to projects via
+  // MODULE_ALIASES). Was unmapped => fail-open.
+  works: "projects",
   asset: "assets",
   assets: "assets",
   stock: "stock",

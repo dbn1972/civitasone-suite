@@ -152,3 +152,117 @@ describe("gateway route map vs catalogue", () => {
     expect([...hrmsKeys].filter((k) => !catalogueKeys.has(k))).toEqual([]);
   });
 });
+
+
+describe("web ModuleGate keys vs gateway enforcement (UI/gateway parity)", () => {
+  // Every <ModuleGate moduleKey=\"X\"> in apps/web must correspond to something the
+  // GATEWAY enforces for that module API: a catalogue-backed gateway key
+  // (ROUTE_TO_MODULE / composition projection), a platform route (never gated), or
+  // an explicitly documented UI-only surface. Without parity the UI can hide a
+  // module while its API stays reachable regardless of subscription (fail-open).
+  const guardSrc = stripComments(readFileSync(join(SERVICES_DIR, "gateway-service/src/module-guard.ts"), "utf8"));
+  const matchSrc = stripComments(readFileSync(join(ROOT, "apps/web/src/lib/moduleMatch.ts"), "utf8"));
+  const quoted = (s: string): string[] => [...s.matchAll(/"([a-z0-9_-]+)"/g)].map((m) => m[1]!);
+
+  // Gateway vocabulary.
+  const routeMapBlock = guardSrc.match(/ROUTE_TO_MODULE: Record<string, string> = \{([\s\S]*?)\n\};/)![1]!;
+  const routeEntries = new Map<string, string>();
+  for (const m of routeMapBlock.matchAll(/"?([a-z0-9-]+)"?:\s*"([a-z0-9_-]+)"/g)) routeEntries.set(m[1]!, m[2]!);
+  const routedKeys = new Set(routeEntries.values());
+  const gatewayPlatform = new Set(quoted(guardSrc.match(/PLATFORM_ROUTES = new Set\(\[([\s\S]*?)\]\);/)![1]!));
+  const catalogueKeys = new Set(MODULE_CATALOGUE.flatMap((m) => m.gatewayKeys));
+  // Keys a composed tenant allow-list (hence the web gate) can actually match.
+  const enforceableKeys = new Set([...catalogueKeys, ...routedKeys]);
+
+  // Web vocabulary (parsed from source, matching how this file reads the guard).
+  const webPlatform = new Set(quoted(matchSrc.match(/PLATFORM_MODULE_KEYS = new Set\(\[([\s\S]*?)\]\)/)![1]!));
+  const aliasBlock = matchSrc.match(/MODULE_ALIASES:[^=]*=\s*\{([\s\S]*?)\n\};/)![1]!;
+  const webAliases: Record<string, string[]> = {};
+  for (const m of aliasBlock.matchAll(/([a-z0-9_-]+):\s*\[([^\]]*)\]/g)) webAliases[m[1]!] = quoted(m[2]!);
+  // HR-area switch keys (hrms/payroll/recruitment + the \"hr\" spelling): logical
+  // switches, not catalogue keys. The HRMS surface is gated path-aware
+  // (services/gateway-service/src/hrms-subroute-map.ts); a switch is enforced iff
+  // its catalogue sub-keys exist (asserted below).
+  const hrSwitchKeys = new Set([
+    matchSrc.match(/HR_SWITCH = "([a-z-]+)"/)![1]!,
+    matchSrc.match(/PAYROLL_SWITCH = "([a-z-]+)"/)![1]!,
+    matchSrc.match(/RECRUITMENT_SWITCH = "([a-z-]+)"/)![1]!,
+    "hr",
+  ]);
+
+  // Web keys a module layout gates on for which NO catalogue entitlement exists to
+  // gate the API against: the service is uncatalogued platform plumbing or a core
+  // engine. Gating these at the gateway would 403 every tenant. Each needs a reason.
+  const WEB_UI_ONLY_MODULE_KEYS: Record<string, string> = {
+    cdp: "cdp-service is uncatalogued platform plumbing (not sold as a module); no catalogue gatewayKey. API intentionally fail-open. Add a MODULE_CATALOGUE entry + gateway gate to sell it.",
+    loyalty: "loyalty-service - uncatalogued, not sold as a module (see cdp).",
+    recommendation: "recommendation-service - uncatalogued, not sold as a module (see cdp).",
+    "ai-agent": "ai-agent-service - uncatalogued platform assistant, not a sellable module.",
+    catalogue: "catalogue-service - uncatalogued platform plumbing, not a sellable module.",
+    journey: "journey-service - uncatalogued, not sold as a module (see cdp).",
+    metadata: "config/metadata engine (catalogue id `config`, isCore, gatewayKeys=[]) - a core platform surface, never module-gated.",
+    themes: "theme-service - uncatalogued platform plumbing; gateway route `theme` is a PLATFORM_ROUTE. Theming is platform-wide.",
+    designer: "no backing service (web-only studio UI); nothing to gate at the gateway.",
+  };
+
+  function scanWebModuleKeys(): Set<string> {
+    const out = new Set<string>();
+    const stack = [join(ROOT, "apps/web/src/app")];
+    while (stack.length) {
+      const dir = stack.pop()!;
+      for (const e of readdirSync(dir, { withFileTypes: true })) {
+        if (e.name === "node_modules" || e.name === "dist" || e.name === ".next") continue;
+        const p = join(dir, e.name);
+        if (e.isDirectory()) { stack.push(p); continue; }
+        if (!/\.tsx?$/.test(e.name) || /\.(test|spec)\.tsx?$/.test(e.name) || e.name === "ModuleGate.tsx") continue;
+        for (const m of readFileSync(p, "utf8").matchAll(/moduleKey="([a-z0-9-]+)"/g)) out.add(m[1]!.toLowerCase());
+      }
+    }
+    return out;
+  }
+  const webKeys = scanWebModuleKeys();
+
+  type Verdict = "platform" | "gated" | "ui-only" | "unclassified";
+  function classify(k: string): Verdict {
+    if (webPlatform.has(k) || gatewayPlatform.has(k)) return "platform";
+    if (hrSwitchKeys.has(k)) return "gated";
+    const candidates = new Set([k, ...(webAliases[k] ?? [])]);
+    if ([...candidates].some((c) => enforceableKeys.has(c))) return "gated";
+    if (k in WEB_UI_ONLY_MODULE_KEYS) return "ui-only";
+    return "unclassified";
+  }
+
+  it("scans a plausible set of web ModuleGate keys", () => {
+    expect(webKeys.size).toBeGreaterThan(20);
+  });
+
+  it("every web ModuleGate key is gateway-enforced, platform, or a documented UI-only surface", () => {
+    const unclassified = [...webKeys].filter((k) => classify(k) === "unclassified").sort();
+    expect(
+      unclassified,
+      "web gates a module the gateway neither enforces nor treats as platform. Map its route in services/gateway-service/src/module-guard.ts ROUTE_TO_MODULE (catalogue-backed sellable module) or document it in WEB_UI_ONLY_MODULE_KEYS with a reason.",
+    ).toEqual([]);
+  });
+
+  it("the HR-area switch keys are backed by real catalogue sub-keys", () => {
+    for (const need of ["payroll", "hrms-recruitment", "hrms-leave"]) {
+      expect(catalogueKeys.has(need), `catalogue must project ${need}`).toBe(true);
+    }
+  });
+
+  it("documented UI-only keys stay current and are not actually enforced", () => {
+    const stale = Object.keys(WEB_UI_ONLY_MODULE_KEYS).filter((k) => !webKeys.has(k)).sort();
+    expect(stale, "WEB_UI_ONLY_MODULE_KEYS lists a key no web layout uses anymore - remove it").toEqual([]);
+    const wrong = Object.keys(WEB_UI_ONLY_MODULE_KEYS).filter((k) => classify(k) !== "ui-only").sort();
+    expect(wrong, "a WEB_UI_ONLY key is now platform/gateway-enforced - stop documenting it as UI-only").toEqual([]);
+    for (const [k, reason] of Object.entries(WEB_UI_ONLY_MODULE_KEYS)) expect(reason.length, k).toBeGreaterThan(20);
+  });
+
+  it("catalogue-backed service routes are module-gated at the gateway (regression lock)", () => {
+    expect(routeEntries.get("revenue"), "map revenue route -> finance in ROUTE_TO_MODULE").toBe("finance");
+    expect(routeEntries.get("works"), "map works route -> projects in ROUTE_TO_MODULE").toBe("projects");
+    expect(catalogueKeys.has("finance") && catalogueKeys.has("projects")).toBe(true);
+    expect(webAliases["revenue"]).toContain("finance");
+    expect(webAliases["works"]).toContain("projects");
+  });
+});
