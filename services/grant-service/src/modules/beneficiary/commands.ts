@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { RequestContext } from "@civitasone/types";
+import { idempotentId } from "@civitasone/auth";
 import { queue, cache } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
 import { maskAadhaar } from "./domain.js";
@@ -10,7 +11,7 @@ export type Accepted = { id: string; status: string; correlationId: string };
 export async function createBeneficiary(ctx: RequestContext, body: CreateBeneficiaryBody): Promise<Accepted> {
   const id = randomUUID();
   await queue.publish(COMMANDS.beneficiaryCreate, {
-    messageId: id, type: COMMANDS.beneficiaryCreate,
+    messageId: idempotentId({ ...(ctx.idempotencyKey ? { idempotencyKey: `beneficiary-create:${ctx.idempotencyKey}` } : {}), tenantId: ctx.tenantId }), type: COMMANDS.beneficiaryCreate,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
     payload: { id, tenantId: ctx.tenantId, ...body },
   });

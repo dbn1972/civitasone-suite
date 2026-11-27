@@ -14,7 +14,7 @@ export async function submitApplication(ctx: RequestContext, schemeId: string, b
   const id = randomUUID();
   // grantNo is allocated gaplessly inside the consumer transaction (per-tenant, per-FY counter).
   await queue.publish(COMMANDS.applicationSubmit, {
-    messageId: id, type: COMMANDS.applicationSubmit,
+    messageId: idempotentId({ ...(ctx.idempotencyKey ? { idempotencyKey: `application-submit:${ctx.idempotencyKey}` } : {}), tenantId: ctx.tenantId }), type: COMMANDS.applicationSubmit,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
     payload: { id, tenantId: ctx.tenantId, schemeId, ...body },
   });

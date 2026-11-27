@@ -10,7 +10,7 @@ export type Accepted = { id: string; status: string; correlationId: string };
 export async function createScheme(ctx: RequestContext, body: CreateSchemeBody): Promise<Accepted> {
   const id = randomUUID();
   await queue.publish(COMMANDS.schemeCreate, {
-    messageId: id, type: COMMANDS.schemeCreate,
+    messageId: idempotentId({ ...(ctx.idempotencyKey ? { idempotencyKey: `scheme-create:${ctx.idempotencyKey}` } : {}), tenantId: ctx.tenantId }), type: COMMANDS.schemeCreate,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
     payload: { id, tenantId: ctx.tenantId, ...body },
   });
@@ -40,7 +40,7 @@ export async function closeScheme(ctx: RequestContext, id: string, body: CloseSc
 export async function createCriterion(ctx: RequestContext, schemeId: string, body: CreateCriterionBody): Promise<Accepted> {
   const id = randomUUID();
   await queue.publish(COMMANDS.eligibilityCreate, {
-    messageId: id, type: COMMANDS.eligibilityCreate,
+    messageId: idempotentId({ ...(ctx.idempotencyKey ? { idempotencyKey: `eligibility-create:${ctx.idempotencyKey}` } : {}), tenantId: ctx.tenantId }), type: COMMANDS.eligibilityCreate,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
     payload: { id, tenantId: ctx.tenantId, schemeId, ...body },
   });
